@@ -8,6 +8,10 @@ challenges - all simulated in a Web Worker at a fixed 60 Hz, rendered to a
 No assets, no frameworks: TypeScript + Vite + Canvas + WebAudio, everything
 procedural.
 
+![The sandbox: lava burning a wood platform over a walled water basin](docs/screenshot-sandbox.png)
+
+![Main menu with the challenge grid](docs/screenshot-menu.png)
+
 ---
 
 ## Run it
@@ -70,6 +74,29 @@ remaining-count badge and grey out when exhausted.
 Topbar buttons: SAVE, LOAD, PAUSE, STEP, SFX, MUSIC, CRT, BG (wallpaper),
 ? (help), MENU. SAVE/LOAD are only visible in free sandbox.
 
+## Interface
+
+The whole UI is one CSS file and a handful of DOM builders - no component
+framework, no icon set, no images.
+
+- The canvas sits inside an **arcade-cabinet bezel**: moulded plastic gradient,
+  four case screws, an etched wordmark and a power lamp that turns amber while
+  the simulation is paused. Explosions shake the entire cabinet, not just the
+  picture.
+- The screen has two separate layers: **glass** (a permanent diagonal sheen and
+  top-edge reflection) and **CRT** (toggleable scanlines, a phosphor grille and
+  a vignette).
+- Palette swatches paint themselves from each material's **real 4-colour ramp** -
+  the same values the simulation rasterises with - and are grouped by physical
+  category (powder / liquid / gas / solid), so the toolbar doubles as a legend.
+- Buttons are beveled arcade keys with real press travel; engaged toggles light
+  up cyan.
+- Every animation is decorative and is switched off under
+  `prefers-reduced-motion`. Interactive elements carry focus rings and labels.
+
+Re-theming means editing the tokens in the `:root` block of `styles.css`;
+nothing else hard-codes a colour.
+
 ## Materials cheat sheet
 
 Powders fall, liquids flow sideways, gases rise, solids stay put.
@@ -100,7 +127,7 @@ Powders fall, liquids flow sideways, gases rise, solids stay put.
 ## Architecture tour
 
 ```
-index.html                 app shell: topbar / canvas / toolbar / overlay
+index.html                 app shell: topbar / cabinet+canvas / toolbar / overlay
 src/
   main.ts                  app state machine + fixed-step rAF loop + worker wiring
   styles.css               all styling (CRT filter, palettes, overlays)
@@ -109,7 +136,8 @@ src/
     rng.ts                 seeded PRNG helpers
     bus.ts                 tiny event bus
   render/
-    renderer.ts            presents the sim buffer to canvas, screen shake, resize
+    renderer.ts            presents the sim buffer to canvas, cabinet shake,
+                           resize (fits the canvas inside the bezel chrome)
   sim/
     protocol.ts            message types + SIM_W/SIM_H/chunk constants
     grid.ts                typed-array cell store (cells, meta, counts)
@@ -123,12 +151,15 @@ src/
     progress.ts            star progress persistence
     wallpapers.ts          background wallpaper cycling
   ui/
-    hud.ts                 topbar buttons, sand/playground palettes, budget badges
-    menu.ts                main menu with challenge cards + star display
+    hud.ts                 topbar buttons, grouped sand/playground palettes with
+                           ramp-painted chips, budget badges, brush preview
+    menu.ts                main menu with challenge cards + star totals
     widgets.ts             toast + result overlay helpers
     help.ts                in-game HELP overlay (? button)
     music.ts               procedural chiptune music loop (MUSIC toggle)
     tooltips.ts            hover descriptions for tools, swatches and buttons
+docs/
+  screenshot-*.png         README screenshots
 tests/
   world.test.ts            unit tests for world rules
 ```

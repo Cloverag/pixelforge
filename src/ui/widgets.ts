@@ -21,11 +21,12 @@ export function toast(msg: string, bad = false): void {
   window.setTimeout(() => t.remove(), 2400);
 }
 
-function starString(n: number, total = 3): { on: string; off: string } {
-  return {
-    on: '\u2605'.repeat(n),
-    off: '\u2605'.repeat(Math.max(0, total - n)),
-  };
+/** Three star glyphs, the earned ones marked so CSS can pop them in. */
+function starsHtml(n: number, total = 3): string {
+  let out = '';
+  for (let i = 0; i < total; i++)
+    out += `<span class="${i < n ? 'on' : 'off'}">★</span>`;
+  return out;
 }
 
 export interface ResultOpts {
@@ -39,18 +40,34 @@ export interface ResultOpts {
   onMenu: () => void;
 }
 
+function statRow(label: string, value: string): HTMLElement {
+  const row = h('div', 'row');
+  row.appendChild(h('span', '', label));
+  row.appendChild(h('b', '', value));
+  return row;
+}
+
 export function showResult(o: ResultOpts): void {
   const overlay = document.getElementById('overlay')!;
   overlay.innerHTML = '';
   overlay.classList.remove('hidden');
+
   const box = h('div', 'screen result-box');
-  const title = h('h2', o.status === 'win' ? 'win' : 'lose', o.status === 'win' ? 'LEVEL CLEAR' : 'FAILED');
-  box.appendChild(title);
-  box.appendChild(h('div', 'result-stats', `${o.name}\n${o.reason}\nTIME ${o.timeSecs.toFixed(1)}S`));
-  const s = starString(o.stars);
+  box.appendChild(
+    h('h2', o.status === 'win' ? 'win' : 'lose', o.status === 'win' ? 'LEVEL CLEAR' : 'FAILED'),
+  );
+  box.appendChild(h('div', 'result-name', o.name));
+
   const starsEl = h('div', 'result-stars');
-  starsEl.innerHTML = s.on + s.off;
+  starsEl.innerHTML = starsHtml(o.stars);
   box.appendChild(starsEl);
+
+  const stats = h('div', 'result-stats');
+  stats.appendChild(statRow('RESULT', o.reason));
+  stats.appendChild(statRow('TIME', `${o.timeSecs.toFixed(1)}s`));
+  stats.appendChild(statRow('STARS', `${o.stars} / 3`));
+  box.appendChild(stats);
+
   const row = h('div', 'btn-row');
   const retry = h('button', 'px', 'RETRY');
   retry.onclick = () => { o.onRetry(); };
@@ -63,10 +80,11 @@ export function showResult(o: ResultOpts): void {
   const menu = h('button', 'px', 'MENU');
   menu.onclick = () => { o.onMenu(); };
   row.appendChild(menu);
+  for (const b of Array.from(row.children)) (b as HTMLButtonElement).type = 'button';
   box.appendChild(row);
   overlay.appendChild(box);
 
-  // star chimes
+  // star chimes -- timings match the .result-stars .on animation delays
   for (let i = 0; i < o.stars; i++) {
     window.setTimeout(() => window.dispatchEvent(new CustomEvent('pf-star', { detail: i })), 500 + i * 300);
   }
