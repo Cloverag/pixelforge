@@ -328,7 +328,22 @@ body.sim-paused #led {
     radial-gradient(130% 92% at 50% -22%, rgba(190, 218, 255, 0.11), transparent 62%);
 }
 
-/* --- crt: toggleable scanlines, phosphor grille and vignette --- */
+/* --- 3D voxel view: overlays the 2D canvas inside the same tube --- */
+#view3d {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#view3d.hidden { display: none; }
+#view3d canvas {
+  border: 2px solid var(--line);
+  box-shadow: 0 0 0 2px #0a0a12, 0 0 40px rgba(0, 0, 0, 0.6);
+}
+
+/* --- crt: toggleable scanlines and vignette --- */
 #crt {
   pointer-events: none;
   position: absolute;

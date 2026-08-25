@@ -301,6 +301,14 @@ export class World {
       case Mat.ICE:
         this.ice(x, y);
         break;
+      case Mat.SNOW:
+        this.snow(x, y);
+        break;
+      case Mat.SALT:
+        this.salt(x, y);
+        break;
+      case Mat.TNT:
+        break; // stable until sparked or fuse-lit (see sparkBurst / fuse)
       case Mat.WIRE:
         this.wire(x, y, i);
         break;
@@ -520,6 +528,7 @@ export class World {
         g.setXY(nx, ny, Mat.STEAM, this.rng.range(90, 220));
         return;
       case Mat.ICE:
+      case Mat.SNOW:
         g.setXY(nx, ny, Mat.WATER);
         if (this.rng.chance(0.3)) {
           g.setXY(x, y, Mat.STONE);
@@ -633,6 +642,13 @@ export class World {
     g.chunks.wakeCell(x, y); // burning fuse keeps ticking
     if (burning === 1) {
       g.setXY(x, y, Mat.FIRE, this.rng.range(10, 24));
+      // fuse-lit TNT (fire alone cannot ignite it - spark or fuse only)
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+        if (g.get(x + dx, y + dy) === Mat.TNT) {
+          this.explode(x + dx, y + dy, 9);
+          return;
+        }
+      }
       return;
     }
     g.meta[i] = burning - 1;
@@ -669,10 +685,66 @@ export class World {
   private ice(x: number, y: number): void {
     if (
       this.adjacent(x, y, Mat.FIRE) || this.adjacent(x, y, Mat.LAVA) ||
-      this.adjacent(x, y, Mat.EMBER)
+      this.adjacent(x, y, Mat.EMBER) || this.adjacent(x, y, Mat.SALT)
     ) {
       this.grid.setXY(x, y, Mat.WATER);
     }
+  }
+
+  // ---------- winter pack (P1) ----------
+
+  private snow(x: number, y: number): void {
+    const g = this.grid;
+    // 8-dir heat/water sense: chasing melt sources are rarely 4-adjacent
+    // at process time (scan-order dodge), diagonals keep the contact real
+    let hot = false;
+    let wet = false;
+    let salty = false;
+    for (let dy = -1; dy <= 1 && !hot; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        if (dx === 0 && dy === 0) continue;
+        const t = g.get(x + dx, y + dy);
+        if (t === Mat.FIRE || t === Mat.LAVA || t === Mat.EMBER) hot = true;
+        else if (t === Mat.WATER) wet = true;
+        else if (t === Mat.SALT) salty = true;
+      }
+    }
+    if (hot || wet) {
+      if (this.rng.chance(0.3)) {
+        g.setXY(x, y, Mat.WATER);
+        return;
+      }
+    }
+    if (salty && this.rng.chance(0.4)) {
+      g.setXY(x, y, Mat.WATER);
+      return;
+    }
+    // floaty fall: only moves ~2 of every 3 frames
+    if (this.rng.chance(0.66)) this.powder(x, y, Mat.SNOW);
+    else g.chunks.wakeCell(x, y);
+  }
+
+  private salt(x: number, y: number): void {
+    const g = this.grid;
+    // dissolves in water
+    if (this.adjacent(x, y, Mat.WATER) && this.rng.chance(0.4)) {
+      g.setXY(x, y, Mat.EMPTY);
+      return;
+    }
+    // melts ice and snow on contact (salt is consumed half the time)
+    const pick = this.rng.int(4);
+    const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    const nx = x + dirs[pick][0];
+    const ny = y + dirs[pick][1];
+    const t = g.get(nx, ny);
+    if ((t === Mat.ICE || t === Mat.SNOW) && this.rng.chance(0.35)) {
+      g.setXY(nx, ny, Mat.WATER);
+      if (this.rng.chance(0.5)) {
+        g.setXY(x, y, Mat.EMPTY);
+        return;
+      }
+    }
+    this.powder(x, y, Mat.SALT);
   }
 
   // ---------- electricity (F1) ----------
@@ -720,6 +792,9 @@ export class World {
           break;
         case Mat.GUNPOWDER:
           this.explode(nx, ny, 5);
+          return;
+        case Mat.TNT:
+          this.explode(nx, ny, 9);
           return;
         case Mat.WOOD:
           if (this.rng.chance(0.5)) g.setXY(nx, ny, Mat.EMBER, this.rng.range(70, 150));
@@ -903,7 +978,7 @@ export class World {
 
 /** materials that can overwrite solid cells when painted */
 export const ERASES_SOLID = new Set<number>([
-  Mat.WALL, Mat.ACID, Mat.WIRE, Mat.TORCH, Mat.CLONE, Mat.VOID,
+  Mat.WALL, Mat.ACID, Mat.WIRE, Mat.TORCH, Mat.CLONE, Mat.VOID, Mat.TNT,
 ]);
 
 export type { Stats, ChallengeResult };

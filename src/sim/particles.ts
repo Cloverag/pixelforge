@@ -1,5 +1,5 @@
 import { RNG } from '../core/rng';
-import { Mat } from './materials';
+import { Mat, colorAt } from './materials';
 import { SIM_H, SIM_W, PgToolMsg } from './protocol';
 
 const CAP = 24000;
@@ -173,6 +173,16 @@ export class PSys {
       const g = (((c >>> 8) & 255) * 238) >> 8;
       const b = (((c >>> 16) & 255) * 238) >> 8;
       pix[i] = ((255 << 24) | (b << 16) | (g << 8) | r) >>> 0;
+    }
+
+    // draw painted grid cells (WALL brush constructions) so they are visible
+    {
+      const cells = this.grid.cells;
+      for (let i = 0; i < nPx; i++) {
+        const c = cells[i];
+        if (c !== Mat.EMPTY)
+          pix[i] = colorAt(c, i % SIM_W, (i / SIM_W) | 0, frame, 0);
+      }
     }
 
     // integrate

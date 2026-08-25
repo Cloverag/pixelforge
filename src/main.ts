@@ -1,6 +1,7 @@
 import './styles.css';
 import { Input, PointerEvt } from './core/input';
 import { Renderer } from './render/renderer';
+import { Voxel3D } from './render/voxel3d';
 import { Sfx } from './game/audio';
 import { Hud, PgTool } from './ui/hud';
 import { showMenu } from './ui/menu';
@@ -42,6 +43,21 @@ let selMat: number = Mat.SAND;
 let brush = 6;
 let pgTool: PgTool = 'fountain';
 let paintKind: 'brush' | 'flood' = 'brush';
+let view3d: Voxel3D | null = null;
+let view3dOn = false;
+
+function toggle3d(): void {
+  view3dOn = !view3dOn;
+  if (view3dOn && !view3d) {
+    view3d = new Voxel3D(document.getElementById('view3d')!, SIM_W >> 1, SIM_H >> 1);
+  }
+  if (view3dOn) view3d!.show();
+  else view3d!.hide();
+  document.getElementById('screen')!.style.visibility = view3dOn ? 'hidden' : 'visible';
+  hud.set3dToggled(view3dOn);
+  post({ t: 'watch3d', on: view3dOn });
+  sfx.ui();
+}
 let challengeId: string | null = null;
 let pgHeld = false;
 let lastPg = { x: 240, y: 128 };
@@ -65,6 +81,8 @@ worker.onmessage = (e: MessageEvent<Res>) => {
     stepBuf = r.buf;
     inFlight = false;
     renderer.present(r.buf, r.shake ?? 0);
+    if (r.snap && view3dOn && view3d)
+      view3d.update(new Uint8Array(r.snap), r.snapW!, r.snapH!);
     if ((r.shake ?? 0) > prevShake + 4) sfx.boom();
     prevShake = r.shake ?? 0;
     if (r.counts && r.used && r.budget) {
@@ -130,6 +148,7 @@ function loop(now: number): void {
     fpsFrames = 0;
     fpsClock = 0;
   }
+  if (view3dOn) view3d?.render();
   requestAnimationFrame(loop);
 }
 
@@ -289,6 +308,7 @@ function openMenu(): void {
     onToggleBg: cycleWallpaper,
     onToggleMusic: toggleMusic,
     onHelp: () => toggleHelp(),
+    onToggle3d: toggle3d,
   });
 }
 
@@ -416,6 +436,7 @@ hud.initTopbar({
   onToggleBg: cycleWallpaper,
   onToggleMusic: toggleMusic,
   onHelp: () => toggleHelp(),
+  onToggle3d: toggle3d,
 });
 
 new Input(
@@ -443,6 +464,9 @@ new Input(
         break;
       case 'escape':
         if (screen === 'game') openMenu();
+        break;
+      case '3':
+        if (screen === 'game') toggle3d();
         break;
       case 'f':
         if (screen === 'game' && mode === 'sand')

@@ -22,6 +22,9 @@ export const Mat = {
   TORCH: 20,
   CLONE: 21,
   VOID: 22,
+  SNOW: 23,
+  SALT: 24,
+  TNT: 25,
 } as const;
 
 export type MatId = (typeof Mat)[keyof typeof Mat];
@@ -104,6 +107,9 @@ MATS[Mat.WIRE] = def(Mat.WIRE, 'WIRE', Cat.SOLID, 100, ['#c47a3c', '#b06a30', '#
 MATS[Mat.TORCH] = def(Mat.TORCH, 'TORCH', Cat.SOLID, 100, ['#ffcf5a', '#ffb43a', '#ffe38a', '#e89a2c'], { acidChance: 0 });
 MATS[Mat.CLONE] = def(Mat.CLONE, 'CLONE', Cat.SOLID, 100, ['#3fd1b4', '#2eb8a0', '#5ae0c8', '#249a86'], { acidChance: 0 });
 MATS[Mat.VOID] = def(Mat.VOID, 'VOID', Cat.SOLID, 100, ['#3a2450', '#2c1a40', '#4a3060', '#221230'], { acidChance: 0 });
+MATS[Mat.SNOW] = def(Mat.SNOW, 'SNOW', Cat.POWDER, 0.7, ['#eef4fa', '#dce8f4', '#f8fbff', '#c8d8ea'], { acidChance: 0.01 });
+MATS[Mat.SALT] = def(Mat.SALT, 'SALT', Cat.POWDER, 1.3, ['#e8e4da', '#d8d4c8', '#f4f0e6', '#c8c4b8'], { acidChance: 0.01 });
+MATS[Mat.TNT] = def(Mat.TNT, 'TNT', Cat.SOLID, 100, ['#c8281e', '#b02018', '#e03828', '#981810'], { acidChance: 0.02 });
 
 /** spark pulse length on wire = refractory period in frames */
 export const SPARK_LIFE = 8;
@@ -139,6 +145,12 @@ export function colorAt(mat: number, x: number, y: number, frame: number, meta: 
       break;
     case Mat.VOID:
       v = (v + (frame >> 2)) & 3;
+      break;
+    case Mat.SNOW:
+      v = (v + ((x + y) & 1)) & 3; // static sparkle per grain
+      break;
+    case Mat.TNT:
+      v = ((x * 7 + y * 13) & 8) ? 0 : v % 4; // striped charge look
       break;
     default:
       v %= 4;

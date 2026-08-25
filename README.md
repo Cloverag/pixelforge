@@ -74,7 +74,11 @@ remaining-count badge and grey out when exhausted.
 | `ESC` | Back to menu |
 
 Topbar buttons: SAVE, LOAD, PAUSE, STEP, SFX, MUSIC, CRT, BG (wallpaper),
-? (help), MENU. SAVE/LOAD are only visible in free sandbox.
+3D (voxel view), ? (help), MENU. SAVE/LOAD are only visible in free sandbox.
+
+The **3D view** (`3` key or the 3D button) extrudes the live simulation into an
+orbitable voxel diorama via three.js - drag to rotate, wheel to zoom. The sim
+keeps running at full speed; the 3D camera just watches it.
 
 ## Interface
 
@@ -123,7 +127,10 @@ Powders fall, liquids flow sideways, gases rise, solids stay put.
 | WIRE | Conducts spark pulses; energized wire glows yellow/white. |
 | TORCH | Emitting spark pulses onto touching wire. |
 | CLONE | Stores the first material that touches it, then emits copies of it. |
-| VOID | Deletes neighboring cells. |
+| VOID | Deletes neighboring cells (8-way). |
+| SNOW | Floaty powder; melts near heat, in water, or on salt. |
+| SALT | Powder; melts ice and snow, dissolves in water. |
+| TNT | Stable solid block - fire can't light it. Detonates (big blast) via spark or fuse only. |
 | EMBER | Burning residue left by fires (not placeable). |
 
 ## Architecture tour

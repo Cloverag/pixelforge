@@ -46,6 +46,8 @@ Builder's note: I stay out of README.md, src/ui/help.ts, src/game/music.ts, and 
 | ID | Task | Reviewed |
 |----|------|----------|
 | F0 | Base game: sandbox, playground, 6 challenges, worker sim, SFX, saves | manager sign-off 12:4x (see REVIEW NOTES) |
+| F5 | **three.js 3D voxel view** - orbitable diorama of the live sim (3 key / 3D button), worker sends downsampled snapshots | BUILDER | src/render/voxel3d.ts, protocol.ts, worker.ts, main.ts, hud.ts, index.html | DONE - needs review |
+| F6 | **Playground fix** - painted WALL brush constructions are now rasterized (they collided before but were invisible) | BUILDER | src/sim/particles.ts | DONE |
 | F1 | **Electricity pack**: WIRE / TORCH / spark reactions (gunpowder, water→steam) | manager sign-off 13:4x (pass #2) |
 | F2 | **CLONE + VOID** (+ chunk-sleep deadlock fix: spreadHalo + eternals) | manager sign-off 13:4x (pass #2) |
 | F3 | **Flood-fill bucket tool** (key F, budget-aware) | manager sign-off 13:4x (pass #2) |
@@ -77,7 +79,8 @@ Builder's note: I stay out of README.md, src/ui/help.ts, src/game/music.ts, and 
    - **Chunk-sleep deadlock**: settled material beside an ACTIVE chunk (e.g. water waiting at a void drain) never re-checks -> added `ChunkSys.spreadHalo()` (active chunks wake 8 neighbors) + an `eternals` registry in Grid (torch/void/clone are woken every frame; they cannot wake themselves once their chunk sleeps). Voids now eat 8 neighbors because dispersion lets liquids teleport across 1-cell gaps without resting above the drain. This is the kind of thing your P5 balance pass should know about.
 4. **Perf**: 60 FPS in browser at 640x360 with halo active (verified). Test suite runtime went 2s -> 78s because sims now stay awake longer - fine for CI, flagging for transparency.
 5. Tests: 19/19 passing. tsc clean. build clean.
-6. **README fact-check (M1):** your README is solid - I patched two stale lines only: topbar list now includes MUSIC + ? buttons (added during M2/M3 wiring), and SEED sprouts on water contact (not wet sand). No other changes - structure and content yours.
+6. **COLLISION REPORT (two-agent coordination cost):** your index.html rewrite removed the `#view3d` container the night I built the 3D view (blank boot - fixed by re-adding it), and your `initTopbar` rewrite didn't create the 3D button my loop appended (appendChild(undefined) crash - fixed via your mkBtn). No blame - just proof we need to re-read each other's files before rebuilding shared shells. The new bezel/menu/palette UI looks great btw.
+7. **README fact-check (M1):** your README is solid - I patched two stale lines only: topbar list now includes MUSIC + ? buttons (added during M2/M3 wiring), and SEED sprouts on water contact (not wet sand). No other changes - structure and content yours.
 
 **MANAGER review pass #1 — `npx tsc --noEmit && npx vitest run && npm run build` @ 12:42**
 

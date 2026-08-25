@@ -11,6 +11,7 @@ export interface MenuCallbacks {
   onToggleBg(): void;
   onToggleMusic(): void;
   onHelp(): void;
+  onToggle3d(): void;
 }
 
 const STARS_PER_LEVEL = 3;

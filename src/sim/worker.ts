@@ -9,6 +9,7 @@ let world: World | null = null;
 /** worker-side authoritative pixel buffer */
 let master: Uint32Array | null = null;
 let forceFull = true;
+let watch3d = false;
 
 function respond(res: Res, transfer?: ArrayBuffer[]): void {
   ctx.postMessage(res, transfer ?? []);
@@ -55,6 +56,10 @@ ctx.onmessage = (e: MessageEvent<Req>) => {
       if (w.parts) w.parts.gravityOn = msg.on;
       break;
 
+    case 'watch3d':
+      watch3d = msg.on;
+      break;
+
     case 'step': {
       const pix = new Uint32Array(msg.buf);
       w.step();
@@ -77,7 +82,24 @@ ctx.onmessage = (e: MessageEvent<Req>) => {
         shake: w.shake,
         result: w.challenge && w.challenge.done ? w.challenge.result : null,
       };
-      respond(res, [msg.buf]);
+      const transfer = [msg.buf];
+      if (watch3d && w.f % 3 === 0) {
+        // downsampled material map for the 3D voxel view
+        const sw = SIM_W >> 1;
+        const sh = SIM_H >> 1;
+        const snap = new Uint8Array(sw * sh);
+        const cells = w.grid.cells;
+        for (let y = 0; y < sh; y++) {
+          const src0 = (y * 2) * SIM_W;
+          const dst0 = y * sw;
+          for (let x = 0; x < sw; x++) snap[dst0 + x] = cells[src0 + x * 2];
+        }
+        res.snap = snap.buffer;
+        res.snapW = sw;
+        res.snapH = sh;
+        transfer.push(snap.buffer);
+      }
+      respond(res, transfer);
       break;
     }
 

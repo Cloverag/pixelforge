@@ -237,4 +237,41 @@ describe('falling sand world', () => {
     }
     expect(sawSpark).toBe(true);
   });
+
+  // ---------- P1: snow & salt ----------
+
+  it('snow melts into water near fire and in water', () => {
+    const w = new World(41);
+    for (let x = 57; x <= 63; x++) w.grid.setXY(x, 103, Mat.WALL); // basin floor
+    for (let x = 58; x <= 62; x++) w.grid.setXY(x, 102, Mat.LAVA); // lava pool
+    w.grid.setXY(60, 98, Mat.SNOW); // dropped into the pool
+    stepN(w, 200);
+    expect(w.grid.counts[Mat.SNOW]).toBe(0);
+  });
+
+  it('salt melts ice and dissolves in water', () => {
+    const w = new World(42);
+    w.grid.setXY(60, 100, Mat.ICE);
+    w.grid.setXY(60, 99, Mat.SALT); // rests on the ice
+    stepN(w, 300);
+    expect(w.grid.counts[Mat.ICE]).toBe(0);
+  });
+
+  // ---------- P2: TNT ----------
+
+  it('TNT ignores fire but detonates via wire spark', () => {
+    const w = new World(43);
+    // fire alone does nothing
+    w.grid.setXY(60, 100, Mat.TNT);
+    w.grid.setXY(61, 100, Mat.FIRE, 60);
+    stepN(w, 120);
+    expect(w.grid.counts[Mat.TNT]).toBe(1); // stable
+    // wire spark detonates it
+    w.grid.setXY(40, 100, Mat.TORCH);
+    for (let x = 41; x <= 53; x++) w.grid.setXY(x, 100, Mat.WIRE);
+    w.grid.setXY(54, 100, Mat.TNT); // directly adjacent to the wire end
+    for (let x = 55; x <= 75; x++) w.grid.setXY(x, 100, Mat.WALL); // backstop
+    stepN(w, 240);
+    expect(w.grid.counts[Mat.TNT]).toBe(0);
+  });
 });

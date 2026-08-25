@@ -42,6 +42,7 @@ export type Req =
   | { t: 'paint'; pts: number[]; mat: number; size: number; kind?: 'brush' | 'flood' }
   | { t: 'pg'; tool: PgToolMsg }
   | { t: 'pgGravity'; on: boolean }
+  | { t: 'watch3d'; on: boolean }
   | { t: 'step'; buf: ArrayBuffer }
   | { t: 'clear' }
   | { t: 'loadChallenge'; id: string }
@@ -66,4 +67,8 @@ export interface Res {
   shake?: number;
   result?: ChallengeResult | null;
   save?: SaveData | null;
+  /** downsampled material map for the 3D view (transferable) */
+  snap?: ArrayBuffer;
+  snapW?: number;
+  snapH?: number;
 }

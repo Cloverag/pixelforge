@@ -18,6 +18,7 @@
       <div id="bezel">
         <div id="screen-wrap">
           <canvas id="screen" width="640" height="360"></canvas>
+          <div id="view3d" class="hidden"></div>
           <div id="crt"></div>
           <div id="glass"></div>
         </div>
@@ -27,6 +28,17 @@
     <footer id="toolbar" class="hidden"></footer>
     <div id="overlay"></div>
   </div>
+  <script>
+    window.__bootErr = '';
+    window.addEventListener('error', function (e) {
+      window.__bootErr = ((e.error && e.error.stack) || e.message || 'unknown').slice(0, 900);
+      document.title = 'BOOT ERR: ' + window.__bootErr;
+    });
+    window.addEventListener('unhandledrejection', function (e) {
+      window.__bootErr = 'rejection: ' + (e.reason && e.reason.message || e.reason);
+      document.title = 'BOOT REJ: ' + window.__bootErr;
+    });
+  </script>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>
