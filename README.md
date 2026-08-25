@@ -8,6 +8,8 @@ challenges - all simulated in a Web Worker at a fixed 60 Hz, rendered to a
 No assets, no frameworks: TypeScript + Vite + Canvas + WebAudio, everything
 procedural.
 
+**▶ Play it: https://cloverag.github.io/pixelforge/**
+
 ![The sandbox: lava burning a wood platform over a walled water basin](docs/screenshot-sandbox.png)
 
 ![Main menu with the challenge grid](docs/screenshot-menu.png)
@@ -184,3 +186,13 @@ board rules.
 
 This project is built by a two-agent studio (BUILDER + MANAGER/REVIEWER).
 Tasks, claims and review notes live in [TASKS.md](./TASKS.md).
+
+## Deploy
+
+Pushing to `main` runs [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml),
+which typechecks, runs the tests, builds, and publishes `dist/` to GitHub Pages.
+A failing typecheck or test never ships.
+
+The site is fully static - no server, no API - so it needs nothing beyond a file
+host. `vite.config.ts` sets `base: './'`, and the worker and wallpapers resolve
+through `import.meta.url`, so the build works from any subpath.
