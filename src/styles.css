@@ -313,16 +313,19 @@ body.sim-paused #led {
   cursor: crosshair;
 }
 
-/* --- glass: always on. It is the tube, not the CRT effect. --- */
+/* --- glass: always on. It is the tube, not the CRT effect. ---
+   No mix-blend-mode: blending re-reads the canvas backdrop on every simulated
+   frame, which cost ~4 FPS at large canvas sizes. Plain alpha reads the same
+   over a dark tube and lets the compositor cache this as a static layer. */
 #glass {
   pointer-events: none;
   position: absolute;
   inset: 0;
   z-index: 6;
-  mix-blend-mode: screen;
+  transform: translateZ(0);
   background:
-    linear-gradient(107deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.028) 20%, transparent 40%),
-    radial-gradient(130% 92% at 50% -22%, rgba(184, 214, 255, 0.1), transparent 62%);
+    linear-gradient(107deg, rgba(255, 255, 255, 0.085) 0%, rgba(255, 255, 255, 0.03) 20%, transparent 40%),
+    radial-gradient(130% 92% at 50% -22%, rgba(190, 218, 255, 0.11), transparent 62%);
 }
 
 /* --- crt: toggleable scanlines, phosphor grille and vignette --- */
@@ -332,21 +335,17 @@ body.sim-paused #led {
   inset: 0;
   z-index: 5;
   opacity: 0;
+  transform: translateZ(0);
   transition: opacity 0.18s;
 }
+/* Static on purpose. An opacity flicker here repaints a full-screen layer over
+   a canvas that is already repainting at 60 Hz, and cost ~8 FPS for an effect
+   most players never consciously notice. */
 body.crt-on #crt {
   opacity: 1;
   background:
-    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.22) 0 1px, transparent 1px 3px),
-    repeating-linear-gradient(90deg, rgba(255, 40, 90, 0.05) 0 1px, rgba(40, 255, 140, 0.05) 1px 2px, rgba(70, 100, 255, 0.05) 2px 3px),
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.24) 0 1px, transparent 1px 3px),
     radial-gradient(ellipse at center, transparent 50%, rgba(0, 0, 0, 0.5) 100%);
-  animation: crt-flicker 5.5s steps(30) infinite;
-}
-@keyframes crt-flicker {
-  0%, 96%, 100% { opacity: 1; }
-  97% { opacity: 0.94; }
-  98% { opacity: 1; }
-  99% { opacity: 0.96; }
 }
 
 /* ---------------------------------------------------------- tool bar */
