@@ -70,6 +70,8 @@ remaining-count badge and grey out when exhausted.
 | `N` | Single step while paused |
 | `M` | Mute SFX |
 | `C` | Toggle CRT filter |
+| `B` | Grid view: chunky blocks, cycles 4 / 8 / 16 px then off |
+| `3` | Toggle 3D voxel view |
 | `G` | Toggle gravity (playground) |
 | `ESC` | Back to menu |
 
@@ -97,6 +99,13 @@ framework, no icon set, no images.
   category (powder / liquid / gas / solid), so the toolbar doubles as a legend.
 - Buttons are beveled arcade keys with real press travel; engaged toggles light
   up cyan.
+- **GRID** redraws the frame as chunky tiles with grout between them, like an
+  LED matrix. The simulation still runs at the full 640x360 - only the drawing
+  is coarsened, so the physics is identical with it on or off. A tile takes the
+  colour of the first non-empty cell it covers rather than a majority vote, so
+  a one-cell-wide water stream still lights its tile instead of vanishing. The
+  size cycles 4 / 8 / 16 px and persists in `localStorage`. Measured at 60 FPS
+  in all three sizes.
 - Every animation is decorative and is switched off under
   `prefers-reduced-motion`. Interactive elements carry focus rings and labels.
 

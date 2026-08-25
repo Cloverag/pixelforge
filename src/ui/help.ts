@@ -65,6 +65,8 @@ function buildContent(box: HTMLElement): void {
     ['N', 'single step while paused'],
     ['G', 'toggle gravity (playground)'],
     ['M / C', 'mute sfx / CRT filter'],
+    ['B', 'grid view - chunky blocks, cycles size'],
+    ['3', 'toggle 3D voxel view'],
     ['ESC', 'back to menu'],
   ];
   for (const [k, d] of rows) {

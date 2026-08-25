@@ -50,6 +50,7 @@ interface TopbarCallbacks {
   onToggleMusic(): void;
   onHelp(): void;
   onToggle3d(): void;
+  onToggleGrid(): void;
 }
 
 interface SandPaletteCallbacks {
@@ -100,13 +101,14 @@ export class Hud {
     const bgBtn = this.mkBtn('BG', cbs.onToggleBg, 'Cycle wallpaper');
     const view3dBtn = this.mkBtn('3D', cbs.onToggle3d, 'Toggle 3D voxel view (3)');
     this.view3dBtn = view3dBtn;
+    this.gridBtn = this.mkBtn('GRID', cbs.onToggleGrid, 'Chunky block view - cycles size (B)');
     const helpBtn = this.mkBtn('?', cbs.onHelp, 'How to play');
     const menuBtn = this.mkBtn('MENU', cbs.onMenu, 'Back to the main menu (ESC)');
     menuBtn.classList.add('primary');
 
     this.fpsEl = h('span', '', '');
     this.fpsEl.id = 'fps';
-    for (const b of [this.saveBtn, this.loadBtn, this.pauseBtn, stepBtn, this.muteBtn, this.musicBtn, crtBtn, bgBtn, view3dBtn, helpBtn, menuBtn])
+    for (const b of [this.saveBtn, this.loadBtn, this.pauseBtn, stepBtn, this.muteBtn, this.musicBtn, crtBtn, bgBtn, this.gridBtn, view3dBtn, helpBtn, menuBtn])
       this.topbar.appendChild(b);
     this.topbar.appendChild(this.fpsEl);
 
@@ -265,6 +267,13 @@ export class Hud {
   private bucketBtn: HTMLButtonElement | null = null;
   private musicBtn!: HTMLButtonElement;
   private view3dBtn!: HTMLButtonElement;
+  private gridBtn!: HTMLButtonElement;
+
+  /** null = off; a number shows the active block edge, e.g. "GRID 8". */
+  setGridSize(n: number | null): void {
+    this.gridBtn.classList.toggle('toggled', n !== null);
+    this.gridBtn.textContent = n === null ? 'GRID' : `GRID ${n}`;
+  }
 
   set3dToggled(v: boolean): void {
     this.view3dBtn.classList.toggle('toggled', v);

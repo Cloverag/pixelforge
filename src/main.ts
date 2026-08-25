@@ -1,6 +1,6 @@
 import './styles.css';
 import { Input, PointerEvt } from './core/input';
-import { Renderer } from './render/renderer';
+import { BLOCK_SIZES, Renderer } from './render/renderer';
 import { Voxel3D } from './render/voxel3d';
 import { Sfx } from './game/audio';
 import { Hud, PgTool } from './ui/hud';
@@ -57,6 +57,41 @@ function toggle3d(): void {
   hud.set3dToggled(view3dOn);
   post({ t: 'watch3d', on: view3dOn });
   sfx.ui();
+}
+
+const GRID_KEY = 'pf.grid';
+
+/** Steps through the block sizes and back to the plain pixel view. */
+function toggleGrid(): void {
+  const cur = renderer.getBlockSize();
+  const i = cur === null ? -1 : BLOCK_SIZES.indexOf(cur as (typeof BLOCK_SIZES)[number]);
+  const next = i + 1 >= BLOCK_SIZES.length ? null : BLOCK_SIZES[i + 1];
+  applyGrid(next);
+  try {
+    if (next === null) localStorage.removeItem(GRID_KEY);
+    else localStorage.setItem(GRID_KEY, String(next));
+  } catch {
+    /* private mode: the setting just will not persist */
+  }
+  toast(next === null ? 'GRID OFF' : `GRID ${next}PX BLOCKS`);
+  sfx.ui();
+}
+
+function applyGrid(n: number | null): void {
+  renderer.setBlockSize(n);
+  hud.setGridSize(n);
+}
+
+/** Restores the saved block size once the HUD buttons exist. */
+function restoreGrid(): void {
+  let saved: string | null = null;
+  try {
+    saved = localStorage.getItem(GRID_KEY);
+  } catch {
+    /* ignore */
+  }
+  const n = saved === null ? NaN : Number(saved);
+  applyGrid(BLOCK_SIZES.includes(n as (typeof BLOCK_SIZES)[number]) ? n : null);
 }
 let challengeId: string | null = null;
 let pgHeld = false;
@@ -437,7 +472,11 @@ hud.initTopbar({
   onToggleMusic: toggleMusic,
   onHelp: () => toggleHelp(),
   onToggle3d: toggle3d,
+  onToggleGrid: toggleGrid,
 });
+
+// the GRID button exists only after initTopbar, so restore the choice here
+restoreGrid();
 
 new Input(
   canvas,
@@ -467,6 +506,9 @@ new Input(
         break;
       case '3':
         if (screen === 'game') toggle3d();
+        break;
+      case 'b':
+        if (screen === 'game') toggleGrid();
         break;
       case 'f':
         if (screen === 'game' && mode === 'sand')
