@@ -118,42 +118,41 @@ export function isFluid(cat: number): boolean {
   return cat === Cat.LIQUID || cat === Cat.GAS;
 }
 
-/** Animated color pick for a cell (worker-side rasterizer). */
-export function colorAt(mat: number, x: number, y: number, frame: number, meta: number): number {
-  const m = MATS[mat];
-  let v = ((x * 73856093) ^ (y * 19349663)) >>> 0;
+/**
+ * Which of a material's four ramp colours a cell shows this frame.
+ *
+ * Split out of `colorAt` so the 3D voxel view can animate its instance
+ * colours from exactly the same rule the 2D rasterizer uses, without
+ * unpacking and re-linearising a packed ABGR word per cell.
+ */
+export function rampIndexAt(mat: number, x: number, y: number, frame: number, meta: number): number {
+  const v = ((x * 73856093) ^ (y * 19349663)) >>> 0;
   switch (mat) {
     case Mat.FIRE:
-      v = (v + frame * 7 + meta * 5) & 3;
-      break;
+      return (v + frame * 7 + meta * 5) & 3;
     case Mat.LAVA:
-      v = (v + (frame >> 2)) & 3;
-      break;
+      return (v + (frame >> 2)) & 3;
     case Mat.ACID:
-      v = (v + (frame >> 3)) & 3;
-      break;
+      return (v + (frame >> 3)) & 3;
     case Mat.EMBER:
-      v = ((frame + meta * 3) >> 2) & 3;
-      break;
-    case Mat.WIRE:
-      // energized wire glows hot yellow/white, idle wire is copper
-      if (meta > 0) return (frame >> 1) & 1 ? 0xffb0f8ff : 0xff3cd2ff; // #fff8b0 / #ffd23c in ABGR
-      v %= 4;
-      break;
+      return ((frame + meta * 3) >> 2) & 3;
     case Mat.TORCH:
-      v = (v + (frame >> 1)) & 3;
-      break;
+      return (v + (frame >> 1)) & 3;
     case Mat.VOID:
-      v = (v + (frame >> 2)) & 3;
-      break;
+      return (v + (frame >> 2)) & 3;
     case Mat.SNOW:
-      v = (v + ((x + y) & 1)) & 3; // static sparkle per grain
-      break;
+      return (v + ((x + y) & 1)) & 3; // static sparkle per grain
     case Mat.TNT:
-      v = ((x * 7 + y * 13) & 8) ? 0 : v % 4; // striped charge look
-      break;
+      return ((x * 7 + y * 13) & 8) ? 0 : v % 4; // striped charge look
     default:
-      v %= 4;
+      return v % 4;
   }
-  return m.ramp[v];
+}
+
+/** Animated color pick for a cell (worker-side rasterizer). */
+export function colorAt(mat: number, x: number, y: number, frame: number, meta: number): number {
+  // energized wire glows hot yellow/white and leaves the ramp entirely
+  if (mat === Mat.WIRE && meta > 0)
+    return (frame >> 1) & 1 ? 0xffb0f8ff : 0xff3cd2ff; // #fff8b0 / #ffd23c in ABGR
+  return MATS[mat].ramp[rampIndexAt(mat, x, y, frame, meta)];
 }

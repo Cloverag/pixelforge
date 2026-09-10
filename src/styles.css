@@ -866,6 +866,35 @@ input[type='range']::-moz-range-thumb {
   }
 }
 
+/* --- 3D voxel view: in-view camera / render controls --- */
+.v3d-ui {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  translate: -50% 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 2px solid var(--line);
+  border-radius: 4px;
+  background: rgba(8, 8, 18, 0.82);
+  box-shadow: 0 0 0 2px #0a0a12, 0 6px 22px rgba(0, 0, 0, 0.55);
+}
+.v3d-ui .px { font-size: 10px; padding: 4px 8px; }
+.v3d-hint {
+  margin-left: 4px;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+@media (max-width: 640px) {
+  .v3d-hint { display: none; }
+}
+
 /* ==== MANAGER LANE ==== (manager-owned CSS goes BELOW this line; builder won't touch) */
 
 /* ---------- help overlay (M2) ---------- */

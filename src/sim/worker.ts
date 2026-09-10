@@ -89,10 +89,19 @@ ctx.onmessage = (e: MessageEvent<Req>) => {
         const sh = SIM_H >> 1;
         const snap = new Uint8Array(sw * sh);
         const cells = w.grid.cells;
+        // Take the first non-empty cell of each 2x2 block rather than a fixed
+        // corner: point-sampling made one-cell-wide streams (wire runs, water
+        // trickles) flicker in and out of the diorama on alternate columns.
         for (let y = 0; y < sh; y++) {
-          const src0 = (y * 2) * SIM_W;
+          const r0 = (y * 2) * SIM_W;
+          const r1 = r0 + SIM_W;
           const dst0 = y * sw;
-          for (let x = 0; x < sw; x++) snap[dst0 + x] = cells[src0 + x * 2];
+          for (let x = 0; x < sw; x++) {
+            const c0 = x * 2;
+            const c1 = c0 + 1;
+            snap[dst0 + x] =
+              cells[r0 + c0] || cells[r0 + c1] || cells[r1 + c0] || cells[r1 + c1];
+          }
         }
         res.snap = snap.buffer;
         res.snapW = sw;
