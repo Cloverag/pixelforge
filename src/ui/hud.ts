@@ -44,6 +44,7 @@ interface TopbarCallbacks {
   onMenu(): void;
   onSave(): void;
   onLoad(): void;
+  onShare(): void;
   onToggleMute(): void;
   onToggleCrt(): void;
   onToggleBg(): void;
@@ -92,6 +93,7 @@ export class Hud {
 
     this.saveBtn = this.mkBtn('SAVE', cbs.onSave, 'Save this world to browser storage');
     this.loadBtn = this.mkBtn('LOAD', cbs.onLoad, 'Load the saved world');
+    this.shareBtn = this.mkBtn('SHARE', cbs.onShare, 'Copy a link that loads this world');
     this.pauseBtn = this.mkBtn('PAUSE', cbs.onPause, 'Pause / resume the simulation (SPACE)');
     const stepBtn = this.mkBtn('STEP', cbs.onStep, 'Advance one tick while paused (N)');
     this.muteBtn = this.mkBtn('SFX', cbs.onToggleMute, 'Mute sound effects (M)');
@@ -108,7 +110,7 @@ export class Hud {
 
     this.fpsEl = h('span', '', '');
     this.fpsEl.id = 'fps';
-    for (const b of [this.saveBtn, this.loadBtn, this.pauseBtn, stepBtn, this.muteBtn, this.musicBtn, crtBtn, bgBtn, this.gridBtn, view3dBtn, helpBtn, menuBtn])
+    for (const b of [this.saveBtn, this.loadBtn, this.shareBtn, this.pauseBtn, stepBtn, this.muteBtn, this.musicBtn, crtBtn, bgBtn, this.gridBtn, view3dBtn, helpBtn, menuBtn])
       this.topbar.appendChild(b);
     this.topbar.appendChild(this.fpsEl);
 
@@ -144,6 +146,9 @@ export class Hud {
   setSaveVisible(v: boolean): void {
     this.saveBtn.classList.toggle('hidden', !v);
     this.loadBtn.classList.toggle('hidden', !v);
+    // sharing a challenge would hand someone a half-solved puzzle, so the
+    // link button lives and dies with save/load
+    this.shareBtn.classList.toggle('hidden', !v);
   }
 
   setMuted(m: boolean): void {
@@ -267,6 +272,7 @@ export class Hud {
   private bucketBtn: HTMLButtonElement | null = null;
   private musicBtn!: HTMLButtonElement;
   private view3dBtn!: HTMLButtonElement;
+  private shareBtn!: HTMLButtonElement;
   private gridBtn!: HTMLButtonElement;
 
   /** null = off; a number shows the active block edge, e.g. "GRID 8". */

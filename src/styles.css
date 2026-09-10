@@ -895,6 +895,41 @@ input[type='range']::-moz-range-thumb {
   .v3d-hint { display: none; }
 }
 
+/* --- share dialog --- */
+.share-box {
+  max-width: 560px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.share-blurb {
+  font-family: var(--font-read);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-dim);
+  text-align: center;
+}
+.share-url {
+  width: 100%;
+  padding: 10px 12px;
+  font-family: var(--font-read);
+  font-size: 12px;
+  color: var(--ink);
+  background: var(--bg);
+  border: 2px solid var(--line);
+  border-radius: 3px;
+  text-overflow: ellipsis;
+}
+.share-url:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.share-meta {
+  font-family: var(--font-read);
+  font-size: 11px;
+  color: var(--ink-faint);
+  text-align: center;
+  line-height: 1.5;
+}
+.share-meta.warn { color: var(--accent); }
+
 /* ==== MANAGER LANE ==== (manager-owned CSS goes BELOW this line; builder won't touch) */
 
 /* ---------- help overlay (M2) ---------- */

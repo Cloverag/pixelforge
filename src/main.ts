@@ -11,6 +11,8 @@ import { Mode, Req, Res, SIM_H, SIM_W, Stats } from './sim/protocol';
 import { CHALLENGES } from './sim/challenges';
 import { recordStars } from './game/progress';
 import { readSave, rleDecode, rleEncode, storeSave } from './game/rle';
+import { decodeShare, encodeShare, shareUrl, takeUrlCode } from './game/share';
+import { showSharePanel } from './ui/share-panel';
 import { applyWallpaper, loadBgIndex, WALLPAPER_NAMES } from './game/wallpapers';
 import { initHelp, toggleHelp } from './ui/help';
 import { initMusic } from './game/music';
@@ -132,11 +134,36 @@ worker.onmessage = (e: MessageEvent<Res>) => {
     return;
   }
   if (r.t === 'state' && r.save) {
-    const blob = rleEncode(r.save.cells, r.save.meta);
-    if (storeSave(blob)) toast('GAME SAVED');
-    else toast('SAVE FAILED (storage)', true);
+    // a snapshot is requested for one of two reasons; the worker does not
+    // care which, so the reason waits here in FIFO order
+    const why = saveIntents.shift() ?? 'store';
+    if (why === 'share') {
+      void encodeShare(r.save.cells, r.save.meta).then((code) => {
+        showSharePanel(shareUrl(code));
+      });
+    } else {
+      const blob = rleEncode(r.save.cells, r.save.meta);
+      if (storeSave(blob)) toast('GAME SAVED');
+      else toast('SAVE FAILED (storage)', true);
+    }
   }
 };
+
+/** Why each in-flight `save` request was made, oldest first. */
+const saveIntents: ('store' | 'share')[] = [];
+
+function requestSnapshot(why: 'store' | 'share'): void {
+  saveIntents.push(why);
+  post({ t: 'save' });
+}
+
+/** Drops a decoded world into the sandbox and leaves the menu. */
+function adoptWorld(d: { a: Uint8Array; b: Uint8Array }): void {
+  post({
+    t: 'load',
+    data: { w: SIM_W, h: SIM_H, cells: d.a, meta: d.b, frame: 0 },
+  });
+}
 
 // ---- sim ticking ----
 let acc = 0;
@@ -448,7 +475,8 @@ hud.initTopbar({
   onPause: togglePause,
   onStep: stepOnce,
   onMenu: () => openMenu(),
-  onSave: () => post({ t: 'save' }),
+  onSave: () => requestSnapshot('store'),
+  onShare: () => requestSnapshot('share'),
   onLoad: () => {
     const blob = readSave();
     if (!blob) {
@@ -460,10 +488,7 @@ hud.initTopbar({
       toast('SAVE CORRUPTED', true);
       return;
     }
-    post({
-      t: 'load',
-      data: { w: SIM_W, h: SIM_H, cells: d.a, meta: d.b, frame: 0 },
-    });
+    adoptWorld(d);
     toast('GAME LOADED');
   },
   onToggleMute: toggleMute,
@@ -550,5 +575,27 @@ let pgGravityOn = true;
 overlay.classList.add('hidden');
 initHelp();
 applyWallpaper(bgIndex);
-openMenu();
+
+// The worker drops every message that arrives before `init`, so nothing that
+// talks to it may run above this line - startSandbox() posts `toSandbox`.
 post({ t: 'init', w: SIM_W, h: SIM_H, buf: masterBuf }, [masterBuf]);
+
+/**
+ * A #w= link skips the menu and drops straight into the shared world.
+ * Decoding is async (gzip), so the `load` is posted whenever it resolves;
+ * message order to the worker is preserved either way.
+ */
+const urlCode = takeUrlCode();
+if (urlCode) {
+  startSandbox();
+  void decodeShare(urlCode, SIM_W * SIM_H).then((d) => {
+    if (!d) {
+      toast('SHARED LINK IS CORRUPTED', true);
+      return;
+    }
+    adoptWorld(d);
+    toast('SHARED WORLD LOADED');
+  });
+} else {
+  openMenu();
+}
