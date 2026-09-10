@@ -13,12 +13,15 @@ export class ChunkSys {
   dirty: Uint8Array;
   /** active chunk indices sorted bottom-up */
   list: number[] = [];
+  /** snapshot of real activity, so spreadHalo does not read what it writes */
+  private halo: Uint8Array;
 
   constructor() {
     const n = CHUNKS_X * CHUNKS_Y;
     this.nxt = new Uint8Array(n);
     this.act = new Uint8Array(n);
     this.dirty = new Uint8Array(n);
+    this.halo = new Uint8Array(n);
   }
 
   wakeCell(x: number, y: number): void {
@@ -61,8 +64,20 @@ export class ChunkSys {
    *  waiting to flow into a void drain) sleeps forever: its chunk only
    *  wakes on writes to itself, and no write will ever come. */
   spreadHalo(): void {
-    for (let ci = 0; ci < this.act.length; ci++) {
-      if (!this.act[ci]) continue;
+    // Spread from chunks that actually did something this frame (`nxt`, which
+    // wakeCell has been filling during the update pass), NOT from every chunk
+    // that merely got scheduled (`act`).
+    //
+    // Spreading from `act` made wakefulness self-sustaining twice over: the
+    // 3x3 halo re-woke the centre chunk, and any two adjacent chunks woke each
+    // other back. So once anything moved anywhere, activity flooded outward a
+    // ring per frame and never receded - a world holding one wall cell still
+    // ran all 3600 chunks every frame, which is the whole chunk-sleep
+    // optimisation defeated.
+    const src = this.halo;
+    src.set(this.nxt);
+    for (let ci = 0; ci < src.length; ci++) {
+      if (!src[ci]) continue;
       const cx = ci % CHUNKS_X;
       const cy = (ci / CHUNKS_X) | 0;
       const x0 = Math.max(0, cx - 1);

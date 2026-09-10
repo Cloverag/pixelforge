@@ -345,6 +345,9 @@ export class World {
       case Mat.ICE:
         this.ice(x, y);
         break;
+      case Mat.ASH:
+        this.powder(x, y, m);
+        break;
       case Mat.SNOW:
         this.snow(x, y);
         break;
@@ -736,10 +739,20 @@ export class World {
     const life = g.meta[i];
     g.chunks.wakeCell(x, y); // embers smolder until gone
     if (life <= 1) {
-      g.setXY(x, y, this.rng.chance(0.4) ? Mat.SMOKE : Mat.EMPTY, this.rng.range(60, 160));
+      // wood -> ember -> ash closes the burn chain: a fire now leaves a
+      // drift of something the wind can pick up, instead of nothing at all
+      const r = this.rng.next();
+      if (r < 0.35) g.setXY(x, y, Mat.SMOKE, this.rng.range(60, 160));
+      else if (r < 0.75) g.setXY(x, y, Mat.ASH);
+      else g.setXY(x, y, Mat.EMPTY);
       return;
     }
-    if ((life & 1) === 0) g.meta[i] = life - 1;
+    // half-rate decay, so embers smolder about twice as long as flame.
+    // This used to gate on `life & 1`, which decremented only from an even
+    // value: an ember fell to the first odd number and stuck there forever,
+    // never becoming smoke and never letting its chunk sleep. Gate on the
+    // frame instead, which is what "every other tick" actually means.
+    if ((this.f & 1) === 0) g.meta[i] = life - 1;
     if (g.get(x, y - 1) === Mat.EMPTY && this.rng.chance(0.15)) {
       g.setXY(x, y - 1, Mat.FIRE, this.rng.range(10, 30));
     }

@@ -25,6 +25,7 @@ export const Mat = {
   SNOW: 23,
   SALT: 24,
   TNT: 25,
+  ASH: 26,
 } as const;
 
 export type MatId = (typeof Mat)[keyof typeof Mat];
@@ -110,6 +111,8 @@ MATS[Mat.VOID] = def(Mat.VOID, 'VOID', Cat.SOLID, 100, ['#3a2450', '#2c1a40', '#
 MATS[Mat.SNOW] = def(Mat.SNOW, 'SNOW', Cat.POWDER, 0.7, ['#eef4fa', '#dce8f4', '#f8fbff', '#c8d8ea'], { acidChance: 0.01 });
 MATS[Mat.SALT] = def(Mat.SALT, 'SALT', Cat.POWDER, 1.3, ['#e8e4da', '#d8d4c8', '#f4f0e6', '#c8c4b8'], { acidChance: 0.01 });
 MATS[Mat.TNT] = def(Mat.TNT, 'TNT', Cat.SOLID, 100, ['#c8281e', '#b02018', '#e03828', '#981810'], { acidChance: 0.02 });
+// lighter than snow, so it is the most wind-mobile thing that still falls
+MATS[Mat.ASH] = def(Mat.ASH, 'ASH', Cat.POWDER, 0.5, ['#5c5764', '#4c4754', '#6c6774', '#3f3b48'], { acidChance: 0.03 });
 
 /**
  * How hard the wind field pushes each material, 0 (immovable) to 1.

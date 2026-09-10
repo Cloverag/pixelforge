@@ -145,3 +145,38 @@ describe('the wind brush', () => {
     expect(w.wind.isMoving).toBe(true);
   });
 });
+
+describe('ash', () => {
+  it('is what wood ends up as', () => {
+    const w = new World(21);
+    // a wood block with fire on top of it
+    for (let y = 200; y < 206; y++)
+      for (let x = 300; x < 312; x++) w.grid.setXY(x, y, Mat.WOOD);
+    for (let x = 300; x < 312; x++) w.grid.setXY(x, 199, Mat.FIRE, 40);
+    const wood0 = w.grid.counts[Mat.WOOD];
+    stepN(w, 400);
+    // wood is only 6% flammable per tick, so a lit face chars rather than
+    // the whole block going up; what matters is that what burns leaves ash
+    expect(w.grid.counts[Mat.WOOD]).toBeLessThan(wood0);
+    expect(w.grid.counts[Mat.ASH]).toBeGreaterThan(0);
+  });
+
+  it('blows further than sand in the same gust', () => {
+    const drift = (mat: number): number => {
+      const w = new World(4);
+      // a floor to land on, so grains travel instead of falling off-screen
+      for (let x = 0; x < SIM_W; x++) w.grid.setXY(x, 300, Mat.WALL);
+      for (let x = 200; x < 210; x++) w.grid.setXY(x, 250, mat);
+      const before = centroidX(w, mat)!;
+      for (let i = 0; i < 120; i++) {
+        w.wind.addGust(205, 260, 2.5, 0, 90);
+        w.step();
+      }
+      return centroidX(w, mat)! - before;
+    };
+    const ash = drift(Mat.ASH);
+    const sand = drift(Mat.SAND);
+    expect(ash).toBeGreaterThan(sand);
+    expect(sand).toBeGreaterThanOrEqual(0);
+  });
+});
