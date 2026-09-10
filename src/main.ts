@@ -1,6 +1,7 @@
 import './styles.css';
 import { Input, PointerEvt } from './core/input';
-import { BLOCK_SIZES, Renderer } from './render/renderer';
+import { BLOCK_SIZES, Renderer, SimRenderer } from './render/renderer';
+import { GLRenderer, tryWebGL2 } from './render/glrenderer';
 import type { Voxel3D } from './render/voxel3d';
 import { Sfx } from './game/audio';
 import { Hud, PgTool } from './ui/hud';
@@ -19,12 +20,41 @@ import { initMusic } from './game/music';
 
 const STEP_MS = 1000 / 60;
 
-const canvas = document.getElementById('screen') as HTMLCanvasElement;
+let canvas = document.getElementById('screen') as HTMLCanvasElement;
 const topbar = document.getElementById('topbar')!;
 const toolbar = document.getElementById('toolbar')!;
 const overlay = document.getElementById('overlay')!;
 
-const renderer = new Renderer(canvas);
+/**
+ * WebGL2 gets the GPU fluid; the 2D canvas is the fallback and still does
+ * trails and glow, just without flowing dye. A canvas only ever gets one
+ * context type, so this is decided once, here, and never revisited.
+ */
+function buildRenderer(): SimRenderer {
+  const gl = tryWebGL2(canvas);
+  if (!gl) return new Renderer(canvas);
+  try {
+    return new GLRenderer(canvas, gl);
+  } catch (e) {
+    // a driver that advertises float render targets but cannot actually make
+    // one leaves the whole view blank, so fall back rather than ship a black
+    // screen; the 2D path still does trails and glow
+    console.warn('[pixelforge] WebGL renderer unavailable, falling back to 2D:', e);
+    return null as unknown as SimRenderer;
+  }
+}
+
+let renderer = buildRenderer();
+let hasFluid = renderer instanceof GLRenderer;
+if (!renderer) {
+  // getContext already handed out a webgl2 context, so this canvas cannot go
+  // back to 2D - replace the element and retry
+  const fresh = canvas.cloneNode(false) as HTMLCanvasElement;
+  canvas.replaceWith(fresh);
+  canvas = fresh;
+  renderer = new Renderer(canvas);
+  hasFluid = false;
+}
 const sfx = new Sfx();
 const hud = new Hud(topbar, toolbar);
 
@@ -106,6 +136,8 @@ function toggleSoft(): void {
 function applySoft(on: boolean): void {
   renderer.setSoft(on);
   hud.setSoftToggled(on);
+  // the material map is only worth streaming when something consumes it
+  if (hasFluid) post({ t: 'watchFluid', on });
 }
 
 function restoreSoft(): void {
@@ -168,15 +200,25 @@ worker.onmessage = (e: MessageEvent<Res>) => {
   const r = e.data;
   if (r.t === 'ready') {
     stepBuf = new ArrayBuffer(SIM_W * SIM_H * 4);
+    // The worker discards everything that arrives before `init`, and the HUD
+    // is wired up further down this file - so any watch flags set during boot
+    // were dropped. Re-send them now that there is something listening.
+    if (hasFluid) post({ t: 'watchFluid', on: renderer.isSoft() });
     requestAnimationFrame(loop);
     return;
   }
   if (r.t === 'frame' && r.buf) {
     stepBuf = r.buf;
     inFlight = false;
+    const snap = r.snap ? new Uint8Array(r.snap) : null;
+    renderer.setFluidInputs(
+      snap,
+      r.snapW ?? 0,
+      r.snapH ?? 0,
+      r.wind ? new Float32Array(r.wind) : null,
+    );
     renderer.present(r.buf, r.shake ?? 0);
-    if (r.snap && view3dOn && view3d)
-      view3d.update(new Uint8Array(r.snap), r.snapW!, r.snapH!);
+    if (snap && view3dOn && view3d) view3d.update(snap, r.snapW!, r.snapH!);
     if ((r.shake ?? 0) > prevShake + 4) sfx.boom();
     prevShake = r.shake ?? 0;
     if (r.counts && r.used && r.budget) {
@@ -361,6 +403,7 @@ function enterGame(label: string): void {
 function startSandbox(): void {
   mode = 'sand';
   challengeId = null;
+  renderer.reset();
   post({ t: 'toSandbox' });
   hud.buildSandPalette(null, Mat.SAND, brush, {
     onSelect: (m) => {
@@ -386,6 +429,7 @@ function startPlayground(): void {
 }
 
 function startChallenge(id: string): void {
+  renderer.reset();
   const def = CHALLENGES.find((c) => c.id === id);
   if (!def) return;
   mode = 'sand';

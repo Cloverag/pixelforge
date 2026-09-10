@@ -141,6 +141,18 @@ export class Wind {
     this.active = live;
   }
 
+  /**
+   * Interleaves the field into `dst` as RG pairs, for upload as a texture.
+   * `dst` must hold two floats per chunk.
+   */
+  copyInto(dst: Float32Array): void {
+    const { vx, vy } = this;
+    for (let i = 0; i < vx.length; i++) {
+      dst[i * 2] = vx[i];
+      dst[i * 2 + 1] = vy[i];
+    }
+  }
+
   /** Horizontal velocity at a cell coordinate. */
   atX(x: number, y: number): number {
     if (this.active === 0) return 0;

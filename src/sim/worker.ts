@@ -1,5 +1,5 @@
 /// <reference lib="webworker" />
-import { SIM_H, SIM_W, Req, Res, SaveData } from './protocol';
+import { CHUNKS_X, CHUNKS_Y, SIM_H, SIM_W, Req, Res, SaveData } from './protocol';
 import { World } from './world';
 import { PG_BG } from './particles';
 
@@ -10,6 +10,9 @@ let world: World | null = null;
 let master: Uint32Array | null = null;
 let forceFull = true;
 let watch3d = false;
+let watchFluid = false;
+/** true while the wind field still needs sending after it goes still */
+let windDirty = false;
 
 function respond(res: Res, transfer?: ArrayBuffer[]): void {
   ctx.postMessage(res, transfer ?? []);
@@ -60,6 +63,11 @@ ctx.onmessage = (e: MessageEvent<Req>) => {
       watch3d = msg.on;
       break;
 
+    case 'watchFluid':
+      watchFluid = msg.on;
+      windDirty = true;
+      break;
+
     case 'step': {
       const pix = new Uint32Array(msg.buf);
       w.step();
@@ -93,7 +101,20 @@ ctx.onmessage = (e: MessageEvent<Req>) => {
         result: w.challenge && w.challenge.done ? w.challenge.result : null,
       };
       const transfer = [msg.buf];
-      if (watch3d && w.f % 3 === 0) {
+      if (watchFluid) {
+        // The fluid advects dye through the CPU wind field, so it needs the
+        // field every frame - but only while it is actually moving. A still
+        // field is sent once so the GPU copy zeroes out, then not again.
+        const moving = w.wind.isMoving;
+        if (moving || windDirty) {
+          const wind = new Float32Array(CHUNKS_X * CHUNKS_Y * 2);
+          w.wind.copyInto(wind);
+          res.wind = wind.buffer;
+          transfer.push(wind.buffer);
+          windDirty = moving;
+        }
+      }
+      if ((watch3d && w.f % 3 === 0) || watchFluid) {
         // downsampled material map for the 3D voxel view
         const sw = SIM_W >> 1;
         const sh = SIM_H >> 1;
