@@ -9,6 +9,17 @@ const GAP = 0xff090505;
 /** Block sizes the GRID button cycles through, in simulation cells. */
 export const BLOCK_SIZES = [4, 8, 16] as const;
 
+/**
+ * SOFT mode: how much of the new frame is laid over the last one. Below 1 the
+ * previous frame shows through, so anything moving leaves a short fading tail
+ * and the whole picture stops looking like a flip-book of stills.
+ */
+const TRAIL = 0.55;
+/** Strength of the additive blurred pass that makes bright cells bleed. */
+const GLOW = 0.24;
+/** Blur radius of that pass, in canvas pixels. */
+const GLOW_BLUR = 2.2;
+
 /** Sum of a box's horizontal / vertical padding + border, in CSS pixels. */
 function chrome(el: HTMLElement): { w: number; h: number } {
   const cs = getComputedStyle(el);
@@ -35,13 +46,47 @@ export class Renderer {
   /** one band of tiles, built once per block row then copied down its rows */
   private rowTpl: Uint32Array | null = null;
 
+  /** scratch canvas holding the raw sim frame, so it can be composited */
+  private off: HTMLCanvasElement;
+  private offCtx: CanvasRenderingContext2D;
+  /** trails + glow + smooth upscale; off restores the hard pixel look */
+  private soft = true;
+  /** whether this browser honours ctx.filter (Safari < 17 does not) */
+  private canBlur: boolean;
+
   constructor(private canvas: HTMLCanvasElement) {
     this.ctx = canvas.getContext('2d', { alpha: false })!;
+    this.off = document.createElement('canvas');
+    this.off.width = SIM_W;
+    this.off.height = SIM_H;
+    this.offCtx = this.off.getContext('2d', { alpha: false })!;
+    // ctx.filter is unimplemented on older Safari, where it silently reads
+    // back as the empty string; without the check the glow pass would draw
+    // an unblurred copy and just wash the picture out
+    this.ctx.filter = 'blur(1px)';
+    this.canBlur = this.ctx.filter === 'blur(1px)';
+    this.ctx.filter = 'none';
     this.stage = document.getElementById('stage')!;
     this.bezel = document.getElementById('bezel');
     this.shakeTarget = this.bezel ?? canvas;
     window.addEventListener('resize', () => this.resize());
     this.resize();
+  }
+
+  /** Trails, glow and a smooth upscale, versus the hard arcade pixel look. */
+  setSoft(on: boolean): void {
+    this.soft = on;
+    this.canvas.classList.toggle('hard-pixels', !on);
+    // a mode switch would otherwise leave the last composite ghosting under
+    // the new one
+    this.ctx.globalCompositeOperation = 'source-over';
+    this.ctx.globalAlpha = 1;
+    this.ctx.fillStyle = '#0b0b14';
+    this.ctx.fillRect(0, 0, SIM_W, SIM_H);
+  }
+
+  isSoft(): boolean {
+    return this.soft;
   }
 
   /** null restores the 1:1 pixel view; a number is the block edge in cells. */
@@ -70,6 +115,30 @@ export class Renderer {
     scale = Math.max(0.5, scale);
     this.canvas.style.width = `${Math.floor(SIM_W * scale)}px`;
     this.canvas.style.height = `${Math.floor(SIM_H * scale)}px`;
+  }
+
+  /**
+   * Lays the frame over the last one with two passes.
+   *
+   * putImageData cannot blend - it overwrites - so the frame goes to a
+   * scratch canvas first and comes back through drawImage, which can. The
+   * first pass at alpha TRAIL leaves a fading tail behind anything moving;
+   * the second is an additive blurred copy, so bright cells bleed into their
+   * neighbours and the near-black background contributes almost nothing.
+   */
+  private composite(img: ImageData): void {
+    this.offCtx.putImageData(img, 0, 0);
+    const c = this.ctx;
+    c.globalCompositeOperation = 'source-over';
+    c.globalAlpha = TRAIL;
+    c.drawImage(this.off, 0, 0);
+    c.globalAlpha = GLOW;
+    c.globalCompositeOperation = 'lighter';
+    if (this.canBlur) c.filter = `blur(${GLOW_BLUR}px)`;
+    c.drawImage(this.off, 0, 0);
+    if (this.canBlur) c.filter = 'none';
+    c.globalAlpha = 1;
+    c.globalCompositeOperation = 'source-over';
   }
 
   /**
@@ -126,7 +195,8 @@ export class Renderer {
     const img = this.block
       ? this.toBlocks(buf, this.block)
       : new ImageData(new Uint8ClampedArray(buf), SIM_W, SIM_H);
-    this.ctx.putImageData(img, 0, 0);
+    if (this.soft) this.composite(img);
+    else this.ctx.putImageData(img, 0, 0);
     if (shake > 0) {
       const mag = Math.min(8, shake / 3);
       const dx = (Math.random() * 2 - 1) * mag;

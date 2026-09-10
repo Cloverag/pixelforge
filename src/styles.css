@@ -103,6 +103,10 @@ body.has-wallpaper #app { position: relative; z-index: 1; }
   flex: 0 0 auto;
   display: flex;
   align-items: center;
+  /* it was a single unwrapped row and already flush with the right edge at
+     1280px, so one more button used to push MENU off screen */
+  flex-wrap: wrap;
+  row-gap: 6px;
   gap: 8px;
   padding: 11px 16px;
   background: linear-gradient(180deg, var(--panel-2) 0%, var(--panel) 60%, #101020 100%);
@@ -306,11 +310,17 @@ body.sim-paused #led {
 
 #screen {
   display: block;
-  image-rendering: pixelated;
-  image-rendering: crisp-edges;
   background: #0b0b14;
   touch-action: none;
   cursor: crosshair;
+  /* SOFT is the default: the browser bilinear-upscales the 640x360 buffer, so
+     grains have soft edges instead of hard squares. .hard-pixels restores the
+     original arcade look. */
+  image-rendering: auto;
+}
+#screen.hard-pixels {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
 }
 
 /* --- glass: always on. It is the tube, not the CRT effect. ---

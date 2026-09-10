@@ -85,6 +85,39 @@ async function toggle3d(): Promise<void> {
   post({ t: 'watch3d', on: true });
 }
 
+const SOFT_KEY = 'pf.soft';
+
+/**
+ * SOFT is on by default. The hard-pixel look is the original arcade skin and
+ * still one keypress away, but "smooth like sandspiel" is what the game is
+ * being asked for, so that is what a new player should see first.
+ */
+function toggleSoft(): void {
+  applySoft(!renderer.isSoft());
+  try {
+    localStorage.setItem(SOFT_KEY, renderer.isSoft() ? '1' : '0');
+  } catch {
+    /* private mode: the setting just will not persist */
+  }
+  toast(renderer.isSoft() ? 'SOFT PARTICLES ON' : 'SOFT PARTICLES OFF');
+  sfx.ui();
+}
+
+function applySoft(on: boolean): void {
+  renderer.setSoft(on);
+  hud.setSoftToggled(on);
+}
+
+function restoreSoft(): void {
+  let saved: string | null = null;
+  try {
+    saved = localStorage.getItem(SOFT_KEY);
+  } catch {
+    /* ignore */
+  }
+  applySoft(saved !== '0');
+}
+
 const GRID_KEY = 'pf.grid';
 
 /** Steps through the block sizes and back to the plain pixel view. */
@@ -522,10 +555,12 @@ hud.initTopbar({
   onHelp: () => toggleHelp(),
   onToggle3d: () => void toggle3d(),
   onToggleGrid: toggleGrid,
+  onToggleSoft: toggleSoft,
 });
 
-// the GRID button exists only after initTopbar, so restore the choice here
+// the GRID and SOFT buttons exist only after initTopbar, so restore here
 restoreGrid();
+restoreSoft();
 
 new Input(
   canvas,
@@ -558,6 +593,9 @@ new Input(
         break;
       case 'b':
         if (screen === 'game') toggleGrid();
+        break;
+      case 's':
+        if (screen === 'game') toggleSoft();
         break;
       case 'f':
         if (screen === 'game' && mode === 'sand')

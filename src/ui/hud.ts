@@ -52,6 +52,7 @@ interface TopbarCallbacks {
   onHelp(): void;
   onToggle3d(): void;
   onToggleGrid(): void;
+  onToggleSoft(): void;
 }
 
 interface SandPaletteCallbacks {
@@ -98,6 +99,7 @@ export class Hud {
     const stepBtn = this.mkBtn('STEP', cbs.onStep, 'Advance one tick while paused (N)');
     this.muteBtn = this.mkBtn('SFX', cbs.onToggleMute, 'Mute sound effects (M)');
     this.musicBtn = this.mkBtn('MUSIC', cbs.onToggleMusic, 'Toggle chiptune loop');
+    this.softBtn = this.mkBtn('SOFT', cbs.onToggleSoft, 'Smooth particles with trails and glow (S)');
     const crtBtn = this.mkBtn('CRT', cbs.onToggleCrt, 'Toggle the CRT filter (C)');
     crtBtn.classList.add('toggled');
     const bgBtn = this.mkBtn('BG', cbs.onToggleBg, 'Cycle wallpaper');
@@ -110,7 +112,7 @@ export class Hud {
 
     this.fpsEl = h('span', '', '');
     this.fpsEl.id = 'fps';
-    for (const b of [this.saveBtn, this.loadBtn, this.shareBtn, this.pauseBtn, stepBtn, this.muteBtn, this.musicBtn, crtBtn, bgBtn, this.gridBtn, view3dBtn, helpBtn, menuBtn])
+    for (const b of [this.saveBtn, this.loadBtn, this.shareBtn, this.pauseBtn, stepBtn, this.muteBtn, this.musicBtn, this.softBtn, crtBtn, bgBtn, this.gridBtn, view3dBtn, helpBtn, menuBtn])
       this.topbar.appendChild(b);
     this.topbar.appendChild(this.fpsEl);
 
@@ -274,6 +276,7 @@ export class Hud {
   private musicBtn!: HTMLButtonElement;
   private view3dBtn!: HTMLButtonElement;
   private shareBtn!: HTMLButtonElement;
+  private softBtn!: HTMLButtonElement;
   private gridBtn!: HTMLButtonElement;
 
   /** null = off; a number shows the active block edge, e.g. "GRID 8". */
@@ -284,6 +287,10 @@ export class Hud {
 
   set3dToggled(v: boolean): void {
     this.view3dBtn.classList.toggle('toggled', v);
+  }
+
+  setSoftToggled(v: boolean): void {
+    this.softBtn.classList.toggle('toggled', v);
   }
 
   setMusicToggled(v: boolean): void {

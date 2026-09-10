@@ -68,6 +68,16 @@ ctx.onmessage = (e: MessageEvent<Req>) => {
         if (forceFull) master.fill(PG_BG);
         w.parts.fullRender(master, false, w.f);
         pix.set(master);
+      } else if (master) {
+        // Sand mode is authoritative on master for the same reason playground
+        // is. renderInto only paints dirty chunks and clears the flag as it
+        // goes, but the frame buffers ping-pong: rendering straight into `pix`
+        // meant each change reached exactly ONE of the two buffers, and the
+        // other kept its previous content for that chunk forever. Settled
+        // material therefore strobed at 30 Hz between its last two states -
+        // a one-pixel shimmer over every pile that had stopped moving.
+        w.renderInto(master, forceFull);
+        pix.set(master);
       } else {
         w.renderInto(pix, forceFull);
       }
