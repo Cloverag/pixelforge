@@ -1,6 +1,10 @@
 import { CHALLENGES } from '../sim/challenges';
 import { isUnlocked, loadProgress, Progress } from '../game/progress';
 import { h } from './widgets';
+import { MATS } from '../sim/materials';
+
+/** Counted, not typed: the menu said 20 while the palette held 25. */
+const PLACEABLE = MATS.filter((m) => m?.placeable).length;
 
 export interface MenuCallbacks {
   onSandbox(): void;
@@ -45,7 +49,7 @@ export function showMenu(cbs: MenuCallbacks): void {
 
   const col = h('div', 'menu-col');
   col.appendChild(
-    modeButton('SANDBOX', 'Paint 20 materials. No rules, no timer.', true, cbs.onSandbox),
+    modeButton('SANDBOX', `Paint ${PLACEABLE} materials. No rules, no timer.`, true, cbs.onSandbox),
   );
   col.appendChild(
     modeButton('PARTICLE PLAYGROUND', 'Fountains, vortices and gravity toys.', false, cbs.onPlayground),

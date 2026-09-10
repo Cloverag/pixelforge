@@ -29,6 +29,9 @@ const EMISSIVE = new Set<number>([Mat.FIRE, Mat.LAVA, Mat.TORCH, Mat.EMBER]);
 /** Per-cell relief, as a fraction of the material's depth. */
 const RELIEF = 0.45;
 
+/** How far over 1.0 emissive colours are pushed, to clear the bloom threshold. */
+const GLOW_GAIN = 1.45;
+
 /** sRGB -> linear, matching what THREE.ColorManagement does on the way in. */
 function toLinear(c: number): number {
   return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
@@ -55,7 +58,7 @@ function buildRampTable(): Float32Array {
   return t;
 }
 
-export type CamPreset = 'front' | 'iso' | 'top';
+export type CamPreset = 'front' | 'iso' | 'tilt';
 
 /** 3D voxel diorama of the 2D sim grid - orbit with the mouse. */
 export class Voxel3D {
@@ -108,7 +111,7 @@ export class Voxel3D {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     this.renderer.setSize(container.clientWidth, container.clientHeight);
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.05;
+    this.renderer.toneMappingExposure = 1.25;
     container.appendChild(this.renderer.domElement);
     this.renderer.domElement.style.width = '100%';
     this.renderer.domElement.style.height = '100%';
@@ -195,11 +198,16 @@ export class Voxel3D {
 
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
+    // Tuned against a scene holding lava, a torch and a burning post: at
+    // strength 0.85 / threshold 0.2 the glow swallowed the whole diorama in
+    // an orange haze and the material underneath stopped being readable.
+    // The threshold now sits above every lit surface, so only the emissive
+    // mesh blooms at all.
     this.bloom = new UnrealBloomPass(
       new THREE.Vector2(container.clientWidth, container.clientHeight),
-      0.85, // strength
-      0.5, // radius
-      0.2, // threshold - only the over-bright glow mesh crosses it
+      0.32, // strength
+      0.45, // radius
+      0.62, // threshold
     );
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
@@ -231,7 +239,7 @@ export class Voxel3D {
 
     mk('FRONT', 'Face the diorama head on', () => this.preset('front'));
     mk('ISO', 'Three-quarter view', () => this.preset('iso'));
-    mk('TOP', 'Look down the stack', () => this.preset('top'));
+    mk('TILT', 'Look down on the diorama', () => this.preset('tilt'));
     this.spinBtn = mk('SPIN', 'Auto-orbit the camera', () => {
       this.controls.autoRotate = !this.controls.autoRotate;
       this.idle = 0;
@@ -266,7 +274,7 @@ export class Voxel3D {
   }
 
   private buildLights(): void {
-    this.scene.add(new THREE.HemisphereLight(0x99bbff, 0x201824, 0.75));
+    this.scene.add(new THREE.HemisphereLight(0x99bbff, 0x241c28, 0.95));
     const sun = new THREE.DirectionalLight(0xfff2d8, 1.5);
     sun.position.set(120, 220, 180);
     this.scene.add(sun);
@@ -301,10 +309,15 @@ export class Voxel3D {
 
   /** Snaps the camera to one of the three framing presets. */
   setCamera(preset: CamPreset): void {
-    const d = this.snapH;
-    if (preset === 'front') this.camera.position.set(0, 0, d * 1.35);
-    else if (preset === 'top') this.camera.position.set(0, d * 1.5, d * 0.5);
-    else this.camera.position.set(d * 0.75, d * 0.5, d * 1.05);
+    // distance that exactly fits the world's height in a 48-degree frustum;
+    // the presets are multiples of it rather than magic numbers
+    const fit = this.snapH / 2 / Math.tan((this.camera.fov / 2) * (Math.PI / 180));
+    if (preset === 'front') this.camera.position.set(0, 0, fit * 1.04);
+    // 45 degrees, not overhead: the world is a vertical slab about 10 units
+    // deep, so a true top-down view looks straight down its edge and renders
+    // as a flat line. This is the steepest angle that still shows the face.
+    else if (preset === 'tilt') this.camera.position.set(0, fit * 0.72, fit * 0.72);
+    else this.camera.position.set(fit * 0.6, fit * 0.42, fit * 0.84);
     this.controls.target.set(0, 0, 0);
     this.controls.update();
   }
@@ -379,9 +392,9 @@ export class Voxel3D {
         const c = n * 3;
         if (hot) {
           // push emissives past the bloom threshold so they actually bleed
-          col[c] = ramps[k] * 2.2;
-          col[c + 1] = ramps[k + 1] * 2.2;
-          col[c + 2] = ramps[k + 2] * 2.2;
+          col[c] = ramps[k] * GLOW_GAIN;
+          col[c + 1] = ramps[k + 1] * GLOW_GAIN;
+          col[c + 2] = ramps[k + 2] * GLOW_GAIN;
           ng++;
         } else {
           col[c] = ramps[k];
