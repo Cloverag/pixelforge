@@ -85,6 +85,28 @@ export class Voxel3D {
   private jitter: Float32Array;
 
   private frame = 0;
+  /**
+   * Quality ladder. The diorama draws one instanced cube per occupied cell,
+   * which a discrete GPU eats and a software rasterizer or a weak iGPU does
+   * not. Rather than guess at the hardware, measure our own frame time and
+   * step down: 0 = full, 1 = no bloom, 2 = half-resolution voxels (a quarter
+   * of the instances). It never steps back up - flapping between quality
+   * levels is worse to look at than sitting one rung low.
+   */
+  private quality = 0;
+  /** exponential moving average of render frame time, ms */
+  private frameMs = 16.7;
+  private lastT = 0;
+  /**
+   * Timestamp before which no further step down is considered. This is a
+   * clock, not a frame count: counting frames to react to a low frame rate
+   * is self-defeating, and a 180-frame cooldown took 22 seconds to fire at
+   * the 8 FPS it was supposed to be rescuing.
+   */
+  private nextStepAt = 0;
+  /** voxels per sampled cell edge; 2 means one cube per 2x2 block */
+  private stride = 1;
+  private hintEl!: HTMLElement;
   /** frames since the user last let go of the orbit controls */
   private idle = 0;
   /** true between an orbit-control 'start' and its 'end' */
@@ -246,6 +268,9 @@ export class Voxel3D {
       this.syncButtons();
     });
     this.glowBtn = mk('GLOW', 'Bloom on emissive materials', () => {
+      // turning it back on by hand also opts out of the automatic step-down,
+      // so the governor does not immediately switch it off again
+      if (!this.bloomOn) this.nextStepAt = Infinity;
       this.setBloom(!this.bloomOn);
       this.syncButtons();
     });
@@ -253,6 +278,7 @@ export class Voxel3D {
     const hint = document.createElement('span');
     hint.className = 'v3d-hint';
     hint.textContent = 'drag to orbit \u00b7 scroll to zoom';
+    this.hintEl = hint;
     bar.appendChild(hint);
 
     this.ui = bar;
@@ -358,13 +384,14 @@ export class Voxel3D {
     const halfH = h / 2;
     const halfW = w / 2;
     const cap = this.capacity;
+    const step = this.stride;
     let ns = 0;
     let ng = 0;
 
-    for (let y = 0; y < h; y++) {
+    for (let y = 0; y < h; y += step) {
       const row = y * w;
       const py = halfH - y;
-      for (let x = 0; x < w; x++) {
+      for (let x = 0; x < w; x += step) {
         const i = row + x;
         const m = cells[i];
         if (m === 0) continue;
@@ -383,7 +410,8 @@ export class Voxel3D {
         const col = hot ? glowCol : solidCol;
 
         const o = n * 16;
-        mat[o] = 1; // sx
+        mat[o] = step; // sx
+        mat[o + 5] = step; // sy
         mat[o + 10] = sz;
         mat[o + 12] = x - halfW;
         mat[o + 13] = py;
@@ -415,6 +443,9 @@ export class Voxel3D {
 
   show(): void {
     this.visible = true;
+    this.lastT = 0;
+    // let the frame-time average settle before judging the hardware
+    if (this.nextStepAt !== Infinity) this.nextStepAt = performance.now() + 2000;
     this.container.classList.remove('hidden');
     this.onResize();
   }
@@ -424,9 +455,36 @@ export class Voxel3D {
     this.container.classList.add('hidden');
   }
 
+  /** Drops one rung of the quality ladder. */
+  private stepDownQuality(): void {
+    this.quality++;
+    if (this.quality === 1) {
+      this.bloom.enabled = false;
+      this.bloomOn = false;
+      this.hintEl.textContent = 'drag to orbit \u00b7 glow off';
+    } else if (this.quality === 2) {
+      this.stride = 2;
+      this.hintEl.textContent = 'drag to orbit \u00b7 low detail';
+    }
+    this.syncButtons();
+  }
+
   render(): void {
     if (!this.visible) return;
     this.frame++;
+
+    const now = performance.now();
+    if (this.lastT !== 0) {
+      const dt = now - this.lastT;
+      // ignore the huge dt of a backgrounded tab or the very first frame
+      if (dt < 500) this.frameMs += (dt - this.frameMs) * 0.1;
+    }
+    this.lastT = now;
+    if (now >= this.nextStepAt && this.quality < 2 && this.frameMs > 24) {
+      this.stepDownQuality();
+      this.nextStepAt = now + 2500;
+    }
+
     // drift the camera once the player stops driving it, so a diorama left
     // on screen keeps showing off its depth
     if (this.dragging) {

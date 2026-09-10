@@ -872,6 +872,9 @@ input[type='range']::-moz-range-thumb {
   left: 50%;
   bottom: 14px;
   translate: -50% 0;
+  /* the pill must never grow past the screen it floats over, or the leftmost
+     button slides out of the bezel when the status hint gets longer */
+  max-width: calc(100% - 24px);
   z-index: 5;
   display: flex;
   align-items: center;
@@ -885,6 +888,9 @@ input[type='range']::-moz-range-thumb {
 .v3d-ui .px { font-size: 10px; padding: 4px 8px; }
 .v3d-hint {
   margin-left: 4px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-size: 9px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
