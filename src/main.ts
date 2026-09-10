@@ -1,7 +1,7 @@
 import './styles.css';
 import { Input, PointerEvt } from './core/input';
 import { BLOCK_SIZES, Renderer } from './render/renderer';
-import { Voxel3D } from './render/voxel3d';
+import type { Voxel3D } from './render/voxel3d';
 import { Sfx } from './game/audio';
 import { Hud, PgTool } from './ui/hud';
 import { showMenu } from './ui/menu';
@@ -48,17 +48,41 @@ let paintKind: 'brush' | 'flood' = 'brush';
 let view3d: Voxel3D | null = null;
 let view3dOn = false;
 
-function toggle3d(): void {
-  view3dOn = !view3dOn;
-  if (view3dOn && !view3d) {
-    view3d = new Voxel3D(document.getElementById('view3d')!, SIM_W >> 1, SIM_H >> 1);
-  }
-  if (view3dOn) view3d!.show();
-  else view3d!.hide();
-  document.getElementById('screen')!.style.visibility = view3dOn ? 'hidden' : 'visible';
-  hud.set3dToggled(view3dOn);
-  post({ t: 'watch3d', on: view3dOn });
+/**
+ * three.js is ~150 kB gzipped and the 3D view is off by default, so it is
+ * pulled in on the first toggle rather than shipped in the entry chunk that
+ * every player downloads. `loading` guards a double-click during the fetch.
+ */
+let view3dLoading = false;
+
+async function toggle3d(): Promise<void> {
   sfx.ui();
+  if (view3dOn) {
+    view3dOn = false;
+    view3d?.hide();
+    document.getElementById('screen')!.style.visibility = 'visible';
+    hud.set3dToggled(false);
+    post({ t: 'watch3d', on: false });
+    return;
+  }
+  if (view3dLoading) return;
+  if (!view3d) {
+    view3dLoading = true;
+    try {
+      const { Voxel3D } = await import('./render/voxel3d');
+      view3d = new Voxel3D(document.getElementById('view3d')!, SIM_W >> 1, SIM_H >> 1);
+    } catch {
+      toast('3D VIEW FAILED TO LOAD', true);
+      return;
+    } finally {
+      view3dLoading = false;
+    }
+  }
+  view3dOn = true;
+  view3d.show();
+  document.getElementById('screen')!.style.visibility = 'hidden';
+  hud.set3dToggled(true);
+  post({ t: 'watch3d', on: true });
 }
 
 const GRID_KEY = 'pf.grid';
@@ -370,7 +394,7 @@ function openMenu(): void {
     onToggleBg: cycleWallpaper,
     onToggleMusic: toggleMusic,
     onHelp: () => toggleHelp(),
-    onToggle3d: toggle3d,
+    onToggle3d: () => void toggle3d(),
   });
 }
 
@@ -496,7 +520,7 @@ hud.initTopbar({
   onToggleBg: cycleWallpaper,
   onToggleMusic: toggleMusic,
   onHelp: () => toggleHelp(),
-  onToggle3d: toggle3d,
+  onToggle3d: () => void toggle3d(),
   onToggleGrid: toggleGrid,
 });
 
@@ -530,7 +554,7 @@ new Input(
         if (screen === 'game') openMenu();
         break;
       case '3':
-        if (screen === 'game') toggle3d();
+        if (screen === 'game') void toggle3d();
         break;
       case 'b':
         if (screen === 'game') toggleGrid();
