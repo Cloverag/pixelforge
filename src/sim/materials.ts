@@ -117,17 +117,20 @@ MATS[Mat.ASH] = def(Mat.ASH, 'ASH', Cat.POWDER, 0.5, ['#5c5764', '#4c4754', '#6c
 /**
  * How hard the wind field pushes each material, 0 (immovable) to 1.
  *
- * Gases go where they are told. Powders drift in proportion to how light
- * they are, so snow streams and sand barely stirs. Liquids are deliberately
- * left at zero: several challenges are scored on where water ends up, and a
- * player fanning a flame should not also be able to bail out a flood.
+ * Gases go where they are told. Powders drift in proportion to how light they
+ * are, so ash streams and sand skitters. Liquids get pushed too - they used to
+ * be pinned at zero to protect the water-scored challenges, but a wind brush
+ * that does nothing to the two things players paint most (sand and water)
+ * reads as broken, which is exactly how it read. The challenge budgets are the
+ * thing to re-tune, not the tool.
  */
 export const WIND_SUSC = new Float32Array(NMATS);
 for (let m = 0; m < NMATS; m++) {
   const d = MATS[m];
   if (!d) continue;
   if (d.cat === Cat.GAS) WIND_SUSC[m] = 1;
-  else if (d.cat === Cat.POWDER) WIND_SUSC[m] = Math.min(1, 0.4 / d.dens);
+  else if (d.cat === Cat.POWDER) WIND_SUSC[m] = Math.min(1, 0.5 / d.dens);
+  else if (d.cat === Cat.LIQUID) WIND_SUSC[m] = 0.35;
   else WIND_SUSC[m] = 0;
 }
 

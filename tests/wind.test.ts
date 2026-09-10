@@ -89,16 +89,52 @@ describe('wind field', () => {
     expect(w.wind.atX(600, 180)).toBe(0);
   });
 
-  it('does not move liquids or solids', () => {
-    expect(WIND_SUSC[Mat.WATER]).toBe(0);
-    expect(WIND_SUSC[Mat.LAVA]).toBe(0);
+  it('never moves solids', () => {
     expect(WIND_SUSC[Mat.STONE]).toBe(0);
     expect(WIND_SUSC[Mat.WALL]).toBe(0);
     for (let m = 0; m < WIND_SUSC.length; m++) {
       if (!MATS[m]) continue;
-      if (MATS[m].cat === Cat.LIQUID || MATS[m].cat === Cat.SOLID)
-        expect(WIND_SUSC[m]).toBe(0);
+      if (MATS[m].cat === Cat.SOLID) expect(WIND_SUSC[m]).toBe(0);
     }
+  });
+
+  it('moves liquids, but less than gases', () => {
+    for (let m = 0; m < WIND_SUSC.length; m++) {
+      if (!MATS[m] || MATS[m].cat !== Cat.LIQUID) continue;
+      expect(WIND_SUSC[m]).toBeGreaterThan(0);
+      expect(WIND_SUSC[m]).toBeLessThan(WIND_SUSC[Mat.SMOKE]);
+    }
+  });
+
+  /**
+   * A pool left alone does not stay put: the dispersion rule slides each cell
+   * to the farthest contiguous opening, which drifts a spreading pool sideways
+   * on its own. So the claim under test is relative - a gust has to move the
+   * water materially further than that baseline drift, in the gust's own
+   * direction - rather than "still water does not move", which is not true
+   * of this engine and never was.
+   */
+  const poolDrift = (gust: number): number => {
+    const w = new World(6);
+    for (let x = 0; x < SIM_W; x++) w.grid.setXY(x, 300, Mat.WALL);
+    for (let y = 296; y < 300; y++)
+      for (let x = 280; x < 320; x++) w.grid.setXY(x, y, Mat.WATER);
+    const before = centroidX(w, Mat.WATER)!;
+    for (let i = 0; i < 150; i++) {
+      if (gust !== 0) w.wind.addGust(300, 298, gust, 0, 70);
+      w.step();
+    }
+    return centroidX(w, Mat.WATER)! - before;
+  };
+
+  it('streams a pool of water downwind', () => {
+    const idle = poolDrift(0);
+    expect(poolDrift(2.5)).toBeGreaterThan(idle + 20);
+  });
+
+  it('streams it the other way for the opposite gust', () => {
+    const idle = poolDrift(0);
+    expect(poolDrift(-2.5)).toBeLessThan(idle - 20);
   });
 
   it('moves light powders more than heavy ones', () => {

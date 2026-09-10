@@ -17,8 +17,8 @@ import { CHUNK, CHUNK_SHIFT, CHUNKS_X, CHUNKS_Y } from './protocol';
 
 /** Below this, a gust is spent and gets flushed to zero. */
 const CUTOFF = 0.06;
-/** Per-frame velocity retained. Roughly a 1.2s tail on a hard gust. */
-const DECAY = 0.955;
+/** Per-frame velocity retained. Roughly a 3s tail on a hard gust. */
+const DECAY = 0.972;
 /** Share of a cell's velocity handed to its four neighbours each frame. */
 const SPREAD = 0.12;
 

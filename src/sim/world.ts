@@ -198,15 +198,15 @@ export class World {
   private blow(pts: number[], size: number): void {
     const n = pts.length >> 1;
     if (n === 0) return;
-    const radius = Math.max(8, size * 2.5);
+    const radius = Math.max(10, size * 3);
     const dx = pts[(n - 1) * 2] - pts[0];
     const dy = pts[(n - 1) * 2 + 1] - pts[1];
     const len = Math.sqrt(dx * dx + dy * dy);
     if (len < 1) {
-      this.wind.addBlast(pts[0], pts[1], radius, 0.5);
+      this.wind.addBlast(pts[0], pts[1], radius, 0.9);
       return;
     }
-    const strength = Math.min(2.2, 0.3 + len * 0.06);
+    const strength = Math.min(3.2, 0.5 + len * 0.09);
     const ux = (dx / len) * strength;
     const uy = (dy / len) * strength;
     // one gust per third-of-a-radius, so a fast swipe lays a continuous
@@ -455,8 +455,19 @@ export class World {
 
   private liquid(x: number, y: number, m: number): void {
     const dens = MATS[m].dens;
+    const susc = WIND_SUSC[m];
+    let wx = 0;
+    if (susc !== 0 && this.wind.isMoving) {
+      wx = Wind.nudge(this.wind.atX(x, y), susc, this.rng.next());
+      const wy = Wind.nudge(this.wind.atY(x, y), susc, this.rng.next());
+      // an updraught can tear droplets off the surface and throw them; this
+      // is the only way a liquid ever moves upward, so it stays rare
+      if (wy < 0 && this.tryMoveTo(x, y, x + wx, y - 1, dens)) return;
+    }
     if (this.tryMoveTo(x, y, x, y + 1, dens)) return;
-    const first = this.rng.chance(0.5);
+    // wind decides which way it prefers to fall and spread; without wind it
+    // is the original coin flip
+    const first = wx !== 0 ? wx > 0 : this.rng.chance(0.5);
     const d1 = first ? 1 : -1;
     const d2 = first ? -1 : 1;
     if (this.tryMoveTo(x, y, x + d1, y + 1, dens)) return;
@@ -464,8 +475,11 @@ export class World {
     // horizontal dispersion: slide to farthest contiguous opening
     const disp = MATS[m].disp;
     for (const dx of [d1, d2]) {
+      // a gust extends the reach downwind, which is what makes a pool visibly
+      // stream rather than just pick a side
+      const reach = dx === wx ? disp + 5 : disp;
       let tx = x;
-      for (let k = 0; k < disp; k++) {
+      for (let k = 0; k < reach; k++) {
         const nx = tx + dx;
         const t = this.grid.get(nx, y);
         if (t === Mat.EMPTY || (t !== 1 && MATS[t].cat === Cat.GAS)) tx = nx;

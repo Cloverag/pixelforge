@@ -92,11 +92,19 @@ Builder's note: I stay out of README.md, src/ui/help.ts, src/game/music.ts, and 
    field costs one `active === 0` check per frame, so **nothing changes until
    a player uses it** - that is deliberate, and it is why all 22 existing sim
    tests still pass untouched.
-   - **Liquids are pinned at WIND_SUSC 0 on purpose.** Several challenges are
-     scored on where water ends up, and I did not want the wind brush to
-     become a flood-drainage cheat. **P5 balance pass should decide whether
-     that stays** - if you want liquids to ripple, the number is one line in
-     materials.ts and the challenge budgets will need re-tuning.
+   - **REVERSED after playtest: liquids now move (WIND_SUSC 0.35).** I first
+     pinned them at 0 to protect the water-scored challenges. Raghav tried it
+     and reported the wind "doesn't work" - correctly, because sand and water
+     are the two things players paint most and neither responded. A tool that
+     does nothing to them reads as broken. Powders were raised too
+     (`0.5 / density`, was `0.4 / density`), gusts are stronger, and the decay
+     tail is ~3s instead of ~1.2s.
+   - **P5 BALANCE PASS NOW HAS A REAL DEPENDENCY.** Wind can push water uphill
+     across a gap and tear droplets off a surface in an updraught. AQUEDUCT
+     and any flood-scored challenge should be re-checked against a player who
+     uses the wind brush - the star thresholds were set for a world where
+     water only ever went downhill. The 22 sim tests still pass, but they do
+     not cover star thresholds.
    - Explosions now emit a shock front (`addBlast`), so smoke and fire get
      thrown outward instead of rising politely from the crater. This changes
      the *look* of TNT/gunpowder but not the crater geometry - the TNT and
