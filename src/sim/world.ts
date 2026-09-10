@@ -1,6 +1,6 @@
 import { RNG, hash2d } from '../core/rng';
 import { Grid } from './grid';
-import { Cat, MATS, Mat, NMATS, colorAt, SPARK_LIFE } from './materials';
+import { Cat, MATS, Mat, NMATS, WIND_SUSC, colorAt, SPARK_LIFE } from './materials';
 import {
   CHUNK,
   CHUNK_SHIFT,
@@ -11,11 +11,15 @@ import {
   Stats,
   ChallengeResult,
   Mode,
+  PaintKind,
 } from './protocol';
 import { PSys } from './particles';
+import { Wind } from './wind';
 import { CHALLENGES, ChallengeDef, starsFor } from './challenges';
 
 const BG = MATS[Mat.EMPTY].ramp[0];
+/** drifting dust mote in a windy empty cell; ABGR for a dim slate blue */
+const WIND_DUST = 0xff3a2c22;
 
 interface Source {
   mat: number;
@@ -102,6 +106,8 @@ export class World {
   mode: Mode = 'sand';
   parts: PSys | null = null;
   challenge: ActiveChallenge | null = null;
+  /** global velocity field; still (and free) until something disturbs it */
+  wind = new Wind();
   shake = 0;
   /** total sim frames elapsed (drives animation + row hashes) */
   f = 0;
@@ -122,6 +128,7 @@ export class World {
     g.counts[Mat.EMPTY] = g.cells.length;
     g.eternals.clear();
     g.chunks.wakeAll();
+    this.wind.clear();
     this.shake = 0;
   }
 
@@ -141,7 +148,11 @@ export class World {
     this.clear();
   }
 
-  paint(pts: number[], rawMat: number, size: number, kind: 'brush' | 'flood' = 'brush'): void {
+  paint(pts: number[], rawMat: number, size: number, kind: PaintKind = 'brush'): void {
+    if (kind === 'wind') {
+      this.blow(pts, size);
+      return;
+    }
     const mat = rawMat === -1 ? Mat.EMPTY : rawMat;
     if (mat < 0 || mat >= NMATS) return;
     if (kind === 'flood') {
@@ -174,6 +185,35 @@ export class World {
         }
       }
     }
+  }
+
+  /**
+   * Turns a brush stroke into gusts along its path.
+   *
+   * The stroke's own direction is the wind direction and its length is the
+   * strength, so a slow drag is a breeze and a fast swipe is a blast. A click
+   * with no drag puffs outward instead, which is the only sensible reading of
+   * a stroke with no direction. Costs no challenge budget - air is free.
+   */
+  private blow(pts: number[], size: number): void {
+    const n = pts.length >> 1;
+    if (n === 0) return;
+    const radius = Math.max(8, size * 2.5);
+    const dx = pts[(n - 1) * 2] - pts[0];
+    const dy = pts[(n - 1) * 2 + 1] - pts[1];
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len < 1) {
+      this.wind.addBlast(pts[0], pts[1], radius, 0.5);
+      return;
+    }
+    const strength = Math.min(2.2, 0.3 + len * 0.06);
+    const ux = (dx / len) * strength;
+    const uy = (dy / len) * strength;
+    // one gust per third-of-a-radius, so a fast swipe lays a continuous
+    // corridor of wind rather than a string of disconnected puffs
+    const stride = Math.max(1, Math.floor(radius / 3));
+    for (let k = 0; k < n; k += stride)
+      this.wind.addGust(pts[k * 2], pts[k * 2 + 1], ux, uy, radius);
   }
 
   /** Flood fill: replace the connected region under the start cell. */
@@ -228,6 +268,10 @@ export class World {
       const y = (i / g.W) | 0;
       g.chunks.wakeCell(i - y * g.W, y);
     }
+    // must run before beginFrame(), which swaps the wake bitmap in: a chunk
+    // the wind is blowing through has to be awake on the frame the gust
+    // reaches it, not the one after
+    this.wind.step(g.chunks);
     g.clock.fill(0); // per-frame updated flags
 
     g.chunks.beginFrame();
@@ -388,6 +432,16 @@ export class World {
 
   private powder(x: number, y: number, m: number): void {
     const dens = MATS[m].dens;
+    const susc = WIND_SUSC[m];
+    if (susc !== 0 && this.wind.isMoving) {
+      const wx = Wind.nudge(this.wind.atX(x, y), susc, this.rng.next());
+      if (wx !== 0) {
+        // downwind-and-down first: a grain caught in a gust should still be
+        // falling, just on a slant
+        if (this.tryMoveTo(x, y, x + wx, y + 1, dens)) return;
+        if (this.tryMoveTo(x, y, x + wx, y, dens)) return;
+      }
+    }
     if (this.tryMoveTo(x, y, x, y + 1, dens)) return;
     const first = this.rng.chance(0.5);
     const d1 = first ? 1 : -1;
@@ -422,10 +476,20 @@ export class World {
   }
 
   private gasStep(x: number, y: number, m: number): void {
-    const up = this.tryMoveTo(x, y, x + this.rng.int(3) - 1, y - 1, MATS[m].dens);
+    const dens = MATS[m].dens;
+    const susc = WIND_SUSC[m];
+    if (susc !== 0 && this.wind.isMoving) {
+      const wx = Wind.nudge(this.wind.atX(x, y), susc, this.rng.next());
+      const wy = Wind.nudge(this.wind.atY(x, y), susc, this.rng.next());
+      // a gust wins over buoyancy for the frame it lands on, so smoke
+      // actually bends downwind instead of climbing straight up through it
+      if ((wx !== 0 || wy !== 0) && this.tryMoveTo(x, y, x + wx, y + wy, dens)) return;
+      if (wx !== 0 && this.tryMoveTo(x, y, x + wx, y, dens)) return;
+    }
+    const up = this.tryMoveTo(x, y, x + this.rng.int(3) - 1, y - 1, dens);
     if (!up) {
       const dx = this.rng.int(3) - 1;
-      if (dx !== 0) this.tryMoveTo(x, y, x + dx, y, MATS[m].dens);
+      if (dx !== 0) this.tryMoveTo(x, y, x + dx, y, dens);
     }
   }
 
@@ -919,6 +983,9 @@ export class World {
       }
     }
     this.shake = Math.min(30, this.shake + r * 2);
+    // the shock front is what makes a blast read as a blast: smoke and fire
+    // get thrown outward instead of politely rising from the crater
+    this.wind.addBlast(cx, cy, r * 5, r * 0.22);
     g.chunks.wakeRect(cx - r - 2, cy - r - 2, cx + r + 2, cy + r + 2);
   }
 
@@ -939,6 +1006,7 @@ export class World {
       return;
     }
     const W = g.W;
+    const windy = this.wind.isMoving;
     for (let cy = 0; cy < CHUNKS_Y; cy++) {
       for (let cx = 0; cx < CHUNKS_X; cx++) {
         const ci = cy * CHUNKS_X + cx;
@@ -946,15 +1014,42 @@ export class World {
         dirty[ci] = 0;
         const x0 = cx << CHUNK_SHIFT;
         const y0 = cy << CHUNK_SHIFT;
+        // the field is constant across a chunk, so sample it once per chunk
+        const vx = windy ? this.wind.atX(x0, y0) : 0;
+        const vy = windy ? this.wind.atY(x0, y0) : 0;
+        const speed = Math.sqrt(vx * vx + vy * vy);
+        const specks = speed > 0 ? Math.min(140, speed * 90) : 0;
         for (let y = y0; y < y0 + CHUNK; y++) {
           let i = y * W + x0;
           for (let x = x0; x < x0 + CHUNK; x++, i++) {
             const m = g.cells[i];
-            pix[i] = m === Mat.EMPTY ? BG : colorAt(m, x, y, this.f, g.meta[i]);
+            if (m !== Mat.EMPTY) {
+              pix[i] = colorAt(m, x, y, this.f, g.meta[i]);
+            } else if (specks === 0) {
+              pix[i] = BG;
+            } else {
+              pix[i] = this.windSpeck(x, y, vx, vy, specks);
+            }
           }
         }
       }
     }
+  }
+
+  /**
+   * A drifting dust mote, or the background.
+   *
+   * Wind moves other people's material and is otherwise invisible, which
+   * makes an empty room feel broken when you fan it. Rather than draw arrows
+   * over the art, we sample a fixed noise field at a position that slides
+   * backwards along the wind vector - the pattern is static, the sampling
+   * window moves, and the eye reads the result as air travelling.
+   */
+  private windSpeck(x: number, y: number, vx: number, vy: number, specks: number): number {
+    const drift = this.f * 0.5;
+    const sx = (x - vx * drift) | 0;
+    const sy = (y - vy * drift) | 0;
+    return (hash2d(sx, sy) & 1023) < specks ? WIND_DUST : BG;
   }
 
   stats(): Stats {

@@ -111,6 +111,23 @@ MATS[Mat.SNOW] = def(Mat.SNOW, 'SNOW', Cat.POWDER, 0.7, ['#eef4fa', '#dce8f4', '
 MATS[Mat.SALT] = def(Mat.SALT, 'SALT', Cat.POWDER, 1.3, ['#e8e4da', '#d8d4c8', '#f4f0e6', '#c8c4b8'], { acidChance: 0.01 });
 MATS[Mat.TNT] = def(Mat.TNT, 'TNT', Cat.SOLID, 100, ['#c8281e', '#b02018', '#e03828', '#981810'], { acidChance: 0.02 });
 
+/**
+ * How hard the wind field pushes each material, 0 (immovable) to 1.
+ *
+ * Gases go where they are told. Powders drift in proportion to how light
+ * they are, so snow streams and sand barely stirs. Liquids are deliberately
+ * left at zero: several challenges are scored on where water ends up, and a
+ * player fanning a flame should not also be able to bail out a flood.
+ */
+export const WIND_SUSC = new Float32Array(NMATS);
+for (let m = 0; m < NMATS; m++) {
+  const d = MATS[m];
+  if (!d) continue;
+  if (d.cat === Cat.GAS) WIND_SUSC[m] = 1;
+  else if (d.cat === Cat.POWDER) WIND_SUSC[m] = Math.min(1, 0.4 / d.dens);
+  else WIND_SUSC[m] = 0;
+}
+
 /** spark pulse length on wire = refractory period in frames */
 export const SPARK_LIFE = 8;
 

@@ -7,7 +7,7 @@ import { Hud, PgTool } from './ui/hud';
 import { showMenu } from './ui/menu';
 import { hideOverlay, showResult, toast } from './ui/widgets';
 import { Mat } from './sim/materials';
-import { Mode, Req, Res, SIM_H, SIM_W, Stats } from './sim/protocol';
+import { Mode, PaintKind, Req, Res, SIM_H, SIM_W, Stats } from './sim/protocol';
 import { CHALLENGES } from './sim/challenges';
 import { recordStars } from './game/progress';
 import { readSave, rleDecode, rleEncode, storeSave } from './game/rle';
@@ -44,7 +44,7 @@ let paused = false;
 let selMat: number = Mat.SAND;
 let brush = 6;
 let pgTool: PgTool = 'fountain';
-let paintKind: 'brush' | 'flood' = 'brush';
+let paintKind: PaintKind = 'brush';
 let view3d: Voxel3D | null = null;
 let view3dOn = false;
 
@@ -482,9 +482,9 @@ function cycleWallpaper(): void {
   toast(`BG: ${WALLPAPER_NAMES[bgIndex]}`);
 }
 
-function setPaintKind(k: 'brush' | 'flood'): void {
+function setPaintKind(k: PaintKind): void {
   paintKind = k;
-  hud.setBucketToggled(k === 'flood');
+  hud.setToolKind(k);
   sfx.ui();
 }
 
@@ -561,7 +561,11 @@ new Input(
         break;
       case 'f':
         if (screen === 'game' && mode === 'sand')
-          setPaintKind(paintKind === 'brush' ? 'flood' : 'brush');
+          setPaintKind(paintKind === 'flood' ? 'brush' : 'flood');
+        break;
+      case 'w':
+        if (screen === 'game' && mode === 'sand')
+          setPaintKind(paintKind === 'wind' ? 'brush' : 'wind');
         break;
       case 'g':
         if (mode === 'playground' && screen === 'game') {
@@ -586,8 +590,8 @@ new Input(
 window.addEventListener('pf-brush', (e) => {
   brush = (e as CustomEvent<number>).detail;
 });
-window.addEventListener('pf-bucket', (e) => {
-  paintKind = (e as CustomEvent<boolean>).detail ? 'flood' : 'brush';
+window.addEventListener('pf-tool', (e) => {
+  paintKind = (e as CustomEvent<PaintKind>).detail;
 });
 window.addEventListener('pf-star', (e) => {
   sfx.star((e as CustomEvent<number>).detail);

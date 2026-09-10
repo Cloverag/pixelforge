@@ -930,6 +930,16 @@ input[type='range']::-moz-range-thumb {
 }
 .share-meta.warn { color: var(--accent); }
 
+/* --- brush tool row: BUCKET / WIND share one line --- */
+.toolbtns {
+  display: flex;
+  gap: 6px;
+}
+.toolbtns .px {
+  flex: 1;
+  white-space: nowrap;
+}
+
 /* ==== MANAGER LANE ==== (manager-owned CSS goes BELOW this line; builder won't touch) */
 
 /* ---------- help overlay (M2) ---------- */

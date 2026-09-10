@@ -1,5 +1,5 @@
 import { Cat, MATS, NMATS } from '../sim/materials';
-import type { Stats } from '../sim/protocol';
+import type { PaintKind, Stats } from '../sim/protocol';
 import { h } from './widgets';
 
 function cssHex(u: number): string {
@@ -270,6 +270,7 @@ export class Hud {
   }
 
   private bucketBtn: HTMLButtonElement | null = null;
+  private windBtn: HTMLButtonElement | null = null;
   private musicBtn!: HTMLButtonElement;
   private view3dBtn!: HTMLButtonElement;
   private shareBtn!: HTMLButtonElement;
@@ -289,10 +290,17 @@ export class Hud {
     this.musicBtn.classList.toggle('toggled', v);
   }
 
-  setBucketToggled(v: boolean): void {
+  /** BUCKET and WIND are the same one-of-three choice, so they light as one. */
+  setToolKind(kind: PaintKind): void {
     if (this.bucketBtn) {
-      this.bucketBtn.classList.toggle('toggled', v);
-      this.bucketBtn.textContent = v ? 'BUCKET: ON' : 'BUCKET';
+      const on = kind === 'flood';
+      this.bucketBtn.classList.toggle('toggled', on);
+      this.bucketBtn.textContent = on ? 'BUCKET: ON' : 'BUCKET';
+    }
+    if (this.windBtn) {
+      const on = kind === 'wind';
+      this.windBtn.classList.toggle('toggled', on);
+      this.windBtn.textContent = on ? 'WIND: ON' : 'WIND';
     }
   }
 
@@ -329,13 +337,20 @@ export class Hud {
     col.appendChild(h('div', 'brushrow hint', 'WHEEL OR [ ] TO RESIZE'));
 
     this.bucketBtn = null;
+    this.windBtn = null;
     if (withBucket) {
-      this.bucketBtn = this.mkBtn('BUCKET', () => {
-        const on = !this.bucketBtn!.classList.contains('toggled');
-        this.setBucketToggled(on);
-        window.dispatchEvent(new CustomEvent('pf-bucket', { detail: on }));
-      }, 'Flood fill (F)');
-      col.appendChild(this.bucketBtn);
+      const pick = (kind: PaintKind, btn: () => HTMLButtonElement) => () => {
+        // clicking the lit button turns it off rather than doing nothing
+        const next = btn().classList.contains('toggled') ? 'brush' : kind;
+        this.setToolKind(next);
+        window.dispatchEvent(new CustomEvent('pf-tool', { detail: next }));
+      };
+      const toolRow = h('div', 'toolbtns');
+      this.bucketBtn = this.mkBtn('BUCKET', pick('flood', () => this.bucketBtn!), 'Flood fill (F)');
+      this.windBtn = this.mkBtn('WIND', pick('wind', () => this.windBtn!), 'Drag to blow smoke, fire and light powders (W)');
+      toolRow.appendChild(this.bucketBtn);
+      toolRow.appendChild(this.windBtn);
+      col.appendChild(toolRow);
     }
 
     this.toolbar.appendChild(col);

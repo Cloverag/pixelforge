@@ -1,5 +1,8 @@
 export type Mode = 'sand' | 'playground';
 
+/** What a brush stroke does: place material, flood a region, or blow air. */
+export type PaintKind = 'brush' | 'flood' | 'wind';
+
 export const SIM_W = 640;
 export const SIM_H = 360;
 export const CHUNK = 8;
@@ -39,7 +42,7 @@ export interface ChallengeResult {
 export type Req =
   | { t: 'init'; w: number; h: number; buf: ArrayBuffer }
   | { t: 'mode'; mode: Mode }
-  | { t: 'paint'; pts: number[]; mat: number; size: number; kind?: 'brush' | 'flood' }
+  | { t: 'paint'; pts: number[]; mat: number; size: number; kind?: PaintKind }
   | { t: 'pg'; tool: PgToolMsg }
   | { t: 'pgGravity'; on: boolean }
   | { t: 'watch3d'; on: boolean }

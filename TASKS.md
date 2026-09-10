@@ -55,8 +55,65 @@ Builder's note: I stay out of README.md, src/ui/help.ts, src/game/music.ts, and 
 | M1 | README.md — run/controls/materials/architecture | self-reviewed, tsc+build clean |
 | M2 | HELP overlay + hover tooltips (wired by builder, overlap bug fixed by manager) | signed off 13:4x (pass #2) |
 | M3 | Procedural music loop (wired: MUSIC button next to SFX) | signed off 13:4x (pass #2) |
+| F7 | **3D view rebuilt** - real depth per material class, emissive+bloom pass, linear-space colours, in-view camera pill | BUILDER - needs review |
+| F8 | **Shareable world links** (SHARE button, `#w=` boot import) + rleEncode stack-overflow fix | BUILDER - needs review |
+| F9 | **Lazy three.js** - entry chunk 157 kB -> 18 kB gzip | BUILDER - needs review |
+| F10 | **Wind field** - global velocity field, WIND brush (W), explosion shock fronts, drifting dust | BUILDER - needs review |
 
 ## REVIEW NOTES
+
+**BUILDER -> MANAGER (F7-F10, ready for review):**
+
+1. **Three.js was already a dependency but barely used.** The old voxel view
+   put every instance at z=0, so it was a flat wall of cubes - a 2D picture
+   rendered the expensive way. Depth now encodes material category (solid 9,
+   powder 6, liquid 3.5, gas 1.75 units) with stable per-cell relief. Fire /
+   lava / torch / ember moved to a second unlit over-bright instanced mesh
+   behind an UnrealBloomPass.
+2. **Colour bug fixed on the way:** instance colours were built with
+   `new THREE.Color(r, g, b)` from sRGB bytes, which three treats as *linear*
+   working space. The whole diorama was darker and more saturated than the 2D
+   view. Ramp entries are pre-converted once into a flat lookup table.
+   `rampIndexAt()` is split out of `colorAt()` so both views animate from one
+   rule - `colorAt` is unchanged behaviourally, 22/22 sim tests confirm it.
+3. **Two real defects found and fixed:**
+   - `rleEncode` ended in `btoa(String.fromCharCode(...out))`. That spreads
+     every byte into an argument list, so any world past ~40k runs threw
+     RangeError inside the worker's onmessage handler and **SAVE silently did
+     nothing**, no toast. Chunked now; regression test checked against the old
+     encoder to confirm it goes red there.
+   - Adding the postprocessing passes put three.js in the entry chunk: every
+     player downloaded 157 kB gzip for a view that is off by default. Now a
+     dynamic import - entry is 18 kB gzip and the 562 kB voxel chunk loads on
+     the first 3D toggle.
+4. **Wind field (`src/sim/wind.ts`) is the one new *system*.** Coarse velocity
+   field at chunk resolution (80x45), so it maps 1:1 onto the chunk-sleep
+   bitmap and a live gust wakes exactly the chunks it blows through. A still
+   field costs one `active === 0` check per frame, so **nothing changes until
+   a player uses it** - that is deliberate, and it is why all 22 existing sim
+   tests still pass untouched.
+   - **Liquids are pinned at WIND_SUSC 0 on purpose.** Several challenges are
+     scored on where water ends up, and I did not want the wind brush to
+     become a flood-drainage cheat. **P5 balance pass should decide whether
+     that stays** - if you want liquids to ripple, the number is one line in
+     materials.ts and the challenge budgets will need re-tuning.
+   - Explosions now emit a shock front (`addBlast`), so smoke and fire get
+     thrown outward instead of rising politely from the crater. This changes
+     the *look* of TNT/gunpowder but not the crater geometry - the TNT and
+     gunpowder tests pass unchanged.
+
+> **BUILDER -> MANAGER hook request (docs, your lane):**
+> `src/ui/help.ts` and `README.md` are yours and I have not touched them.
+> Three things are now undocumented in both:
+> 1. **`W`** toggles the WIND brush (drag to blow; click for a puff). It sits
+>    next to BUCKET in the brush column. Only gases and light powders move -
+>    snow streams, sand barely stirs, liquids and solids ignore it.
+> 2. **SHARE** button in the topbar copies a link that loads the world into
+>    someone else's sandbox. It hides with SAVE/LOAD outside sandbox mode.
+> 3. The 3D view has its own control pill now (FRONT / ISO / TOP / SPIN /
+>    GLOW) - the topbar `3D` button and `3` key are unchanged.
+
+
 
 *(manager writes here)*
 
@@ -98,5 +155,14 @@ Builder's note: I stay out of README.md, src/ui/help.ts, src/game/music.ts, and 
 ### Fun ideas parking lot
 - Birds that peck through wood? Ants that tunnel sand?
 - Gravity flip potion (temporarily inverts your material gravity)
-- Daily challenge: seeded challenge rotation with share codes (export save as short string)
+- ~~Daily challenge: seeded challenge rotation with share codes~~ - **share
+  codes shipped (F8)**; the seeded daily rotation on top of them is still open
+  and is now cheap to build
 - Painting with FIREWORKS mode: brush shoots mini-bursts of the selected material
+
+**Now that the wind field exists (F10):**
+- A challenge scored on *steering* something - carry a fire across a gap, keep
+  smoke out of a chimney - rather than on placing material
+- Constant prevailing wind as a challenge modifier (one `addGust` per frame)
+- Sails / turbines: a solid that emits a spark while wind blows across it,
+  which plugs straight into the existing WIRE + TORCH kit
