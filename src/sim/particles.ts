@@ -3,6 +3,7 @@ import { Mat, colorAt } from './materials';
 import { SIM_H, SIM_W, PgToolMsg } from './protocol';
 
 const CAP = 24000;
+export const PG_CAP = CAP;
 const DRAG = 0.985;
 const MAXV = 5;
 const GRAVITY = 0.09;
@@ -66,8 +67,15 @@ export class PSys {
   private n = 0;
   private px = new Float32Array(CAP);
   private py = new Float32Array(CAP);
+  /**
+   * Depth, for the 3D view only. The 2D view ignores it and every rule
+   * (walls, forces, water) stays two-dimensional; in 3D a firework is a
+   * shell and a fountain has some thickness instead of being a sheet.
+   */
+  private pz = new Float32Array(CAP);
   private vx = new Float32Array(CAP);
   private vy = new Float32Array(CAP);
+  private vz = new Float32Array(CAP);
   private life = new Float32Array(CAP);
   private hue = new Uint8Array(CAP);
   private rng = new RNG(987654321);
@@ -92,13 +100,15 @@ export class PSys {
     return this.n;
   }
 
-  private push(x: number, y: number, vx: number, vy: number, life: number, hue: number): void {
+  private push(x: number, y: number, vx: number, vy: number, life: number, hue: number, z = 0, vz = 0): void {
     if (this.n >= CAP) return;
     const i = this.n++;
     this.px[i] = x;
     this.py[i] = y;
+    this.pz[i] = z;
     this.vx[i] = vx;
     this.vy[i] = vy;
+    this.vz[i] = vz;
     this.life[i] = life;
     this.hue[i] = hue;
   }
@@ -110,7 +120,7 @@ export class PSys {
       const a = -Math.PI / 2 + (this.rng.next() - 0.5) * 1.1;
       const sp = 1.5 + this.rng.next() * 2.5;
       const hue = (base + this.rng.int(4)) % RAINBOW_N;
-      this.push(x, y, Math.cos(a) * sp, Math.sin(a) * sp, 90 + this.rng.range(30, 90), hue);
+      this.push(x, y, Math.cos(a) * sp, Math.sin(a) * sp, 90 + this.rng.range(30, 90), hue, 0, (this.rng.next() - 0.5) * 1.2);
     }
   }
 
@@ -144,10 +154,16 @@ export class PSys {
       let i: number;
       if (this.n < CAP) i = this.n++;
       else i = this.rng.int(CAP);
+      // a shell: a random direction on the sphere. Projected flat it is the
+      // same filled disk the 2D view always showed.
+      const cz = this.rng.next() * 2 - 1;
+      const rxy = Math.sqrt(1 - cz * cz);
       this.px[i] = x;
       this.py[i] = y;
-      this.vx[i] = Math.cos(a) * sp;
-      this.vy[i] = Math.sin(a) * sp;
+      this.pz[i] = 0;
+      this.vx[i] = Math.cos(a) * rxy * sp;
+      this.vy[i] = Math.sin(a) * rxy * sp;
+      this.vz[i] = cz * sp;
       this.life[i] = 50 + this.rng.range(20, 70);
       // mostly one colour, a few sparks from the far side of the wheel
       this.hue[i] = this.rng.chance(0.75) ? (baseHue + this.rng.int(3)) % RAINBOW_N : (baseHue + RAINBOW_N / 2) % RAINBOW_N;
@@ -181,8 +197,10 @@ export class PSys {
     const last = --this.n;
     this.px[i] = this.px[last];
     this.py[i] = this.py[last];
+    this.pz[i] = this.pz[last];
     this.vx[i] = this.vx[last];
     this.vy[i] = this.vy[last];
+    this.vz[i] = this.vz[last];
     this.life[i] = this.life[last];
     this.hue[i] = this.hue[last];
   }
@@ -222,6 +240,43 @@ export class PSys {
         }
         break;
     }
+  }
+
+  /**
+   * Particles for the 3D view: x, y, z and a linear, over-bright RGB per
+   * particle (6 floats). Same colour rule as the 2D raster - rainbow hue,
+   * white-hot when fast, fading out at the end of life - but in linear
+   * light and pushed past 1.0 so the 3D bloom treats them as light.
+   * Returns how many were written.
+   */
+  pack3d(out: Float32Array): number {
+    const n = Math.min(this.n, (out.length / 6) | 0);
+    for (let i = 0; i < n; i++) {
+      const o = i * 6;
+      out[o] = this.px[i];
+      out[o + 1] = this.py[i];
+      out[o + 2] = this.pz[i];
+      const v2 = this.vx[i] * this.vx[i] + this.vy[i] * this.vy[i] + this.vz[i] * this.vz[i];
+      const hot = Math.min(0.55, v2 / 30);
+      const fade = Math.min(1, this.life[i] / 40);
+      const c = RAINBOW[this.hue[i]];
+      const gain = 2.2 * fade;
+      const ch = (v: number) => {
+        const s = (v + (255 - v) * hot) / 255;
+        return s * s * gain; // ~sRGB -> linear, then over-bright
+      };
+      out[o + 3] = ch(c & 255);
+      out[o + 4] = ch((c >>> 8) & 255);
+      out[o + 5] = ch((c >>> 16) & 255);
+    }
+    return n;
+  }
+
+  /** Force markers for the 3D view: [kind 0/1/2, x, y] triples. */
+  packForces(): number[] {
+    const out: number[] = [];
+    for (const f of this.forces) out.push(f.kind === 'attract' ? 0 : f.kind === 'repel' ? 1 : 2, f.x, f.y);
+    return out;
   }
 
   /** decay trails -> integrate -> rasterize heads */
@@ -304,6 +359,13 @@ export class PSys {
 
       vx *= DRAG;
       vy *= DRAG;
+      // depth: drag, an attractor pulls toward its plane, and a soft wall
+      // keeps the cloud from drifting off the stage
+      let vz = this.vz[i] * DRAG;
+      for (const f of this.forces) if (f.kind === 'attract') vz -= this.pz[i] * 0.004;
+      this.pz[i] += vz;
+      if (this.pz[i] > 70 || this.pz[i] < -70) vz = -vz * 0.5;
+      this.vz[i] = vz;
       const spd2 = vx * vx + vy * vy;
       if (spd2 > MAXV * MAXV) {
         const s = MAXV / Math.sqrt(spd2);

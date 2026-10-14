@@ -92,6 +92,13 @@ export interface Res {
   events?: SimEvents;
   /** live particle count, playground only */
   parts?: number;
+  /** 3D playground: packed particles (x, y, z, r, g, b) x pgN, transferable */
+  pg3d?: ArrayBuffer;
+  pgN?: number;
+  /** 3D playground: force markers as [kind, x, y] triples */
+  pgForces?: number[];
+  /** 3D playground: wall mask at half resolution, sent only when it changes */
+  pgWalls?: ArrayBuffer;
   result?: ChallengeResult | null;
   save?: SaveData | null;
   /** downsampled material map for the 3D view and the fluid (transferable) */

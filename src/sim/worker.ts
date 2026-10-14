@@ -10,6 +10,8 @@ let world: World | null = null;
 let master: Uint32Array | null = null;
 let forceFull = true;
 let watch3d = false;
+/** the playground's walls changed since the 3D view last got a mask */
+let pgWallsDirty = true;
 let watchFluid = false;
 /** true while the wind field still needs sending after it goes still */
 let windDirty = false;
@@ -49,10 +51,12 @@ ctx.onmessage = (e: MessageEvent<Req>) => {
 
     case 'paint':
       w.paint(msg.pts, msg.mat, msg.size, msg.kind ?? 'brush');
+      pgWallsDirty = true;
       break;
 
     case 'pg':
       w.parts?.tool(msg.tool);
+      if (msg.tool.kind === 'erase') pgWallsDirty = true;
       break;
 
     case 'pgGravity':
@@ -61,6 +65,7 @@ ctx.onmessage = (e: MessageEvent<Req>) => {
 
     case 'watch3d':
       watch3d = msg.on;
+      pgWallsDirty = true;
       break;
 
     case 'watchFluid':
@@ -103,6 +108,27 @@ ctx.onmessage = (e: MessageEvent<Req>) => {
         result: w.challenge && w.challenge.done ? w.challenge.result : null,
       };
       const transfer = [msg.buf];
+      if (watch3d && w.mode === 'playground' && w.parts) {
+        const pg = new Float32Array(Math.max(6, w.parts.count * 6));
+        res.pgN = w.parts.pack3d(pg);
+        res.pg3d = pg.buffer;
+        res.pgForces = w.parts.packForces();
+        transfer.push(pg.buffer);
+        if (pgWallsDirty) {
+          pgWallsDirty = false;
+          const mw = SIM_W >> 1;
+          const mh = SIM_H >> 1;
+          const mask = new Uint8Array(mw * mh);
+          const cells = w.grid.cells;
+          for (let y = 0; y < mh; y++)
+            for (let x = 0; x < mw; x++) {
+              const i = y * 2 * SIM_W + x * 2;
+              if (cells[i] || cells[i + 1] || cells[i + SIM_W] || cells[i + SIM_W + 1]) mask[y * mw + x] = 1;
+            }
+          res.pgWalls = mask.buffer;
+          transfer.push(mask.buffer);
+        }
+      }
       if (watchFluid) {
         // The fluid advects dye through the CPU wind field, so it needs the
         // field every frame - but only while it is actually moving. A still

@@ -3,6 +3,7 @@ import { Input, PointerEvt } from './core/input';
 import { BLOCK_SIZES, Renderer, SimRenderer } from './render/renderer';
 import { GLRenderer, tryWebGL2 } from './render/glrenderer';
 import type { Voxel3D } from './render/voxel3d';
+import type { PG3D } from './render/pg3d';
 import { Sfx } from './game/audio';
 import { Juice } from './game/juice';
 import { Hud, PgTool } from './ui/hud';
@@ -100,8 +101,55 @@ let view3dOn = false;
  */
 let view3dLoading = false;
 
+/** The playground's 3D view: a lit scene, not the sandbox diorama. */
+let pgView: PG3D | null = null;
+
+async function togglePg3d(): Promise<void> {
+  if (view3dOn) {
+    view3dOn = false;
+    pgView?.hide();
+    document.getElementById('screen')!.style.visibility = 'visible';
+    hud.set3dToggled(false);
+    post({ t: 'watch3d', on: false });
+    return;
+  }
+  if (view3dLoading) return;
+  if (!pgView) {
+    view3dLoading = true;
+    try {
+      const { PG3D } = await import('./render/pg3d');
+      pgView = new PG3D(document.getElementById('pg3d')!, (x, y, phase, button) =>
+        onPointer({ x, y, sx: 0, sy: 0, button, phase }),
+      );
+    } catch (err) {
+      console.error(err);
+      toast('3D VIEW FAILED TO LOAD', true);
+      return;
+    } finally {
+      view3dLoading = false;
+    }
+  }
+  view3dOn = true;
+  pgView.show();
+  document.getElementById('screen')!.style.visibility = 'hidden';
+  hud.set3dToggled(true);
+  post({ t: 'watch3d', on: true });
+}
+
+/** Leaving a mode closes whichever 3D view it had open. */
+function close3d(): void {
+  if (!view3dOn) return;
+  view3dOn = false;
+  view3d?.hide();
+  pgView?.hide();
+  document.getElementById('screen')!.style.visibility = 'visible';
+  hud.set3dToggled(false);
+  post({ t: 'watch3d', on: false });
+}
+
 async function toggle3d(): Promise<void> {
   sfx.ui();
+  if (mode === 'playground') return togglePg3d();
   if (view3dOn) {
     view3dOn = false;
     view3d?.hide();
@@ -213,6 +261,7 @@ function playEvents(ev: SimEvents): void {
     const pan = (b[k] / SIM_W) * 2 - 1;
     sfx.boom(b[k + 2], pan);
     juice.boom(b[k], b[k + 1], b[k + 2]);
+    if (pgView?.visible) pgView.flash(b[k], b[k + 1]);
   }
   if (ev.fuses) sfx.fuse();
   if (ev.sizzles) sfx.sizzle(ev.sizzles);
@@ -247,6 +296,8 @@ worker.onmessage = (e: MessageEvent<Res>) => {
     );
     renderer.present(r.buf);
     if (snap && view3dOn && view3d) view3d.update(snap, r.snapW!, r.snapH!);
+    if (r.pg3d && pgView?.visible) pgView.update(new Float32Array(r.pg3d), r.pgN ?? 0, r.pgForces ?? []);
+    if (r.pgWalls && pgView) pgView.setWalls(new Uint8Array(r.pgWalls));
     if (r.events) playEvents(r.events);
     if (r.parts !== undefined) hud.setParticles(r.parts);
     if (r.counts) sfx.crackle(r.counts[Mat.FIRE] + r.counts[Mat.EMBER]);
@@ -354,7 +405,10 @@ function loop(now: number): void {
     fpsFrames = 0;
     fpsClock = 0;
   }
-  if (view3dOn) view3d?.render();
+  if (view3dOn) {
+    view3d?.render();
+    pgView?.render();
+  }
   juice.frame();
   requestAnimationFrame(loop);
 }
@@ -447,6 +501,7 @@ function enterGame(label: string): void {
 }
 
 function startSandbox(): void {
+  close3d();
   renderer.setCinematic?.(false);
   mode = 'sand';
   challengeId = null;
@@ -462,6 +517,7 @@ function startSandbox(): void {
 }
 
 function startPlayground(): void {
+  close3d();
   renderer.setCinematic?.(true);
   mode = 'playground';
   challengeId = null;
@@ -477,6 +533,7 @@ function startPlayground(): void {
 }
 
 function startChallenge(id: string): void {
+  close3d();
   renderer.setCinematic?.(false);
   renderer.reset();
   const def = CHALLENGES.find((c) => c.id === id);

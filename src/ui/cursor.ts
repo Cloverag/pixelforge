@@ -61,8 +61,11 @@ export class BrushCursor {
 
   private place(): void {
     if (!this.ensure() || !this.el || !this.wrap) return;
-    const view3d = document.getElementById('view3d');
-    const hidden = !this.inside || (view3d !== null && !view3d.classList.contains('hidden'));
+    const in3d = ['view3d', 'pg3d'].some((id) => {
+      const el = document.getElementById(id);
+      return el !== null && !el.classList.contains('hidden');
+    });
+    const hidden = !this.inside || in3d;
     this.el.style.opacity = hidden ? '0' : '1';
     if (hidden) return;
     const canvas = this.wrap.querySelector('canvas#screen') as HTMLCanvasElement | null;

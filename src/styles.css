@@ -362,6 +362,30 @@ body.has-wallpaper #stage { background: transparent; }
   justify-content: center;
 }
 #view3d.hidden { display: none; }
+/* the 3D playground: same tube, its own canvas (render/pg3d.ts) */
+#pg3d {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+}
+#pg3d.hidden { display: none; }
+.pg3d-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 10px;
+  translate: -50% 0;
+  padding: 5px 10px;
+  font-family: var(--font);
+  font-size: 10px;
+  letter-spacing: 1px;
+  line-height: 1.4;
+  color: #cfc6b8;
+  background: rgba(8, 8, 14, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  pointer-events: none;
+  white-space: nowrap;
+}
 #view3d canvas {
   border: 1px solid var(--line);
   box-shadow: 0 0 0 1px var(--edge-dark), 0 0 40px rgba(0, 0, 0, 0.6);

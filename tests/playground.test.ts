@@ -48,4 +48,24 @@ describe('particle playground', () => {
     expect(burst).not.toBeNull();
     expect(Math.abs(burst![1] - 120)).toBeLessThan(12);
   });
+
+  it('packs a firework shell for the 3D view: real depth, light-bright colour', () => {
+    const w = playground();
+    const pix = new Uint32Array(N).fill(PG_BG);
+    w.parts!.firework(320, 150);
+    for (let n = 0; n < 12; n++) w.parts!.fullRender(pix, false, n);
+    const out = new Float32Array(24000 * 6);
+    const n = w.parts!.pack3d(out);
+    expect(n).toBeGreaterThan(80);
+    let zMin = Infinity, zMax = -Infinity, overBright = 0;
+    for (let i = 0; i < n; i++) {
+      zMin = Math.min(zMin, out[i * 6 + 2]);
+      zMax = Math.max(zMax, out[i * 6 + 2]);
+      if (Math.max(out[i * 6 + 3], out[i * 6 + 4], out[i * 6 + 5]) > 1) overBright++;
+    }
+    // a shell, not a flat disk
+    expect(zMax - zMin).toBeGreaterThan(20);
+    // bright enough for the bloom to treat as light
+    expect(overBright).toBeGreaterThan(n / 4);
+  });
 });
