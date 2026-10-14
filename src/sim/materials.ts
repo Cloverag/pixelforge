@@ -91,7 +91,7 @@ function def(
 export const MATS: MatDef[] = [];
 
 MATS[Mat.EMPTY] = def(Mat.EMPTY, 'EMPTY', Cat.EMPTY, 0, ['#0b0b14', '#0b0b14', '#0b0b14', '#0b0b14'], { placeable: false, acidChance: 0 });
-MATS[Mat.WALL] = def(Mat.WALL, 'WALL', Cat.SOLID, 100, ['#6b6b7e', '#75758a', '#5d5d70', '#80809a'], { acidChance: 0 });
+MATS[Mat.WALL] = def(Mat.WALL, 'WALL', Cat.SOLID, 100, ['#6b6b7e', '#75758a', '#47475a', '#80809a'], { acidChance: 0 });
 MATS[Mat.SAND] = def(Mat.SAND, 'SAND', Cat.POWDER, 1.6, ['#e0c068', '#d4a94e', '#c99a3e', '#ecd28c']);
 MATS[Mat.WATER] = def(Mat.WATER, 'WATER', Cat.LIQUID, 1.0, ['#3663c8', '#2f57b4', '#4a76dd', '#2c4da0'], { disp: 5, acidChance: 0.005 });
 MATS[Mat.OIL] = def(Mat.OIL, 'OIL', Cat.LIQUID, 0.8, ['#7a5c3f', '#6a4e34', '#8a6a4a', '#5c4229'], { disp: 3, flam: 0.35, acidChance: 0.02 });
@@ -235,9 +235,66 @@ function liquidIndex(h: number): number {
   return b < 150 ? 0 : b < 228 ? 1 : b < 248 ? 3 : 2;
 }
 
+/**
+ * Textures for things that never move, drawn from position. Each returns a
+ * ramp index; by convention ramp[2] is the material's darkest tone (mortar,
+ * seams, cracks) and ramp[3] or ramp[2] its lightest where noted.
+ */
+function brick(x: number, y: number): number {
+  const course = y >> 2;
+  const sx = x + (course & 1) * 4; // half-brick offset on alternate courses
+  if ((y & 3) === 3 || (sx & 7) === 7) return 2; // mortar
+  const face = cellHash(sx >> 3, course) % 3; // each brick its own shade
+  const speck = (cellHash(x, y) & 15) === 0;
+  return speck ? 3 : face === 0 ? 0 : face === 1 ? 1 : 3;
+}
+
+function woodGrain(x: number, y: number): number {
+  const board = y >> 2;
+  if ((y & 3) === 3) return 2; // seam between boards
+  const h = cellHash(board, 7);
+  if ((cellHash(x >> 1, board) & 127) === 0) return 2; // a knot
+  const streak = (x + (h & 31) + (y & 3) * 3) % 9;
+  if (streak < 2) return 0; // grain line
+  return (h & 1) === 0 ? 1 : 3; // alternate boards light and lighter
+}
+
+function cobble(x: number, y: number): number {
+  const row = y >> 2;
+  const sx = x + (row & 1) * 2;
+  const bx = sx >> 2;
+  const vEdge = (sx & 3) === 3 && (cellHash(bx, row) & 3) !== 0; // some stones merge
+  const hEdge = (y & 3) === 3 && (cellHash(bx, row + 99) & 3) !== 0;
+  if (vEdge || hEdge) return 2;
+  const face = cellHash(bx, row) % 3;
+  return face === 0 ? 0 : face === 1 ? 1 : 3;
+}
+
+function glassShine(x: number, y: number): number {
+  const d = (x + y) % 23;
+  if (d === 0 || d === 1 || d === 4) return 2; // two diagonal glints
+  return (cellHash(x, y) & 31) === 0 ? 1 : 0;
+}
+
+function iceCracks(x: number, y: number): number {
+  // ice's light tone is ramp[2]: bright fracture lines on a calm body
+  if ((x * 2 - y + 400) % 29 === 0 || (x + y * 3) % 41 === 0) return 2;
+  return (cellHash(x, y) & 31) === 0 ? 1 : 0;
+}
+
 export function rampIndexAt(mat: number, x: number, y: number, frame: number, meta: number): number {
   const v = cellHash(x, y);
   switch (mat) {
+    case Mat.WALL:
+      return brick(x, y);
+    case Mat.WOOD:
+      return woodGrain(x, y);
+    case Mat.STONE:
+      return cobble(x, y);
+    case Mat.GLASS:
+      return glassShine(x, y);
+    case Mat.ICE:
+      return iceCracks(x, y);
     case Mat.FIRE:
       return (v + frame * 7 + meta * 5) & 3;
     case Mat.LAVA:
