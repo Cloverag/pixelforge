@@ -69,6 +69,14 @@ const worker = new Worker(new URL('./sim/worker.ts', import.meta.url), {
   type: 'module',
 });
 
+// Without this a worker throw is swallowed: the sim silently stops stepping
+// and the page looks frozen rather than broken. Surface it instead.
+worker.onerror = (e): void => {
+  console.error('[pixelforge] sim worker error', e.message, e.filename, e.lineno);
+  inFlight = false;
+  toast('SIM ERROR - RELOAD THE PAGE', true);
+};
+
 // ---- buffers: master goes to the worker forever; stepBuf ping-pongs ----
 const masterBuf = new ArrayBuffer(SIM_W * SIM_H * 4);
 let stepBuf: ArrayBuffer | null = null;
@@ -253,13 +261,16 @@ worker.onmessage = (e: MessageEvent<Res>) => {
     return;
   }
   if (r.t === 'state' && r.save) {
-    // a snapshot is requested for one of two reasons; the worker does not
+    // a snapshot is requested for one of three reasons; the worker does not
     // care which, so the reason waits here in FIFO order
     const why = saveIntents.shift() ?? 'store';
     if (why === 'share') {
       void encodeShare(r.save.cells, r.save.meta).then((code) => {
         showSharePanel(shareUrl(code));
       });
+    } else if (why === 'auto') {
+      // the periodic save is silent: a toast every few seconds would be noise
+      storeSave(rleEncode(r.save.cells, r.save.meta));
     } else {
       const blob = rleEncode(r.save.cells, r.save.meta);
       if (storeSave(blob)) toast('GAME SAVED');
@@ -269,11 +280,24 @@ worker.onmessage = (e: MessageEvent<Res>) => {
 };
 
 /** Why each in-flight `save` request was made, oldest first. */
-const saveIntents: ('store' | 'share')[] = [];
+const saveIntents: ('store' | 'share' | 'auto')[] = [];
 
-function requestSnapshot(why: 'store' | 'share'): void {
+function requestSnapshot(why: 'store' | 'share' | 'auto'): void {
   saveIntents.push(why);
   post({ t: 'save' });
+}
+
+/**
+ * Autosave only covers the free sandbox: challenges have their own start state
+ * and the particle playground is deliberately throwaway. Snapshotting while a
+ * request is already in flight would just queue duplicate work.
+ */
+function autosaveEligible(): boolean {
+  return screen === 'game' && mode === 'sand' && challengeId === null;
+}
+
+function autosaveNow(): void {
+  if (autosaveEligible() && !saveIntents.includes('auto')) requestSnapshot('auto');
 }
 
 /** Drops a decoded world into the sandbox and leaves the menu. */
@@ -764,5 +788,27 @@ if (urlCode) {
     toast('SHARED WORLD LOADED');
   });
 } else {
-  openMenu();
+  // A returning player gets their sandbox back instead of an empty world: the
+  // save used to be reachable only through the LOAD button, so any reload or
+  // tab close looked like the game had reset itself.
+  const boot = readSave();
+  const bootWorld = boot ? rleDecode(boot, SIM_W * SIM_H) : null;
+  if (bootWorld) {
+    startSandbox();
+    adoptWorld(bootWorld);
+    toast('WORLD RESTORED');
+  } else {
+    openMenu();
+  }
 }
+
+// ---- autosave ----
+// Belt and braces: the interval covers a browser or tab that dies without
+// warning, and pagehide covers the ordinary close/navigate. visibilitychange
+// is the one that actually fires reliably on mobile, where pagehide is skipped.
+const AUTOSAVE_MS = 15000;
+setInterval(autosaveNow, AUTOSAVE_MS);
+addEventListener('pagehide', autosaveNow);
+addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') autosaveNow();
+});
