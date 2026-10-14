@@ -25,6 +25,8 @@ export interface SimRenderer {
   ): void;
   /** Clears accumulated visual state, e.g. on world clear or a level load. */
   reset(): void;
+  /** Film look for the playground; only the WebGL renderer has one. */
+  setCinematic?(on: boolean): void;
 }
 
 /**

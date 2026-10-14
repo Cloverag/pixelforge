@@ -447,6 +447,7 @@ function enterGame(label: string): void {
 }
 
 function startSandbox(): void {
+  renderer.setCinematic?.(false);
   mode = 'sand';
   challengeId = null;
   renderer.reset();
@@ -461,6 +462,7 @@ function startSandbox(): void {
 }
 
 function startPlayground(): void {
+  renderer.setCinematic?.(true);
   mode = 'playground';
   challengeId = null;
   pgTool = 'fountain';
@@ -475,6 +477,7 @@ function startPlayground(): void {
 }
 
 function startChallenge(id: string): void {
+  renderer.setCinematic?.(false);
   renderer.reset();
   const def = CHALLENGES.find((c) => c.id === id);
   if (!def) return;

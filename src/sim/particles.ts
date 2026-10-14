@@ -248,8 +248,9 @@ export class PSys {
       const cells = this.grid.cells;
       for (let i = 0; i < nPx; i++) {
         const c = cells[i];
+        // alpha 253 tags a wall for the cinematic composite to light
         if (c !== Mat.EMPTY)
-          pix[i] = colorAt(c, i % SIM_W, (i / SIM_W) | 0, frame, 0);
+          pix[i] = ((colorAt(c, i % SIM_W, (i / SIM_W) | 0, frame, 0) & 0x00ffffff) | (253 << 24)) >>> 0;
       }
     }
 

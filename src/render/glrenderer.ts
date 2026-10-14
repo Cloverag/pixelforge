@@ -2,6 +2,7 @@ import { MATS, Mat, NMATS, Cat } from '../sim/materials';
 import { CHUNKS_X, CHUNKS_Y, SIM_H, SIM_W } from '../sim/protocol';
 import { Blockifier, fitSize } from './blocks';
 import { Fluid } from './fluid';
+import { Cinematic } from './cinematic';
 import { bindDummyVao, blit, Program } from './glutil';
 import type { SimRenderer } from './renderer';
 
@@ -28,6 +29,9 @@ uniform float uGlow;
 uniform float uDyeGain;
 uniform float uSoft;
 uniform float uTime;
+// cinematic (playground) mode: write HDR, and light walls from last frame's bloom
+uniform float uCine;
+uniform sampler2D uLight;
 
 // The rasterizer marks liquid pixels with alpha 250 (LIQUID_ALPHA); every
 // other pixel is 255. Read with texelFetch so linear filtering cannot blur
@@ -89,6 +93,21 @@ void main() {
   }
 
   c += texture(uDye, vUv).rgb * uDyeGain;
+
+  if (uCine > 0.5) {
+    // into linear light, for the tone mapper downstream
+    c = pow(max(c, 0.0), vec3(2.2));
+    float a = texelFetch(uFrame, p, 0).a;
+    if (abs(a - 253.0 / 255.0) < 0.002) {
+      // a wall: dim on its own, lit by whatever glows nearby
+      vec3 L = texture(uLight, vUv).rgb;
+      c *= 0.28 + 2.4 * L;
+    } else {
+      // particles are light sources: push bright cores past 1.0 so they bloom
+      float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+      c *= 1.0 + 3.0 * l;
+    }
+  }
   frag = vec4(c, 1.0);
 }`;
 
@@ -154,6 +173,25 @@ export class GLRenderer implements SimRenderer {
 
   private block: number | null = null;
   private t0 = performance.now();
+  private cine: Cinematic | null = null;
+  private cineOn = false;
+
+  /**
+   * The playground's film look (bloom, filmic tone mapping, lit walls).
+   * Built on first use; if the GPU cannot make the float targets, the
+   * playground just keeps the plain composite.
+   */
+  setCinematic(on: boolean): void {
+    this.cineOn = on;
+    if (on && !this.cine) {
+      try {
+        this.cine = new Cinematic(this.gl, SIM_W, SIM_H);
+      } catch (err) {
+        console.warn('cinematic pipeline unavailable:', err);
+        this.cineOn = false;
+      }
+    }
+  }
   private soft = true;
   /** RG pairs at chunk resolution, rebuilt per frame from the worker's field */
   private windBuf = new Float32Array(CHUNKS_X * CHUNKS_Y * 2);
@@ -275,10 +313,16 @@ export class GLRenderer implements SimRenderer {
       .f('uDyeGain', this.soft ? DYE_GAIN : 0)
       .f('uSoft', this.soft ? 1 : 0)
       .f('uTime', (performance.now() - this.t0) / 1000);
-    blit(gl, null);
+    const cine = this.cineOn ? this.cine : null;
+    this.composite
+      .f('uCine', cine ? 1 : 0)
+      .tex('uLight', cine ? cine.light : this.fluid.dyeTexture, 2);
+    blit(gl, cine ? cine.scene : null);
+    cine?.render();
   }
 
   dispose(): void {
+    this.cine?.dispose();
     this.fluid.dispose();
     this.composite.dispose();
     this.gl.deleteTexture(this.frameTex);
