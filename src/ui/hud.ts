@@ -57,6 +57,7 @@ interface TopbarCallbacks {
   onToggle3d(): void;
   onToggleGrid(): void;
   onToggleSoft(): void;
+  onCycleTheme(): void;
 }
 
 interface SandPaletteCallbacks {
@@ -121,6 +122,7 @@ export class Hud {
     this.gridBtn = this.mkBtn('GRID', cbs.onToggleGrid, 'Chunky block view - cycles size (B)', true);
     this.view3dBtn = this.mkBtn('3D', cbs.onToggle3d, 'Toggle 3D voxel view (3)', true);
     const bgBtn = this.mkBtn('BG', cbs.onToggleBg, 'Cycle wallpaper');
+    this.themeBtn = this.mkBtn('THEME', cbs.onCycleTheme, 'Light / dark / follow system (T)');
     this.muteBtn = this.mkBtn('SFX', cbs.onToggleMute, 'Mute sound effects (M)', true);
     this.musicBtn = this.mkBtn('MUSIC', cbs.onToggleMusic, 'Toggle chiptune loop', true);
     const helpBtn = this.mkBtn('?', cbs.onHelp, 'How to play');
@@ -131,7 +133,7 @@ export class Hud {
     const groups: [string, HTMLButtonElement[]][] = [
       ['Run', [this.pauseBtn, stepBtn]],
       ['File', [this.saveBtn, this.loadBtn, this.shareBtn]],
-      ['View', [this.softBtn, crtBtn, this.gridBtn, this.view3dBtn, bgBtn]],
+      ['View', [this.softBtn, crtBtn, this.gridBtn, this.view3dBtn, bgBtn, this.themeBtn]],
       ['Sound', [this.muteBtn, this.musicBtn]],
     ];
     for (const [name, btns] of groups) {
@@ -386,6 +388,11 @@ export class Hud {
   private shareBtn!: HTMLButtonElement;
   private softBtn!: HTMLButtonElement;
   private crtBtn!: HTMLButtonElement;
+  private themeBtn!: HTMLButtonElement;
+
+  setThemeLabel(t: string): void {
+    this.setLabel(this.themeBtn, t === 'auto' ? 'AUTO' : t.toUpperCase());
+  }
   private gridBtn!: HTMLButtonElement;
 
   /** null = off; a number shows the active block edge, e.g. "GRID 8". */

@@ -16,6 +16,8 @@ export interface MenuCallbacks {
   onToggleMusic(): void;
   onHelp(): void;
   onToggle3d(): void;
+  onCycleTheme(): string;
+  theme: string;
 }
 
 const STARS_PER_LEVEL = 3;
@@ -65,7 +67,7 @@ const TIPS: string[] = [
 
 const KEYS: [string, string][] = [
   ['LMB', 'paint'], ['RMB', 'erase'], ['WHEEL', 'brush size'], ['SPACE', 'pause'],
-  ['N', 'step'], ['F', 'bucket'], ['W', 'wind'], ['M', 'sound'], ['C', 'crt'], ['ESC', 'menu'],
+  ['N', 'step'], ['F', 'bucket'], ['W', 'wind'], ['M', 'sound'], ['C', 'crt'], ['T', 'theme'], ['ESC', 'menu'],
 ];
 
 export function showMenu(cbs: MenuCallbacks): void {
@@ -97,7 +99,14 @@ export function showMenu(cbs: MenuCallbacks): void {
   const help = h('button', 'px', '? HELP') as HTMLButtonElement;
   help.type = 'button';
   help.onclick = () => cbs.onHelp();
-  settings.append(bg, help);
+  const themeLabel = (t: string) => `THEME: ${t.toUpperCase()}`;
+  const theme = h('button', 'px', themeLabel(cbs.theme)) as HTMLButtonElement;
+  theme.type = 'button';
+  theme.title = 'Light / dark / follow system (T)';
+  // the T key changes theme without clicking this; main.ts updates it by role
+  theme.dataset.role = 'theme-label';
+  theme.onclick = () => { theme.textContent = themeLabel(cbs.onCycleTheme()); };
+  settings.append(bg, theme, help);
   head.appendChild(settings);
   screen.appendChild(head);
 

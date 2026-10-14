@@ -66,6 +66,7 @@ function buildContent(box: HTMLElement): void {
     ['WHEEL / [ ]', 'brush size 2-24'],
     ['F', 'flood-fill bucket (sandbox)'],
     ['W', 'wind brush - drag to blow, click for a puff (sandbox)'],
+    ['T', 'theme: auto / light / dark'],
     ['1-9', 'quick-pick palette swatch'],
     ['SPACE', 'pause / resume'],
     ['N', 'single step while paused'],

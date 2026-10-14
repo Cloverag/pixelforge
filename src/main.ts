@@ -18,6 +18,7 @@ import { showSharePanel } from './ui/share-panel';
 import { applyWallpaper, loadBgIndex, WALLPAPER_NAMES } from './game/wallpapers';
 import { initHelp, toggleHelp } from './ui/help';
 import { initMusic } from './game/music';
+import { applyTheme, cycleTheme, loadTheme } from './ui/theme';
 
 const STEP_MS = 1000 / 60;
 
@@ -492,6 +493,8 @@ function openMenu(): void {
     onToggleMusic: toggleMusic,
     onHelp: () => toggleHelp(),
     onToggle3d: () => void toggle3d(),
+    onCycleTheme: nextTheme,
+    theme: loadTheme(),
   });
 }
 
@@ -560,6 +563,18 @@ function toggleMute(): void {
   hud.setMuted(sfx.muted);
 }
 
+applyTheme(loadTheme());
+
+function nextTheme(): string {
+  const t = cycleTheme();
+  hud.setThemeLabel(t);
+  for (const el of document.querySelectorAll<HTMLElement>('[data-role="theme-label"]'))
+    el.textContent = `THEME: ${t.toUpperCase()}`;
+  sfx.ui();
+  toast(`THEME: ${t.toUpperCase()}`);
+  return t;
+}
+
 function toggleCrt(): void {
   hud.setCrt(document.body.classList.toggle('crt-on'));
 }
@@ -620,7 +635,9 @@ hud.initTopbar({
   onToggle3d: () => void toggle3d(),
   onToggleGrid: toggleGrid,
   onToggleSoft: toggleSoft,
+  onCycleTheme: () => void nextTheme(),
 });
+hud.setThemeLabel(loadTheme());
 
 // the GRID and SOFT buttons exist only after initTopbar, so restore here
 restoreGrid();
@@ -653,6 +670,9 @@ new Input(
         break;
       case 'n':
         stepOnce();
+        break;
+      case 't':
+        nextTheme();
         break;
       case 'm':
         toggleMute();
