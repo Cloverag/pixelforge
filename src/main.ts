@@ -248,6 +248,7 @@ worker.onmessage = (e: MessageEvent<Res>) => {
     renderer.present(r.buf);
     if (snap && view3dOn && view3d) view3d.update(snap, r.snapW!, r.snapH!);
     if (r.events) playEvents(r.events);
+    if (r.parts !== undefined) hud.setParticles(r.parts);
     if (r.counts) sfx.crackle(r.counts[Mat.FIRE] + r.counts[Mat.EMBER]);
     if (r.counts && r.used && r.budget) {
       hud.updateStats({

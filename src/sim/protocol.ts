@@ -90,6 +90,8 @@ export interface Res {
   budget?: (number | null)[];
   shake?: number;
   events?: SimEvents;
+  /** live particle count, playground only */
+  parts?: number;
   result?: ChallengeResult | null;
   save?: SaveData | null;
   /** downsampled material map for the 3D view and the fluid (transferable) */

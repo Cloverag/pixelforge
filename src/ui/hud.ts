@@ -86,7 +86,15 @@ export class Hud {
     note: HTMLElement;
     tool: HTMLElement;
     cells: HTMLElement;
+    cellsKey: HTMLElement;
   };
+  /** the playground counts particles, not cells */
+  private particleMode = false;
+
+  setParticles(n: number): void {
+    if (!this.status) return;
+    this.status.cells.textContent = n.toLocaleString('en-US');
+  }
   private cursor = new BrushCursor();
   private brushN = 6;
   private toolKind: PaintKind = 'brush';
@@ -185,11 +193,12 @@ export class Hud {
     const tool = h('span', 'sb-val', '');
     seg('sb-tool').append(h('span', 'sb-key', 'Tool'), tool);
     const cells = h('span', 'sb-val num', '0');
-    seg('sb-cells').append(h('span', 'sb-key', 'Cells'), cells);
+    const cellsKey = h('span', 'sb-key', 'Cells');
+    seg('sb-cells').append(cellsKey, cells);
     this.fpsEl = h('span', 'sb-val num', '');
     this.fpsEl.id = 'fps';
     seg('sb-fps').append(this.fpsEl);
-    this.status = { lamp, run, chip, name, note, tool, cells };
+    this.status = { lamp, run, chip, name, note, tool, cells, cellsKey };
   }
 
   private renderTool(): void {
@@ -338,6 +347,8 @@ export class Hud {
     this.toolbar.appendChild(pal);
     this.buildBrushCol(brush);
     this.selectMat(initial, cbs);
+    this.particleMode = false;
+    if (this.status) this.status.cellsKey.textContent = 'Cells';
   }
 
   buildPgPalette(
@@ -355,7 +366,7 @@ export class Hud {
     // [tool, label, chip gradient, group, tooltip]
     const tools: [PgTool, string, string, string, string][] = [
       ['fountain', 'FOUNTAIN', 'linear-gradient(135deg,#7fd8ff 0 50%,#2b7fd4 50% 100%)', 'EMITTERS', 'Streams particles upward from the cursor'],
-      ['firework', 'FIREWORK', 'linear-gradient(135deg,#ffe97f 0 50%,#ff9a2b 50% 100%)', 'EMITTERS', 'Bursts particles in a ring'],
+      ['firework', 'FIREWORK', 'linear-gradient(135deg,#ffe97f 0 50%,#ff9a2b 50% 100%)', 'EMITTERS', 'Launches a rocket that bursts where you click'],
       ['attract', 'ATTRACT', 'linear-gradient(135deg,#9ff7ea 0 50%,#2ea996 50% 100%)', 'FORCES', 'Pulls nearby particles in'],
       ['repel', 'REPULSE', 'linear-gradient(135deg,#ffa8c6 0 50%,#d43e77 50% 100%)', 'FORCES', 'Pushes nearby particles away'],
       ['vortex', 'VORTEX', 'linear-gradient(135deg,#e0f79f 0 50%,#8fc42b 50% 100%)', 'FORCES', 'Swirls particles around the cursor'],
@@ -384,6 +395,8 @@ export class Hud {
     this.toolbar.appendChild(pal);
     this.buildBrushCol(brush, false);
     this.selectTool(initial, cbs);
+    this.particleMode = true;
+    if (this.status) this.status.cellsKey.textContent = 'Particles';
   }
 
   private bucketBtn: HTMLButtonElement | null = null;
@@ -510,7 +523,7 @@ export class Hud {
   }
 
   updateStats(st: Stats): void {
-    if (this.status) {
+    if (this.status && !this.particleMode) {
       let n = 0;
       for (let m = 1; m < NMATS; m++) n += st.counts[m];
       this.status.cells.textContent = n.toLocaleString('en-US');

@@ -143,6 +143,8 @@ export class World {
     this.grid.counts[Mat.EMPTY] = SIM_W * SIM_H;
     this.rng = new RNG(seed);
     this.parts = new PSys(this.grid);
+    // a firework burst is a small blast as far as sound and screen go
+    this.parts.onBurst = (x, y) => this.events.booms.push(x | 0, y | 0, 4);
   }
 
   clear(): void {

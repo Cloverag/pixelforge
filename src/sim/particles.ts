@@ -22,13 +22,45 @@ function u32(hex: string): number {
   return (((255 << 24) | (b << 16) | (g << 8) | r) >>> 0);
 }
 
-/** vivid playground palette */
-const HUES = [
-  '#ff4b5c', '#ff8f3f', '#ffd93f', '#a8e63f', '#3fe86c', '#3fe8c8',
-  '#3fb4ff', '#6b6bff', '#a83fff', '#e33fff', '#ff3fa8', '#ffffff',
-].map(u32);
+/**
+ * A smooth 64-step rainbow. Particles used to pick one of 12 hues at random,
+ * so every stream read as confetti; now an emitter walks the wheel over
+ * time and a stream is a ribbon of neighbouring colours.
+ */
+const RAINBOW_N = 64;
+const RAINBOW: number[] = [];
+for (let k = 0; k < RAINBOW_N; k++) {
+  const h = (k / RAINBOW_N) * 6;
+  const c = 0.78; // saturation x value: vivid but not neon
+  const xx = c * (1 - Math.abs((h % 2) - 1));
+  const [r, g, b] =
+    h < 1 ? [c, xx, 0] : h < 2 ? [xx, c, 0] : h < 3 ? [0, c, xx] : h < 4 ? [0, xx, c] : h < 5 ? [xx, 0, c] : [c, 0, xx];
+  const m = 1 - c;
+  const to = (v: number) => Math.round((v + m * 0.55) * 255);
+  RAINBOW.push((((255 << 24) | (to(b) << 16) | (to(g) << 8) | to(r)) >>> 0));
+}
 
 export const PG_BG = u32('#0b0b14');
+const BG_R = PG_BG & 255;
+const BG_G = (PG_BG >>> 8) & 255;
+const BG_B = (PG_BG >>> 16) & 255;
+
+/** additive blend with saturation: overlapping particles glow brighter */
+function addSat(a: number, b: number): number {
+  const r = Math.min(255, (a & 255) + (b & 255) - BG_R);
+  const g = Math.min(255, ((a >>> 8) & 255) + ((b >>> 8) & 255) - BG_G);
+  const bl = Math.min(255, ((a >>> 16) & 255) + ((b >>> 16) & 255) - BG_B);
+  return ((255 << 24) | (Math.max(0, bl) << 16) | (Math.max(0, g) << 8) | Math.max(0, r)) >>> 0;
+}
+
+interface Rocket {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  ty: number;
+  hue: number;
+}
 
 export class PSys {
   private n = 0;
@@ -42,19 +74,25 @@ export class PSys {
 
   forces: Force[] = [];
   gravityOn = true;
+  private rockets: Rocket[] = [];
+  /** walks the rainbow so a fountain stream changes colour over time */
+  private hueClock = 0;
+  /** called with each firework burst position (for sound and screen flash) */
+  onBurst: ((x: number, y: number) => void) | null = null;
 
   constructor(private grid: import('./grid').Grid) {}
 
   reset(): void {
     this.n = 0;
     this.forces.length = 0;
+    this.rockets.length = 0;
   }
 
   get count(): number {
     return this.n;
   }
 
-  private push(x: number, y: number, vx: number, vy: number, life: number): void {
+  private push(x: number, y: number, vx: number, vy: number, life: number, hue: number): void {
     if (this.n >= CAP) return;
     const i = this.n++;
     this.px[i] = x;
@@ -62,20 +100,44 @@ export class PSys {
     this.vx[i] = vx;
     this.vy[i] = vy;
     this.life[i] = life;
-    this.hue[i] = this.rng.int(HUES.length);
+    this.hue[i] = hue;
   }
 
   fountain(x: number, y: number): void {
+    this.hueClock = (this.hueClock + 0.12) % RAINBOW_N;
+    const base = this.hueClock | 0;
     for (let k = 0; k < 4; k++) {
       const a = -Math.PI / 2 + (this.rng.next() - 0.5) * 1.1;
       const sp = 1.5 + this.rng.next() * 2.5;
-      this.push(x, y, Math.cos(a) * sp, Math.sin(a) * sp, 90 + this.rng.range(30, 90));
+      const hue = (base + this.rng.int(4)) % RAINBOW_N;
+      this.push(x, y, Math.cos(a) * sp, Math.sin(a) * sp, 90 + this.rng.range(30, 90), hue);
     }
   }
 
-  firework(x: number, y: number): void {
+  /** Launch a rocket from the bottom edge that bursts at (x, y). */
+  launch(x: number, y: number): void {
+    if (this.rockets.length >= 12) return;
+    const lx = x + (this.rng.next() - 0.5) * 30;
+    // start below the target, but above anything in the way: launched from
+    // the bottom edge, a rocket under a wall just burst against it
+    let sy = y;
+    while (sy < SIM_H - 2 && sy < y + 140 && !this.solidAt(lx, sy + 1)) sy++;
+    if (sy - y < 12) {
+      this.firework(x, y); // no room to fly: burst on the spot
+      return;
+    }
+    this.rockets.push({
+      x: lx,
+      y: sy,
+      vx: 0,
+      vy: -(3.6 + this.rng.next() * 0.8),
+      ty: y,
+      hue: this.rng.int(RAINBOW_N),
+    });
+  }
+
+  firework(x: number, y: number, baseHue = this.rng.int(RAINBOW_N)): void {
     const count = 110 + this.rng.int(50);
-    const baseHue = this.rng.int(HUES.length);
     for (let k = 0; k < count; k++) {
       const a = this.rng.next() * Math.PI * 2;
       const sp = 0.6 + this.rng.next() * 3.4;
@@ -87,8 +149,10 @@ export class PSys {
       this.vx[i] = Math.cos(a) * sp;
       this.vy[i] = Math.sin(a) * sp;
       this.life[i] = 50 + this.rng.range(20, 70);
-      this.hue[i] = this.rng.chance(0.7) ? baseHue : (baseHue + 6) % HUES.length;
+      // mostly one colour, a few sparks from the far side of the wheel
+      this.hue[i] = this.rng.chance(0.75) ? (baseHue + this.rng.int(3)) % RAINBOW_N : (baseHue + RAINBOW_N / 2) % RAINBOW_N;
     }
+    this.onBurst?.(x, y);
   }
 
   placeForce(kind: 'attractor' | 'repulsor' | 'vortex', x: number, y: number): void {
@@ -134,7 +198,7 @@ export class PSys {
         if (msg.phase !== 'up') this.fountain(msg.x, msg.y);
         break;
       case 'firework':
-        if (msg.phase === 'down') this.firework(msg.x, msg.y);
+        if (msg.phase === 'down') this.launch(msg.x, msg.y);
         break;
       case 'attractor':
       case 'repulsor':
@@ -164,15 +228,19 @@ export class PSys {
   fullRender(pix: Uint32Array, forceFull: boolean, frame: number): void {
     if (forceFull) pix.fill(PG_BG);
 
-    // trail decay
+    // Trail decay, toward the background. Scaling toward black instead left
+    // trails darker than the background - a black wedge under every fountain.
     const nPx = SIM_W * SIM_H;
     for (let i = 0; i < nPx; i++) {
       const c = pix[i];
       if (c === PG_BG) continue;
-      const r = ((c & 255) * 238) >> 8;
-      const g = (((c >>> 8) & 255) * 238) >> 8;
-      const b = (((c >>> 16) & 255) * 238) >> 8;
-      pix[i] = ((255 << 24) | (b << 16) | (g << 8) | r) >>> 0;
+      const r = BG_R + ((((c & 255) - BG_R) * 230) >> 8);
+      const g = BG_G + (((((c >>> 8) & 255) - BG_G) * 230) >> 8);
+      const b = BG_B + (((((c >>> 16) & 255) - BG_B) * 230) >> 8);
+      pix[i] =
+        Math.abs(r - BG_R) + Math.abs(g - BG_G) + Math.abs(b - BG_B) < 4
+          ? PG_BG
+          : ((255 << 24) | (b << 16) | (g << 8) | r) >>> 0;
     }
 
     // draw painted grid cells (WALL brush constructions) so they are visible
@@ -183,6 +251,24 @@ export class PSys {
         if (c !== Mat.EMPTY)
           pix[i] = colorAt(c, i % SIM_W, (i / SIM_W) | 0, frame, 0);
       }
+    }
+
+    // rockets: climb with a wobble, shed sparks, burst at their target height
+    for (let k = this.rockets.length - 1; k >= 0; k--) {
+      const r = this.rockets[k];
+      r.vx = Math.max(-0.6, Math.min(0.6, r.vx + (this.rng.next() - 0.5) * 0.15));
+      r.x += r.vx;
+      r.y += r.vy;
+      r.vy *= 0.985;
+      if (this.rng.chance(0.8)) this.push(r.x, r.y + 1, (this.rng.next() - 0.5) * 0.4, 0.6, 18 + this.rng.int(14), (r.hue + 2) % RAINBOW_N);
+      if (r.y <= r.ty || r.vy > -0.6 || this.solidAt(r.x, r.y)) {
+        this.firework(r.x, r.y, r.hue);
+        this.rockets.splice(k, 1);
+        continue;
+      }
+      const rx = r.x | 0;
+      const ry = r.y | 0;
+      if (rx >= 0 && ry >= 0 && rx < SIM_W && ry < SIM_H) pix[ry * SIM_W + rx] = 0xffd8f4ff;
     }
 
     // integrate
@@ -255,38 +341,54 @@ export class PSys {
       if (x < 0 || y < 0 || x >= SIM_W || y >= SIM_H) continue;
       const idx = y * SIM_W + x;
       const fade = Math.min(1, this.life[i] / 40);
-      let col = HUES[this.hue[i]];
-      if (fade < 1) {
-        const r = ((col & 255) * fade) | 0;
-        const gr = (((col >>> 8) & 255) * fade) | 0;
-        const b = (((col >>> 16) & 255) * fade) | 0;
-        col = ((255 << 24) | (b << 16) | (gr << 8) | r) >>> 0;
-      }
-      pix[idx] = col;
       const v2 = this.vx[i] * this.vx[i] + this.vy[i] * this.vy[i];
+      // fast particles run white-hot; dying ones fade into the background
+      const hot = Math.min(0.55, v2 / 30);
+      const base = RAINBOW[this.hue[i]];
+      let r = (base & 255) + ((255 - (base & 255)) * hot);
+      let gr = ((base >>> 8) & 255) + ((255 - ((base >>> 8) & 255)) * hot);
+      let b = ((base >>> 16) & 255) + ((255 - ((base >>> 16) & 255)) * hot);
+      r = BG_R + (r - BG_R) * fade;
+      gr = BG_G + (gr - BG_G) * fade;
+      b = BG_B + (b - BG_B) * fade;
+      const col = ((255 << 24) | ((b | 0) << 16) | ((gr | 0) << 8) | (r | 0)) >>> 0;
+      pix[idx] = addSat(pix[idx], col);
       if (v2 > 4) {
         const mx = (x - this.vx[i] * 0.5) | 0;
         const my = (y - this.vy[i] * 0.5) | 0;
         if (mx >= 0 && my >= 0 && mx < SIM_W && my < SIM_H)
-          pix[my * SIM_W + mx] = col;
+          pix[my * SIM_W + mx] = addSat(pix[my * SIM_W + mx], col);
       }
     }
 
-    // force markers
+    // force markers, animated: attractors pull a ring inward, repulsors
+    // push one outward, vortices spin three arms
     const mA = u32('#6ef0e0');
     const mR = u32('#f06e9e');
     const mV = u32('#c9f06e');
+    const dot = (x: number, y: number, col: number) => {
+      const ix = x | 0;
+      const iy = y | 0;
+      if (ix >= 0 && iy >= 0 && ix < SIM_W && iy < SIM_H) pix[iy * SIM_W + ix] = col;
+    };
     for (const f of this.forces) {
       const col = f.kind === 'attract' ? mA : f.kind === 'repel' ? mR : mV;
-      const rr = 3;
-      for (let dy = -rr; dy <= rr; dy++)
-        for (let dx = -rr; dx <= rr; dx++) {
-          if (Math.abs(dx) + Math.abs(dy) > rr) continue;
-          const x = (f.x + dx) | 0;
-          const y = (f.y + dy) | 0;
-          if (x < 0 || y < 0 || x >= SIM_W || y >= SIM_H) continue;
-          pix[y * SIM_W + x] = col;
+      dot(f.x, f.y, col);
+      if (f.kind === 'vortex') {
+        for (let arm = 0; arm < 3; arm++)
+          for (let rr = 2; rr <= 6; rr++) {
+            const a = frame * 0.15 + (arm * Math.PI * 2) / 3 + rr * 0.35;
+            dot(f.x + Math.cos(a) * rr, f.y + Math.sin(a) * rr, col);
+          }
+      } else {
+        const phase = (frame % 24) / 24;
+        const rr = f.kind === 'attract' ? 8 - phase * 6 : 2 + phase * 6;
+        const steps = Math.max(8, (rr * 6) | 0);
+        for (let k = 0; k < steps; k++) {
+          const a = (k / steps) * Math.PI * 2;
+          dot(f.x + Math.cos(a) * rr, f.y + Math.sin(a) * rr, col);
         }
+      }
     }
 
     void frame;
