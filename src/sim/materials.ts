@@ -26,6 +26,7 @@ export const Mat = {
   SALT: 24,
   TNT: 25,
   ASH: 26,
+  FLORA: 27,
 } as const;
 
 export type MatId = (typeof Mat)[keyof typeof Mat];
@@ -113,6 +114,38 @@ MATS[Mat.SALT] = def(Mat.SALT, 'SALT', Cat.POWDER, 1.3, ['#e8e4da', '#d8d4c8', '
 MATS[Mat.TNT] = def(Mat.TNT, 'TNT', Cat.SOLID, 100, ['#c8281e', '#b02018', '#e03828', '#981810'], { acidChance: 0.02 });
 // lighter than snow, so it is the most wind-mobile thing that still falls
 MATS[Mat.ASH] = def(Mat.ASH, 'ASH', Cat.POWDER, 0.5, ['#5c5764', '#4c4754', '#6c6774', '#3f3b48'], { acidChance: 0.03 });
+// stems, leaves and flowers that plants push up into the air. Its own
+// material so GARDENER's PLANT count (and every plant rule) is untouched;
+// which part a cell is lives in meta (see Flora below). The ramp is the
+// stem's, which is what the 3D view and anything ramp-based will show.
+MATS[Mat.FLORA] = def(Mat.FLORA, 'FLORA', Cat.SOLID, 100, ['#3c8a37', '#337a30', '#46993f', '#2c6c2a'], { flam: 0.16, acidChance: 0.05, placeable: false });
+
+/**
+ * FLORA meta: a static part (1..7) or a growing bud (0x80 | height left).
+ * Petals carry their hue as an offset from PETAL, so a whole flower is one
+ * colour without any per-flower bookkeeping.
+ */
+export const Flora = {
+  STEM: 1,
+  LEAF: 2,
+  CENTER: 3,
+  PETAL: 4, // 4..7 = four petal hues
+  BUD: 0x80,
+} as const;
+
+const hex = (s: string) => u32(s);
+/** ABGR colours per FLORA part; index by meta for static parts */
+const FLORA_COLS: number[][] = [
+  [],
+  [hex('#3c8a37'), hex('#337a30'), hex('#46993f'), hex('#2c6c2a')], // stem
+  [hex('#6cc24a'), hex('#5bb03e'), hex('#80d35a'), hex('#4f9d36')], // leaf
+  [hex('#ffd54a'), hex('#f2b632'), hex('#ffe27a'), hex('#e8a628')], // centre
+  [hex('#f47fb0'), hex('#e86a9f'), hex('#ff97c1'), hex('#f47fb0')], // pink
+  [hex('#f6f0e4'), hex('#e9e1d2'), hex('#fffaf0'), hex('#f6f0e4')], // white
+  [hex('#a989e8'), hex('#9473d9'), hex('#bea2f2'), hex('#a989e8')], // violet
+  [hex('#ea564c'), hex('#d8463d'), hex('#f56e63'), hex('#ea564c')], // red
+];
+const BUD_COL = hex('#8fdc6a');
 
 /**
  * How hard the wind field pushes each material, 0 (immovable) to 1.
@@ -148,8 +181,28 @@ export function isFluid(cat: number): boolean {
  * colours from exactly the same rule the 2D rasterizer uses, without
  * unpacking and re-linearising a packed ABGR word per cell.
  */
+/**
+ * A well-mixed per-cell hash. The old `(x*73856093 ^ y*19349663) & 3` used
+ * only the low two bits, and an odd multiplier leaves those as a plain
+ * function of x and y - every static material was drawn as a regular
+ * checker lattice, not noise.
+ */
+export function cellHash(x: number, y: number): number {
+  let h = (Math.imul(x, 0x27d4eb2d) ^ Math.imul(y, 0x165667b1)) >>> 0;
+  h ^= h >>> 15;
+  h = Math.imul(h, 0x2c1b3c6d);
+  h ^= h >>> 12;
+  return h >>> 0;
+}
+
+/** Calm liquid surface: mostly the base tone, some darker, rare glints. */
+function liquidIndex(h: number): number {
+  const b = h & 255;
+  return b < 150 ? 0 : b < 228 ? 1 : b < 248 ? 3 : 2;
+}
+
 export function rampIndexAt(mat: number, x: number, y: number, frame: number, meta: number): number {
-  const v = ((x * 73856093) ^ (y * 19349663)) >>> 0;
+  const v = cellHash(x, y);
   switch (mat) {
     case Mat.FIRE:
       return (v + frame * 7 + meta * 5) & 3;
@@ -157,6 +210,9 @@ export function rampIndexAt(mat: number, x: number, y: number, frame: number, me
       return (v + (frame >> 2)) & 3;
     case Mat.ACID:
       return (v + (frame >> 3)) & 3;
+    case Mat.WATER:
+    case Mat.OIL:
+      return liquidIndex(v);
     case Mat.EMBER:
       return ((frame + meta * 3) >> 2) & 3;
     case Mat.TORCH:
@@ -185,7 +241,7 @@ for (let m = 0; m < NMATS; m++) if (MATS[m]?.cat === Cat.POWDER) GRAINY[m] = 1;
 
 /** True when a cell's colour comes from its state, not its ramp. */
 export function offRamp(mat: number, meta: number): boolean {
-  return meta > 0 && (mat === Mat.WIRE || mat === Mat.TNT);
+  return mat === Mat.FLORA || (meta > 0 && (mat === Mat.WIRE || mat === Mat.TNT));
 }
 
 /** Animated color pick for a cell, without surface lighting. */
@@ -197,6 +253,11 @@ export function colorAt(mat: number, x: number, y: number, frame: number, meta: 
   // has to be readable from across the screen, so it beats the stripe
   if (mat === Mat.TNT && meta > 0)
     return (frame >> (meta < 24 ? 1 : 2)) & 1 ? 0xfff0f8ff : MATS[mat].ramp[2];
+  if (mat === Mat.FLORA) {
+    if (meta & Flora.BUD) return BUD_COL;
+    const cols = FLORA_COLS[meta] ?? FLORA_COLS[Flora.STEM];
+    return cols[cellHash(x, y) & 3];
+  }
   return MATS[mat].ramp[rampIndexAt(mat, x, y, frame, meta)];
 }
 
@@ -289,9 +350,21 @@ export function applyShade(c: number, v: number): number {
  * every imported binding into a getter and inflated this to 4x.)
  */
 export const SHADED = new Uint32Array(NMATS * 4 * 8);
+
+/**
+ * Alpha byte that marks a pixel as liquid surface-or-body for the GL
+ * composite (depth, caustics, surface glints). Every other pixel is 255.
+ * 250/255 is invisible to the 2D fallback, which just draws it.
+ */
+export const LIQUID_ALPHA = 250;
+
 for (let m = 0; m < NMATS; m++) {
   if (!MATS[m]) continue;
+  // lava is a light source, not a pool: it keeps its own look
+  const tag = MATS[m].cat === Cat.LIQUID && m !== Mat.LAVA;
   for (let r = 0; r < 4; r++)
-    for (let v = 0; v < 8; v++)
-      SHADED[(((m << 2) | r) << 3) | v] = applyShade(MATS[m].ramp[r], v);
+    for (let v = 0; v < 8; v++) {
+      const c = applyShade(MATS[m].ramp[r], v);
+      SHADED[(((m << 2) | r) << 3) | v] = tag ? ((c & 0x00ffffff) | (LIQUID_ALPHA << 24)) >>> 0 : c;
+    }
 }

@@ -2,7 +2,7 @@ import { RNG, hash2d } from '../core/rng';
 import { Grid } from './grid';
 import {
   Cat, GRAINY, LIT, Lit, MATS, Mat, NMATS, OPEN, SHADED, Shade, WIND_SUSC,
-  applyShade, colorAt, offRamp, rampIndexAt, SPARK_LIFE,
+  Flora, applyShade, colorAt, offRamp, rampIndexAt, SPARK_LIFE,
 } from './materials';
 import {
   CHUNK,
@@ -26,6 +26,12 @@ const BG = MATS[Mat.EMPTY].ramp[0];
 /** frames from fire touching TNT to the blast: long enough to see it blink
  *  and back away, short enough that it still reads as cause and effect */
 export const TNT_FUSE = 70;
+/** liquid meta: last flow direction */
+const LQ_DIR = 3;
+const LQ_RIGHT = 1;
+const LQ_LEFT = 2;
+/** how far a liquid looks along its surface for somewhere lower */
+const LQ_SCAN = 128;
 /** drifting dust mote in a windy empty cell; ABGR for a dim slate blue */
 const WIND_DUST = 0xff3a2c22;
 
@@ -360,6 +366,9 @@ export class World {
       case Mat.PLANT:
         this.plant(x, y);
         break;
+      case Mat.FLORA:
+        this.flora(x, y, i);
+        break;
       case Mat.FUSE:
         this.fuse(x, y);
         break;
@@ -478,7 +487,25 @@ export class World {
     if (this.tryMoveTo(x, y, x + d2, y + 1, dens)) return;
   }
 
+  /**
+   * Liquids: fall, then slide sideways only toward somewhere to fall.
+   *
+   * The old rule flipped a coin and slid to the farthest opening every tick,
+   * so a partly filled top layer shuffled back and forth forever - measured,
+   * a settled pool still swapped ~62 cells per frame 2000 frames after
+   * landing and its chunks never slept. Sliding only toward a drop (an empty
+   * cell below, within reach) keeps everything that makes water level -
+   * any slope has a drop somewhere along it - while a flat partial layer,
+   * which has nowhere lower to go, rests. A first attempt that instead
+   * counted reversals and put cells to sleep froze slopes like sand (surface
+   * range 54-64 cells): a resting cell never woke its chunk to look again.
+   *
+   * meta holds the last flow direction (LQ_*), which travels with the cell
+   * and breaks ties, so a stream keeps going the way it was going.
+   */
   private liquid(x: number, y: number, m: number): void {
+    const g = this.grid;
+    const i = g.idx(x, y);
     const dens = MATS[m].dens;
     const susc = WIND_SUSC[m];
     let wx = 0;
@@ -489,32 +516,125 @@ export class World {
       // is the only way a liquid ever moves upward, so it stays rare
       if (wy < 0 && this.tryMoveTo(x, y, x + wx, y - 1, dens)) return;
     }
-    if (this.tryMoveTo(x, y, x, y + 1, dens)) return;
-    // wind decides which way it prefers to fall and spread; without wind it
-    // is the original coin flip
-    const first = wx !== 0 ? wx > 0 : this.rng.chance(0.5);
-    const d1 = first ? 1 : -1;
-    const d2 = first ? -1 : 1;
-    if (this.tryMoveTo(x, y, x + d1, y + 1, dens)) return;
-    if (this.tryMoveTo(x, y, x + d2, y + 1, dens)) return;
-    // horizontal dispersion: slide to farthest contiguous opening
+    const stored = g.meta[i] & LQ_DIR;
+    const d1 = wx !== 0 ? wx : stored === LQ_RIGHT ? 1 : stored === LQ_LEFT ? -1 : this.rng.chance(0.5) ? 1 : -1;
+    const d2 = -d1;
+    const code = (d: number) => (d > 0 ? LQ_RIGHT : LQ_LEFT);
+
+    if (this.tryMoveTo(x, y, x, y + 1, dens)) {
+      this.setLiquidDir(x, y + 1, m, code(d1));
+      this.wakeSurface(x, y);
+      return;
+    }
+    if (this.tryMoveTo(x, y, x + d1, y + 1, dens)) {
+      this.setLiquidDir(x + d1, y + 1, m, code(d1));
+      this.wakeSurface(x, y);
+      return;
+    }
+    if (this.tryMoveTo(x, y, x + d2, y + 1, dens)) {
+      this.setLiquidDir(x + d2, y + 1, m, code(d2));
+      this.wakeSurface(x, y);
+      return;
+    }
+
     const disp = MATS[m].disp;
-    for (const dx of [d1, d2]) {
-      // a gust extends the reach downwind, which is what makes a pool visibly
-      // stream rather than just pick a side
-      const reach = dx === wx ? disp + 5 : disp;
-      let tx = x;
-      for (let k = 0; k < reach; k++) {
-        const nx = tx + dx;
-        const t = this.grid.get(nx, y);
-        if (t === Mat.EMPTY || (t !== 1 && MATS[t].cat === Cat.GAS)) tx = nx;
-        else break;
-      }
+    if (wx !== 0) {
+      // a gust pushes regardless of slope, and further: that is what makes a
+      // pool visibly stream rather than just pick a side
+      const tx = this.openRun(x, y, wx, disp + 5);
       if (tx !== x) {
-        this.grid.swap(this.grid.idx(x, y), this.grid.idx(tx, y));
+        g.swap(i, g.idx(tx, y));
+        this.setLiquidDir(tx, y, m, code(wx));
+      }
+      return;
+    }
+    // slide toward the nearest drop, travel direction first. Look far, move
+    // at most disp: with the search capped at disp a pool froze as a ramp
+    // falling one row per ~disp cells, since a cell further than that from
+    // the next step down saw nowhere to go.
+    // Surface cells also look through their own liquid: the whole top row
+    // of a terrace can then drain toward the drop at once (crudely, pressure)
+    // instead of one edge cell at a time, which levelled a pool too slowly.
+    // Runny liquids only: lava (disp 1) jumping a whole terrace in a frame
+    // poured off a 7-cell ledge in 3 frames, which is not how lava moves.
+    const surface = disp >= 3 && this.isOpen(g.get(x, y - 1));
+    for (const dx of [d1, d2]) {
+      const k = this.dropStep(x, y, dx, disp, surface ? m : -1);
+      if (k > 0) {
+        const tx = x + dx * k;
+        g.swap(i, g.idx(tx, y));
+        this.setLiquidDir(tx, y, m, code(dx));
+        this.wakeSurface(x, y);
         return;
       }
     }
+  }
+
+  /**
+   * A liquid just left (x, y), which is a new drop for any liquid on the row
+   * above within LQ_SCAN. Chunk wake-ups only reach a chunk or two, so
+   * without this a cell 60 cells along never heard about it, slept, and a
+   * pool settled as a ramp (surface range 21 measured) instead of level.
+   */
+  private wakeSurface(x: number, y: number): void {
+    if (y > 0) this.grid.chunks.wakeRect(x - LQ_SCAN, y - 1, x + LQ_SCAN, y - 1);
+  }
+
+  private setLiquidDir(x: number, y: number, m: number, dir: number): void {
+    const g = this.grid;
+    const i = g.idx(x, y);
+    // tryMoveTo can turn the mover into something else (fire); leave that be
+    if (g.cells[i] === m) g.meta[i] = dir;
+  }
+
+  private isOpen(t: number): boolean {
+    return t === Mat.EMPTY || (t !== 1 && MATS[t].cat === Cat.GAS);
+  }
+
+  /** Farthest x reachable along open cells toward dx, up to reach. */
+  private openRun(x: number, y: number, dx: number, reach: number): number {
+    let tx = x;
+    for (let k = 0; k < reach; k++) {
+      if (!this.isOpen(this.grid.get(tx + dx, y))) break;
+      tx += dx;
+    }
+    return tx;
+  }
+
+  /**
+   * How far to move toward dx to head for the nearest drop (an open cell
+   * with open space or a VOID under it, or the cell beside a VOID) within
+   * LQ_SCAN, or 0 if there is none. Water on a flat floor otherwise rests,
+   * so without the VOID cases a drain left a film of water around it.
+   *
+   * Over open cells it slides at most `disp`. If `through` is a liquid id,
+   * runs of that liquid are passable for the search, and the move is a jump
+   * to the first open cell past them - the far edge of the terrace.
+   */
+  private dropStep(x: number, y: number, dx: number, disp: number, through: number): number {
+    const g = this.grid;
+    let firstOpen = 0;
+    let crossed = false;
+    for (let k = 1; k <= LQ_SCAN; k++) {
+      const t = g.get(x + dx * k, y);
+      if (this.isOpen(t)) {
+        if (firstOpen === 0) firstOpen = k;
+        // a VOID below is a drain: as good as a drop
+        const below = g.get(x + dx * k, y + 1);
+        if (this.isOpen(below) || below === Mat.VOID) {
+          return crossed ? firstOpen : Math.min(k, disp);
+        }
+      } else if (t === Mat.VOID) {
+        // a drain in the wall: head for the cell beside it
+        if (firstOpen === 0) return 0;
+        return crossed ? firstOpen : Math.min(k - 1, disp);
+      } else if (t === through && firstOpen === 0) {
+        crossed = true;
+      } else {
+        return 0;
+      }
+    }
+    return 0;
   }
 
   private gasStep(x: number, y: number, m: number): void {
@@ -594,8 +714,88 @@ export class World {
       const ny = y + dirs[(pick + d) % dirs.length][1];
       if (g.get(nx, ny) === Mat.WATER) {
         g.setXY(nx, ny, Mat.PLANT, gen + 1);
+        this.trySprout(nx, ny);
         return;
       }
+    }
+  }
+
+  /**
+   * A plant that has just grown up to open air may push a bud into it.
+   * Buds keep their distance from other flora so a pond grows a scatter of
+   * flowers rather than a lawn of stems.
+   */
+  private trySprout(x: number, y: number): void {
+    const g = this.grid;
+    if (g.get(x, y - 1) !== Mat.EMPTY) return;
+    if (!this.rng.chance(0.3)) return;
+    for (let dy = 1; dy <= 3; dy++)
+      for (let dx = -3; dx <= 3; dx++)
+        if (g.get(x + dx, y - dy) === Mat.FLORA) return;
+    g.setXY(x, y - 1, Mat.FLORA, Flora.BUD | this.rng.range(4, 16));
+  }
+
+  /**
+   * Flora: only buds tick. A bud climbs one cell at a time (leaving stem
+   * behind, swaying now and then, dropping leaves to the sides) until its
+   * height runs out or it is blocked, then blooms. Every other part is inert,
+   * so a finished flower costs nothing and lets its chunk sleep.
+   */
+  private flora(x: number, y: number, i: number): void {
+    const g = this.grid;
+    const meta = g.meta[i];
+    if ((meta & Flora.BUD) === 0) return;
+    g.chunks.wakeCell(x, y);
+    if (!this.rng.chance(0.07)) return;
+    const height = meta & 0x7f;
+    if (height === 0) {
+      this.bloom(x, y, i);
+      return;
+    }
+    if (this.rng.chance(0.22)) {
+      const side = this.rng.chance(0.5) ? 1 : -1;
+      if (g.get(x + side, y) === Mat.EMPTY) {
+        g.setXY(x + side, y, Mat.FLORA, Flora.LEAF);
+        if (this.rng.chance(0.5) && g.get(x + side * 2, y - 1) === Mat.EMPTY)
+          g.setXY(x + side * 2, y - 1, Mat.FLORA, Flora.LEAF);
+      }
+    }
+    const drift = this.rng.chance(0.18) ? (this.rng.chance(0.5) ? 1 : -1) : 0;
+    const tx = x + drift;
+    if (g.get(tx, y - 1) !== Mat.EMPTY) {
+      this.bloom(x, y, i);
+      return;
+    }
+    // same material, so setI would skip the repaint - write meta and touch
+    g.meta[i] = Flora.STEM;
+    g.touch(x, y);
+    g.setXY(tx, y - 1, Mat.FLORA, Flora.BUD | (height - 1));
+  }
+
+  /** End of a stem: usually a flower in one of four colours, sometimes leaves. */
+  private bloom(x: number, y: number, i: number): void {
+    const g = this.grid;
+    g.touch(x, y);
+    const put = (px: number, py: number, part: number) => {
+      if (g.get(px, py) === Mat.EMPTY) g.setXY(px, py, Mat.FLORA, part);
+    };
+    if (this.rng.chance(0.25)) {
+      g.meta[i] = Flora.LEAF;
+      put(x - 1, y - 1, Flora.LEAF);
+      put(x + 1, y - 1, Flora.LEAF);
+      return;
+    }
+    const petal = Flora.PETAL + this.rng.int(4);
+    g.meta[i] = Flora.CENTER;
+    put(x - 1, y, petal);
+    put(x + 1, y, petal);
+    put(x, y - 1, petal);
+    if (this.rng.chance(0.45)) {
+      put(x - 1, y - 1, petal);
+      put(x + 1, y - 1, petal);
+      put(x - 2, y, petal);
+      put(x + 2, y, petal);
+      put(x, y - 2, petal);
     }
   }
 

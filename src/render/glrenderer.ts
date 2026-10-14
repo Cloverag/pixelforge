@@ -27,9 +27,46 @@ uniform vec2 uTexel;
 uniform float uGlow;
 uniform float uDyeGain;
 uniform float uSoft;
+uniform float uTime;
+
+// The rasterizer marks liquid pixels with alpha 250 (LIQUID_ALPHA); every
+// other pixel is 255. Read with texelFetch so linear filtering cannot blur
+// the flag, at 1:1 because the canvas is exactly SIM_W x SIM_H.
+bool liquidAt(ivec2 p) {
+  return texelFetch(uFrame, p, 0).a < 0.99;
+}
+
+vec3 waterFx(vec3 c, ivec2 p) {
+  // depth: liquid cells above this one (texture is flipped, +y is up)
+  float d = 0.0;
+  for (int k = 1; k <= 24; k++) {
+    if (!liquidAt(p + ivec2(0, k))) break;
+    d += 1.0;
+  }
+  float deep = smoothstep(1.0, 24.0, d);
+  c = mix(c, c * vec3(0.42, 0.55, 0.80), deep * 0.8);
+
+  // caustics: two interfering slow waves, quantised to three levels so the
+  // shimmer stays pixel art instead of becoming a smooth gradient
+  vec2 q = vec2(p) * 0.11;
+  float t = uTime;
+  float w = sin(q.x * 1.7 + t * 1.3 + sin(q.y * 2.3 + t * 0.9))
+          * sin(q.y * 1.9 - t * 1.1 + sin(q.x * 1.3 - t * 0.7));
+  w = floor(max(w, 0.0) * 3.0) / 3.0;
+  c += w * 0.075 * (1.0 - deep * 0.75) * vec3(0.75, 0.9, 1.0);
+
+  // surface: travelling glints along the top row only
+  if (d == 0.0) {
+    float g = sin(float(p.x) * 0.31 - t * 2.2 + sin(float(p.x) * 0.05 + t * 0.5) * 2.5);
+    c *= 1.0 + 0.2 * step(0.55, g);
+  }
+  return c;
+}
 
 void main() {
   vec3 c = texture(uFrame, vUv).rgb;
+  ivec2 p = ivec2(gl_FragCoord.xy);
+  if (liquidAt(p)) c = waterFx(c, p);
 
   if (uSoft > 0.5) {
     // eight taps on two rings: enough of a bloom for embers and lava to bleed
@@ -116,6 +153,7 @@ export class GLRenderer implements SimRenderer {
   private blocks = new Blockifier();
 
   private block: number | null = null;
+  private t0 = performance.now();
   private soft = true;
   /** RG pairs at chunk resolution, rebuilt per frame from the worker's field */
   private windBuf = new Float32Array(CHUNKS_X * CHUNKS_Y * 2);
@@ -235,7 +273,8 @@ export class GLRenderer implements SimRenderer {
       .v2('uTexel', 1 / SIM_W, 1 / SIM_H)
       .f('uGlow', GLOW)
       .f('uDyeGain', this.soft ? DYE_GAIN : 0)
-      .f('uSoft', this.soft ? 1 : 0);
+      .f('uSoft', this.soft ? 1 : 0)
+      .f('uTime', (performance.now() - this.t0) / 1000);
     blit(gl, null);
   }
 

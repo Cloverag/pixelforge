@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { TNT_FUSE, World } from '../src/sim/world';
-import { Mat } from '../src/sim/materials';
+import { Flora, Mat } from '../src/sim/materials';
 import { SIM_H, SIM_W } from '../src/sim/protocol';
 
 function stepN(w: World, n: number): void {
@@ -315,5 +315,77 @@ describe('falling sand world', () => {
     booms += w.takeEvents().booms.length / 3;
     expect(w.grid.counts[Mat.TNT]).toBe(0);
     expect(booms).toBeGreaterThan(3); // a chain, not one pop
+  });
+});
+
+describe('water flow', () => {
+  function basin(seed: number): World {
+    const w = new World(seed);
+    for (let x = 0; x < SIM_W; x++) for (let y = 330; y < 340; y++) w.grid.setXY(x, y, Mat.STONE);
+    for (let y = 250; y < 330; y++) {
+      for (let x = 100; x < 104; x++) w.grid.setXY(x, y, Mat.STONE);
+      for (let x = 300; x < 304; x++) w.grid.setXY(x, y, Mat.STONE);
+    }
+    return w;
+  }
+  const surfaceRange = (w: World, x0: number, x1: number) => {
+    const tops: number[] = [];
+    for (let x = x0; x < x1; x++)
+      for (let y = 0; y < SIM_H; y++)
+        if (w.grid.get(x, y) === Mat.WATER) { tops.push(y); break; }
+    return Math.max(...tops) - Math.min(...tops);
+  };
+
+  /**
+   * The coin-flip rule left a partly filled top layer shuffling forever
+   * (~62 cells/frame measured long after landing). A pool must come to rest,
+   * and must come to rest level - an early fix stopped the jitter by
+   * freezing water into a sand-like ramp.
+   */
+  it('a dropped block settles level and then stops moving', () => {
+    const w = basin(7);
+    for (let x = 110; x < 150; x++) for (let y = 200; y < 290; y++) w.grid.setXY(x, y, Mat.WATER);
+    stepN(w, 2600);
+    expect(surfaceRange(w, 104, 300)).toBeLessThanOrEqual(1);
+    const prev = new Uint8Array(w.grid.cells);
+    stepN(w, 60);
+    let moved = 0;
+    for (let i = 0; i < prev.length; i++) if (prev[i] !== w.grid.cells[i]) moved++;
+    expect(moved).toBe(0);
+  }, 30_000); // thousands of frames by design; 4 s alone, 8 s on a busy machine
+
+  it('resting water still pours out when its wall is removed', () => {
+    const w = basin(8);
+    for (let x = 104; x < 200; x++) for (let y = 300; y < 330; y++) w.grid.setXY(x, y, Mat.WATER);
+    for (let y = 280; y < 330; y++) for (let x = 200; x < 202; x++) w.grid.setXY(x, y, Mat.STONE);
+    stepN(w, 400); // let it come to rest behind the dam
+    for (let y = 280; y < 330; y++) for (let x = 200; x < 202; x++) w.grid.setXY(x, y, Mat.EMPTY);
+    stepN(w, 600);
+    let past = 0;
+    for (let x = 202; x < 300; x++) for (let y = 250; y < 330; y++) if (w.grid.get(x, y) === Mat.WATER) past++;
+    expect(past).toBeGreaterThan(800);
+  }, 30_000);
+});
+
+describe('flora', () => {
+  it('plants at a pond surface grow stems, leaves and flowers - as FLORA, not PLANT', () => {
+    const w = new World(11);
+    for (let x = 0; x < SIM_W; x++) for (let y = 330; y < 340; y++) w.grid.setXY(x, y, Mat.STONE);
+    for (let y = 290; y < 330; y++) {
+      for (let x = 80; x < 84; x++) w.grid.setXY(x, y, Mat.STONE);
+      for (let x = 400; x < 404; x++) w.grid.setXY(x, y, Mat.STONE);
+    }
+    for (let x = 84; x < 400; x++) for (let y = 300; y < 330; y++) w.grid.setXY(x, y, Mat.WATER);
+    for (let k = 0; k < 14; k++) w.grid.setXY(100 + k * 21, 296, Mat.SEED);
+    stepN(w, 3000);
+    expect(w.grid.counts[Mat.FLORA]).toBeGreaterThan(50);
+    const parts = new Set<number>();
+    for (let i = 0; i < w.grid.cells.length; i++)
+      if (w.grid.cells[i] === Mat.FLORA) parts.add(w.grid.meta[i] >= Flora.PETAL && w.grid.meta[i] < Flora.BUD ? Flora.PETAL : w.grid.meta[i] & 0x80 ? Flora.BUD : w.grid.meta[i]);
+    expect(parts.has(Flora.STEM)).toBe(true);
+    expect(parts.has(Flora.PETAL)).toBe(true);
+    // every flora cell sits above the water line: it grew into the air
+    for (let i = 0; i < w.grid.cells.length; i++)
+      if (w.grid.cells[i] === Mat.FLORA) expect(Math.floor(i / SIM_W)).toBeLessThan(300);
   });
 });

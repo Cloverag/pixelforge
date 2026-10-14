@@ -195,8 +195,27 @@ export class Grid {
     const W = this.W;
     const y = (i / W) | 0;
     const x = i - y * W;
-    this.chunks.wakeCell(x, y);
+    this.wakeAround(x, y);
     this.markDirty(x, y);
+  }
+
+  /**
+   * Wake the chunk holding (x, y) and, on a chunk edge, the chunk across it.
+   *
+   * Moves during the update get their neighbours woken by the halo, but the
+   * halo only spreads from chunks where something moved. Erasing a wall
+   * moves nothing in the wall's own chunk, so resting water in the next
+   * chunk over was never told the wall had gone and stood there as a wall.
+   */
+  private wakeAround(x: number, y: number): void {
+    const c = this.chunks;
+    c.wakeCell(x, y);
+    const lx = x & CHUNK_MASK;
+    const ly = y & CHUNK_MASK;
+    if (lx === 0) c.wakeCell(x - 1, y);
+    else if (lx === CHUNK_MASK) c.wakeCell(x + 1, y);
+    if (ly === 0) c.wakeCell(x, y - 1);
+    else if (ly === CHUNK_MASK) c.wakeCell(x, y + 1);
   }
 
   clearEternals(): void {

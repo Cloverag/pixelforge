@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { World } from '../src/sim/world';
-import { Mat } from '../src/sim/materials';
+import { Mat, rampIndexAt } from '../src/sim/materials';
 import { SIM_H, SIM_W } from '../src/sim/protocol';
 
 const N = SIM_W * SIM_H;
@@ -60,7 +60,7 @@ describe('pixel art shading', () => {
     // guard on the test above: if every row hashed to the same ramp entry,
     // "keeps its colour" would pass on the old code too
     const picks = new Set<number>();
-    for (let y = 20; y < 80; y++) picks.add(((320 * 73856093) ^ (y * 19349663)) >>> 0 & 3);
+    for (let y = 20; y < 80; y++) picks.add(rampIndexAt(Mat.SAND, 320, y, 0, 0));
     expect(picks.size).toBeGreaterThan(1);
   });
 
