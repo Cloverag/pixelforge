@@ -27,73 +27,142 @@ function starHtml(n: number): string {
   return out;
 }
 
-/** A big mode button with a one-line explanation underneath the label. */
-function modeButton(label: string, sub: string, primary: boolean, onClick: () => void): HTMLElement {
-  const b = h('button', 'px mode-btn' + (primary ? ' primary' : ''));
-  (b as HTMLButtonElement).type = 'button';
-  b.appendChild(h('span', '', label));
-  b.appendChild(h('span', 'sub', sub));
+/** A mode card: big label, one line of what it is, the key that starts it. */
+function modeButton(label: string, sub: string, key: string, primary: boolean, onClick: () => void): HTMLElement {
+  const b = h('button', 'px mode-btn' + (primary ? ' primary' : '')) as HTMLButtonElement;
+  b.type = 'button';
+  const text = h('span', 'mode-text');
+  text.appendChild(h('span', 'mode-name', label));
+  text.appendChild(h('span', 'sub', sub));
+  b.appendChild(text);
+  b.appendChild(h('kbd', 'mode-key', key));
   b.onclick = onClick;
   return b;
 }
+
+/** A settings key with an indicator lamp, matching the in-game topbar. */
+function lampButton(label: string, on: boolean, onClick: (b: HTMLButtonElement) => void): HTMLButtonElement {
+  const b = h('button', 'px has-led' + (on ? ' toggled' : '')) as HTMLButtonElement;
+  b.type = 'button';
+  const led = h('span', 'led');
+  led.setAttribute('aria-hidden', 'true');
+  b.append(led, h('span', 'lbl', label));
+  b.onclick = () => onClick(b);
+  return b;
+}
+
+/** One per visit. Each names a mechanic that nothing on screen teaches. */
+const TIPS: string[] = [
+  'Fire lights TNT on a short fuse - watch it blink, then stand back. Stacks go off in a chain.',
+  'A torch on the end of a wire sends sparks down it. Sparks set off TNT and gunpowder instantly.',
+  'W turns the brush into wind. Fan fire to spread it, or blow smoke out of a chimney.',
+  'Salt melts ice. Snow piles up light and drifts in the wind.',
+  'Water on lava cools it to stone - and sizzles.',
+  'F is a bucket: one click fills the whole connected area.',
+  'SHARE copies a link that loads your world on someone else\'s screen.',
+  'Clone copies whatever touches it first. Void deletes everything that touches it.',
+];
+
+const KEYS: [string, string][] = [
+  ['LMB', 'paint'], ['RMB', 'erase'], ['WHEEL', 'brush size'], ['SPACE', 'pause'],
+  ['N', 'step'], ['F', 'bucket'], ['W', 'wind'], ['M', 'sound'], ['C', 'crt'], ['ESC', 'menu'],
+];
 
 export function showMenu(cbs: MenuCallbacks): void {
   const overlay = document.getElementById('overlay')!;
   overlay.innerHTML = '';
   overlay.classList.remove('hidden');
 
-  const screen = h('div', 'screen');
-  screen.appendChild(h('div', 'game-title', 'PIXELFORGE'));
-  screen.appendChild(h('div', 'tagline', 'A PIXEL PARTICLE SANDBOX'));
-  screen.appendChild(h('div', 'title-rule'));
+  const screen = h('div', 'screen menu');
 
-  const col = h('div', 'menu-col');
-  col.appendChild(
-    modeButton('SANDBOX', `Paint ${PLACEABLE} materials. No rules, no timer.`, true, cbs.onSandbox),
+  // ---- head: wordmark left, settings right ----
+  const head = h('header', 'menu-head');
+  const brand = h('div', 'menu-brand');
+  brand.appendChild(h('h1', 'game-title', 'PIXELFORGE'));
+  brand.appendChild(h('p', 'tagline', 'A falling-sand forge: powders, liquids, fire and wire.'));
+  head.appendChild(brand);
+
+  const settings = h('div', 'menu-settings');
+  settings.appendChild(lampButton('SFX', !document.body.classList.contains('muted'), (b) => {
+    cbs.onToggleMute();
+    b.classList.toggle('toggled', !document.body.classList.contains('muted'));
+  }));
+  settings.appendChild(lampButton('CRT', document.body.classList.contains('crt-on'), (b) => {
+    cbs.onToggleCrt();
+    b.classList.toggle('toggled', document.body.classList.contains('crt-on'));
+  }));
+  const bg = h('button', 'px', 'WALLPAPER') as HTMLButtonElement;
+  bg.type = 'button';
+  bg.onclick = () => cbs.onToggleBg();
+  const help = h('button', 'px', '? HELP') as HTMLButtonElement;
+  help.type = 'button';
+  help.onclick = () => cbs.onHelp();
+  settings.append(bg, help);
+  head.appendChild(settings);
+  screen.appendChild(head);
+
+  // ---- body: modes | challenges ----
+  const body = h('div', 'menu-body');
+
+  const modes = h('section', 'menu-modes');
+  modes.appendChild(h('h2', 'section-title', 'PLAY'));
+  modes.appendChild(
+    modeButton('SANDBOX', `Paint ${PLACEABLE} materials. No rules, no timer.`, 'ENTER', true, cbs.onSandbox),
   );
-  col.appendChild(
-    modeButton('PARTICLE PLAYGROUND', 'Fountains, vortices and gravity toys.', false, cbs.onPlayground),
+  modes.appendChild(
+    modeButton('PLAYGROUND', 'Fountains, vortices and gravity toys.', 'P', false, cbs.onPlayground),
   );
-  screen.appendChild(col);
+  const tip = h('aside', 'menu-tip');
+  tip.appendChild(h('span', 'tip-label', 'TIP'));
+  tip.appendChild(h('p', 'tip-text', TIPS[Math.floor(Math.random() * TIPS.length)]));
+  modes.appendChild(tip);
+  body.appendChild(modes);
 
   const prog: Progress = loadProgress();
   const order = CHALLENGES.map((c) => c.id);
   const earned = CHALLENGES.reduce((sum, c) => sum + (prog[c.id] ?? 0), 0);
   const total = CHALLENGES.length * STARS_PER_LEVEL;
 
-  const chalTitle = h('div', 'section-title');
+  const chal = h('section', 'menu-chal');
+  const chalTitle = h('h2', 'section-title');
   chalTitle.appendChild(h('span', '', 'CHALLENGES'));
   chalTitle.appendChild(h('span', 'count', `★ ${earned} / ${total}`));
-  screen.appendChild(chalTitle);
+  chal.appendChild(chalTitle);
+  const bar = h('div', 'chal-progress');
+  const fill = h('span', 'chal-fill');
+  fill.style.width = `${((earned / total) * 100).toFixed(1)}%`;
+  bar.appendChild(fill);
+  bar.setAttribute('role', 'progressbar');
+  bar.setAttribute('aria-valuemin', '0');
+  bar.setAttribute('aria-valuemax', String(total));
+  bar.setAttribute('aria-valuenow', String(earned));
+  bar.setAttribute('aria-label', 'Stars earned');
+  chal.appendChild(bar);
 
-  const listEl = h('div', 'challenge-list');
+  const listEl = h('ol', 'challenge-list');
   CHALLENGES.forEach((c, i) => {
     const unlocked = isUnlocked(i, order, prog);
     const stars = prog[c.id] ?? 0;
-    const card = h(
-      'div',
+    const row = h(
+      'li',
       'challenge-card' + (unlocked ? '' : ' locked') + (stars > 0 ? ' cleared' : ''),
     );
-
-    const head = h('div', 'chead');
-    head.appendChild(h('span', 'cnum', String(i + 1)));
-    head.appendChild(h('span', 'cname', c.name));
-    card.appendChild(head);
-
-    card.appendChild(
-      h('div', 'cdesc', unlocked ? c.desc : 'LOCKED · clear the level before it'),
-    );
-
-    const starsEl = h('div', 'stars');
-    starsEl.innerHTML = unlocked ? starHtml(stars) : starHtml(0);
-    card.appendChild(starsEl);
+    row.appendChild(h('span', 'cnum', String(i + 1).padStart(2, '0')));
+    const text = h('div', 'ctext');
+    text.appendChild(h('span', 'cname', c.name));
+    // a locked level says why once, quietly - not seven times in full
+    text.appendChild(h('span', 'cdesc', unlocked ? c.desc : 'Clear the level above to unlock.'));
+    row.appendChild(text);
+    const starsEl = h('span', 'stars');
+    starsEl.innerHTML = unlocked ? starHtml(stars) : '<span class="lock" aria-label="locked">LOCKED</span>';
+    row.appendChild(starsEl);
 
     if (unlocked) {
-      card.onclick = () => cbs.onChallenge(c.id);
-      card.title = c.hint;
-      card.tabIndex = 0;
-      card.setAttribute('role', 'button');
-      card.onkeydown = (e) => {
+      row.onclick = () => cbs.onChallenge(c.id);
+      row.title = c.hint;
+      row.tabIndex = 0;
+      row.setAttribute('role', 'button');
+      row.onkeydown = (e) => {
         const k = (e as KeyboardEvent).key;
         if (k === 'Enter' || k === ' ') {
           e.preventDefault();
@@ -101,43 +170,19 @@ export function showMenu(cbs: MenuCallbacks): void {
         }
       };
     }
-    listEl.appendChild(card);
+    listEl.appendChild(row);
   });
-  screen.appendChild(listEl);
+  chal.appendChild(listEl);
+  body.appendChild(chal);
+  screen.appendChild(body);
 
-  const foot = h('div', 'menu-foot');
-  const row = h('div', 'btn-row');
-  const mute = h('button', 'px', 'SFX: ON');
-  mute.onclick = () => {
-    cbs.onToggleMute();
-    const muted = document.body.classList.contains('muted');
-    mute.textContent = muted ? 'SFX: OFF' : 'SFX: ON';
-    mute.classList.toggle('toggled', muted);
-  };
-  const crt = h('button', 'px toggled', 'CRT: ON');
-  crt.onclick = () => {
-    cbs.onToggleCrt();
-    const on = document.body.classList.contains('crt-on');
-    crt.classList.toggle('toggled', on);
-    crt.textContent = on ? 'CRT: ON' : 'CRT: OFF';
-  };
-  const bg = h('button', 'px', 'WALLPAPER');
-  bg.onclick = () => cbs.onToggleBg();
-  const help = h('button', 'px primary', '? HELP');
-  help.onclick = () => cbs.onHelp();
-  for (const b of [mute, crt, bg, help]) {
-    (b as HTMLButtonElement).type = 'button';
-    row.appendChild(b);
+  // ---- foot: the controls, as keys rather than a sentence ----
+  const foot = h('footer', 'menu-keys');
+  for (const [k, what] of KEYS) {
+    const item = h('span', 'key-item');
+    item.append(h('kbd', '', k), h('span', '', what));
+    foot.appendChild(item);
   }
-  foot.appendChild(row);
-  foot.appendChild(
-    h(
-      'div',
-      'hint-line',
-      'LEFT DRAG PAINT   ·   RIGHT DRAG ERASE   ·   WHEEL OR [ ] BRUSH SIZE\n' +
-        'SPACE PAUSE   ·   N STEP   ·   M SOUND   ·   C CRT   ·   ESC MENU',
-    ),
-  );
   screen.appendChild(foot);
 
   overlay.appendChild(screen);

@@ -28,7 +28,8 @@ export const ELEMENT_NOTES: Record<string, string> = {
   ICE: 'Melts near heat.',
   WOOD: 'Flammable building solid.',
   PLANT: 'Grows when drinking adjacent water.',
-  SEED: 'Sprouts into plants on wet ground.',  ACID: 'Dissolves almost everything.',
+  SEED: 'Sprouts into plants on wet ground.',
+  ACID: 'Dissolves almost everything.',
   POWDER: 'Gunpowder. Explodes on any ignition.',
   FUSE: 'Burns slowly along its length. Timing fuses.',
   GLASS: 'Transparent, blast-proof.',
@@ -37,6 +38,10 @@ export const ELEMENT_NOTES: Record<string, string> = {
   TORCH: 'Pulses sparks into touching wire.',
   CLONE: 'Copies whatever touches it first.',
   VOID: 'Deletes neighboring cells.',
+  SNOW: 'Floaty powder. Melts near heat, salt or water; drifts in wind.',
+  SALT: 'Melts ice and snow. Dissolves in water.',
+  ASH: 'What burnt wood leaves. The lightest powder - wind carries it.',
+  TNT: 'Fire lights a short fuse (it blinks). Sparks and fuses set it off at once. Chains.',
 };
 
 function cssHex(u: number): string {
@@ -60,6 +65,7 @@ function buildContent(box: HTMLElement): void {
     ['RIGHT DRAG', 'erase'],
     ['WHEEL / [ ]', 'brush size 2-24'],
     ['F', 'flood-fill bucket (sandbox)'],
+    ['W', 'wind brush - drag to blow, click for a puff (sandbox)'],
     ['1-9', 'quick-pick palette swatch'],
     ['SPACE', 'pause / resume'],
     ['N', 'single step while paused'],

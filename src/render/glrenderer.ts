@@ -1,6 +1,6 @@
 import { MATS, Mat, NMATS, Cat } from '../sim/materials';
 import { CHUNKS_X, CHUNKS_Y, SIM_H, SIM_W } from '../sim/protocol';
-import { Blockifier, fitSize, shakeOffset } from './blocks';
+import { Blockifier, fitSize } from './blocks';
 import { Fluid } from './fluid';
 import { bindDummyVao, blit, Program } from './glutil';
 import type { SimRenderer } from './renderer';
@@ -109,7 +109,6 @@ export class GLRenderer implements SimRenderer {
   private gl: WebGL2RenderingContext;
   private stage: HTMLElement;
   private bezel: HTMLElement | null;
-  private shakeTarget: HTMLElement;
 
   private frameTex: WebGLTexture;
   private composite: Program;
@@ -129,7 +128,6 @@ export class GLRenderer implements SimRenderer {
     bindDummyVao(gl);
     this.stage = document.getElementById('stage')!;
     this.bezel = document.getElementById('bezel');
-    this.shakeTarget = this.bezel ?? canvas;
 
     canvas.width = SIM_W;
     canvas.height = SIM_H;
@@ -207,7 +205,7 @@ export class GLRenderer implements SimRenderer {
     }
   }
 
-  present(buf: ArrayBuffer, shake: number): void {
+  present(buf: ArrayBuffer): void {
     const gl = this.gl;
     const img = this.block ? this.blocks.apply(buf, this.block) : null;
     const pixels = img
@@ -239,11 +237,6 @@ export class GLRenderer implements SimRenderer {
       .f('uDyeGain', this.soft ? DYE_GAIN : 0)
       .f('uSoft', this.soft ? 1 : 0);
     blit(gl, null);
-
-    const off = shakeOffset(shake);
-    this.shakeTarget.style.translate = off
-      ? `${off.dx.toFixed(1)}px ${off.dy.toFixed(1)}px`
-      : '0px 0px';
   }
 
   dispose(): void {

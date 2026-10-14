@@ -1,5 +1,5 @@
 import { SIM_H, SIM_W } from '../sim/protocol';
-import { Blockifier, fitSize, shakeOffset } from './blocks';
+import { Blockifier, fitSize } from './blocks';
 
 export { BLOCK_SIZES } from './blocks';
 
@@ -10,7 +10,7 @@ export { BLOCK_SIZES } from './blocks';
  * canvas only ever gets one context type and the choice cannot be revisited.
  */
 export interface SimRenderer {
-  present(buf: ArrayBuffer, shake: number): void;
+  present(buf: ArrayBuffer): void;
   resize(): void;
   setBlockSize(n: number | null): void;
   getBlockSize(): number | null;
@@ -43,8 +43,6 @@ export class Renderer implements SimRenderer {
   private stage: HTMLElement;
   /** cabinet bezel around the screen; null if the shell markup is absent */
   private bezel: HTMLElement | null;
-  /** what the screen-shake translates -- the whole cabinet if we have one */
-  private shakeTarget: HTMLElement;
 
   /** block size in sim cells, or null for the normal 1:1 pixel view */
   private block: number | null = null;
@@ -72,7 +70,6 @@ export class Renderer implements SimRenderer {
     this.ctx.filter = 'none';
     this.stage = document.getElementById('stage')!;
     this.bezel = document.getElementById('bezel');
-    this.shakeTarget = this.bezel ?? canvas;
     window.addEventListener('resize', () => this.resize());
     this.resize();
   }
@@ -142,16 +139,11 @@ export class Renderer implements SimRenderer {
     c.globalCompositeOperation = 'source-over';
   }
 
-  present(buf: ArrayBuffer, shake: number): void {
+  present(buf: ArrayBuffer): void {
     const img = this.block
       ? this.blocks.apply(buf, this.block)
       : new ImageData(new Uint8ClampedArray(buf), SIM_W, SIM_H);
     if (this.soft) this.composite(img);
     else this.ctx.putImageData(img, 0, 0);
-
-    const off = shakeOffset(shake);
-    this.shakeTarget.style.translate = off
-      ? `${off.dx.toFixed(1)}px ${off.dy.toFixed(1)}px`
-      : '0px 0px';
   }
 }

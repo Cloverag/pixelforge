@@ -4,11 +4,12 @@ import { BLOCK_SIZES, Renderer, SimRenderer } from './render/renderer';
 import { GLRenderer, tryWebGL2 } from './render/glrenderer';
 import type { Voxel3D } from './render/voxel3d';
 import { Sfx } from './game/audio';
+import { Juice } from './game/juice';
 import { Hud, PgTool } from './ui/hud';
 import { showMenu } from './ui/menu';
 import { hideOverlay, showResult, toast } from './ui/widgets';
 import { Mat } from './sim/materials';
-import { Mode, PaintKind, Req, Res, SIM_H, SIM_W, Stats } from './sim/protocol';
+import { Mode, PaintKind, Req, Res, SIM_H, SIM_W, SimEvents, Stats } from './sim/protocol';
 import { CHALLENGES } from './sim/challenges';
 import { recordStars } from './game/progress';
 import { readSave, rleDecode, rleEncode, storeSave } from './game/rle';
@@ -56,6 +57,11 @@ if (!renderer) {
   hasFluid = false;
 }
 const sfx = new Sfx();
+// the flash sits over the screen inside the cabinet, so it shakes with it
+const flashEl = document.createElement('div');
+flashEl.id = 'blast-flash';
+document.getElementById('screen-wrap')!.appendChild(flashEl);
+const juice = new Juice(document.getElementById('bezel') ?? canvas, flashEl);
 const hud = new Hud(topbar, toolbar);
 
 const worker = new Worker(new URL('./sim/worker.ts', import.meta.url), {
@@ -190,7 +196,20 @@ let lastPg = { x: 240, y: 128 };
 let strokeLast: { x: number; y: number } | null = null;
 let resultOpen = false;
 let lastResultKey = '';
-let prevShake = 0;
+
+/** Sim events -> sound and screen feedback. Positions pan across stereo. */
+function playEvents(ev: SimEvents): void {
+  const b = ev.booms;
+  for (let k = 0; k < b.length; k += 3) {
+    const pan = (b[k] / SIM_W) * 2 - 1;
+    sfx.boom(b[k + 2], pan);
+    juice.boom(b[k], b[k + 1], b[k + 2]);
+  }
+  if (ev.fuses) sfx.fuse();
+  if (ev.sizzles) sfx.sizzle(ev.sizzles);
+  if (ev.zaps) sfx.zap();
+  if (ev.ignites) sfx.ignite(ev.ignites);
+}
 
 function post(msg: Req, transfer?: ArrayBuffer[]): void {
   worker.postMessage(msg, transfer ?? []);
@@ -217,10 +236,10 @@ worker.onmessage = (e: MessageEvent<Res>) => {
       r.snapH ?? 0,
       r.wind ? new Float32Array(r.wind) : null,
     );
-    renderer.present(r.buf, r.shake ?? 0);
+    renderer.present(r.buf);
     if (snap && view3dOn && view3d) view3d.update(snap, r.snapW!, r.snapH!);
-    if ((r.shake ?? 0) > prevShake + 4) sfx.boom();
-    prevShake = r.shake ?? 0;
+    if (r.events) playEvents(r.events);
+    if (r.counts) sfx.crackle(r.counts[Mat.FIRE] + r.counts[Mat.EMBER]);
     if (r.counts && r.used && r.budget) {
       hud.updateStats({
         counts: r.counts,
@@ -310,6 +329,7 @@ function loop(now: number): void {
     fpsClock = 0;
   }
   if (view3dOn) view3d?.render();
+  juice.frame();
   requestAnimationFrame(loop);
 }
 
@@ -541,7 +561,7 @@ function toggleMute(): void {
 }
 
 function toggleCrt(): void {
-  document.body.classList.toggle('crt-on');
+  hud.setCrt(document.body.classList.toggle('crt-on'));
 }
 
 const music = initMusic();
@@ -610,6 +630,23 @@ new Input(
   canvas,
   onPointer,
   (k) => {
+    if (screen === 'menu') {
+      // a focused control already handles its own Enter/Space
+      const a = document.activeElement as HTMLElement | null;
+      const onControl = a !== null && (a.tagName === 'BUTTON' || a.getAttribute('role') === 'button');
+      if (k === 'enter' && !onControl) {
+        sfx.ensure();
+        sfx.ui();
+        startSandbox();
+        return;
+      }
+      if (k === 'p') {
+        sfx.ensure();
+        sfx.ui();
+        startPlayground();
+        return;
+      }
+    }
     switch (k) {
       case ' ':
         togglePause();

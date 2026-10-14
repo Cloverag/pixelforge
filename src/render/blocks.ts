@@ -99,13 +99,3 @@ export function fitSize(stage: HTMLElement, bezel: HTMLElement | null): { w: num
   scale = Math.max(0.5, scale);
   return { w: Math.floor(SIM_W * scale), h: Math.floor(SIM_H * scale) };
 }
-
-/** Screen-shake offset for a given shake magnitude, or null when at rest. */
-export function shakeOffset(shake: number): { dx: number; dy: number } | null {
-  if (shake <= 0) return null;
-  const mag = Math.min(8, shake / 3);
-  return {
-    dx: (Math.random() * 2 - 1) * mag,
-    dy: (Math.random() * 2 - 1) * mag,
-  };
-}

@@ -59,6 +59,10 @@ Builder's note: I stay out of README.md, src/ui/help.ts, src/game/music.ts, and 
 | F8 | **Shareable world links** (SHARE button, `#w=` boot import) + rleEncode stack-overflow fix | BUILDER - needs review |
 | F9 | **Lazy three.js** - entry chunk 157 kB -> 18 kB gzip | BUILDER - needs review |
 | F10 | **Wind field** - global velocity field, WIND brush (W), explosion shock fronts, drifting dust | BUILDER - needs review |
+| F12 | **TNT short fuse + chains** - fire/lava light a 70-frame fuse (blinks white); TNT in a blast's outer ring is lit, not erased. **Fixed: painted fire/smoke/steam had life 0 and died before their first neighbour check - painted fire never ignited anything.** Sandbox-only impact (no challenge allows FIRE) | Claude (2026-10-15) - needs review |
+| F13 | **Explosion juice + sound** - `SimEvents` channel (booms/ignites/sizzles/zaps/fuses) worker->main; `game/juice.ts` trauma shake + capped kick + positional flash (reduced-motion aware), replaces per-frame random jitter in both renderers; SFX: sized/panned boom, fuse hiss, sizzle, zap, fire crackle; `ignite()` finally wired | Claude (2026-10-15) - needs review |
+| F14 | **UI redesign ("forge")** - warm single-accent palette, Silkscreen labels, left material rail, grouped topbar with LED toggles, status bar, brush cursor ring (`ui/cursor.ts`), two-column menu with tips + key chips, ENTER/P menu shortcuts, help gains W + SNOW/SALT/ASH/TNT notes | Claude (2026-10-15) - needs review |
+| F11 | **Pixel-art shading** - per-grain colour (`Grid.shade`, travels on swap; powders no longer boil as they fall) + surface lighting (powder rim, waterline, solid bevel, warm/cool hue shift) via precomputed `SHADED` table; `markDirty` repaints across chunk edges. Render-only: sim never reads `shade`. 2D view only - the 3D view still uses the position rule | Claude (2026-10-14) - needs review |
 
 ## REVIEW NOTES
 

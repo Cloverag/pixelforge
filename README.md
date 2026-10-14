@@ -139,7 +139,7 @@ Powders fall, liquids flow sideways, gases rise, solids stay put.
 | VOID | Deletes neighboring cells (8-way). |
 | SNOW | Floaty powder; melts near heat, in water, or on salt. |
 | SALT | Powder; melts ice and snow, dissolves in water. |
-| TNT | Stable solid block - fire can't light it. Detonates (big blast) via spark or fuse only. |
+| TNT | Stable solid block. Fire or lava lights a ~1 s fuse (it blinks white); a wire spark or burning fuse detonates it at once. TNT at the edge of a blast is lit too, so stacks go off as a chain. |
 | EMBER | Burning residue left by fires (not placeable). |
 
 ## Architecture tour
