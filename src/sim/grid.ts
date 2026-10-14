@@ -91,22 +91,71 @@ export class ChunkSys {
   }
 }
 
+const CHUNK_MASK = CHUNK - 1;
+
 export class Grid {
   cells: Uint8Array;
   meta: Uint8Array;
+  /**
+   * A random byte owned by the grain, not the position: it is rolled when a
+   * cell becomes a new material and travels with it on every swap. Colour
+   * picked from position made moving sand boil - grains slid through a fixed
+   * noise pattern and changed colour every frame they fell. Render-only; the
+   * sim never reads it, so it cannot change behaviour.
+   */
+  shade: Uint8Array;
   /** per-frame "already updated" flag */
   clock: Uint8Array;
   counts = new Int32Array(NMATS);
   chunks: ChunkSys;
   /** indices of eternal cells - woken every frame by the world */
   eternals = new Set<number>();
+  private shadeSeed = 0x9e3779b9;
 
   constructor(public W: number, public H: number) {
     const n = W * H;
     this.cells = new Uint8Array(n);
     this.meta = new Uint8Array(n);
+    this.shade = new Uint8Array(n);
+    // pre-rolled, so a bulk load (cells.set) that bypasses setI still shows
+    // varied grains instead of one flat colour
+    for (let i = 0; i < n; i++) this.shade[i] = this.rollShade();
     this.clock = new Uint8Array(n);
     this.chunks = new ChunkSys();
+  }
+
+  /** xorshift32, separate from the sim rng so shading never perturbs it */
+  private rollShade(): number {
+    let s = this.shadeSeed;
+    s ^= s << 13; s ^= s >>> 17; s ^= s << 5;
+    this.shadeSeed = s >>> 0;
+    return s & 255;
+  }
+
+  /**
+   * Repaint the chunk holding (x, y), plus any neighbouring chunk whose cells
+   * read this one when shaded. Surface lighting looks up to two cells above
+   * and one cell below and to each side, so a change on a chunk's edge can
+   * alter a pixel in the next chunk over - which would otherwise stay stale.
+   * Public as `touch` for state drawn from meta that changes without a write
+   * (a lit TNT's blink).
+   */
+  touch(x: number, y: number): void {
+    this.markDirty(x, y);
+  }
+
+  private markDirty(x: number, y: number): void {
+    const d = this.chunks.dirty;
+    const cx = x >> CHUNK_SHIFT;
+    const cy = y >> CHUNK_SHIFT;
+    const ci = cy * CHUNKS_X + cx;
+    d[ci] = 1;
+    const ly = y & CHUNK_MASK;
+    const lx = x & CHUNK_MASK;
+    if (ly >= CHUNK - 2 && cy + 1 < CHUNKS_Y) d[ci + CHUNKS_X] = 1;
+    if (ly === 0 && cy > 0) d[ci - CHUNKS_X] = 1;
+    if (lx === 0 && cx > 0) d[ci - 1] = 1;
+    if (lx === CHUNK_MASK && cx + 1 < CHUNKS_X) d[ci + 1] = 1;
   }
 
   idx(x: number, y: number): number {
@@ -140,13 +189,14 @@ export class Grid {
     this.counts[mat]++;
     this.cells[i] = mat;
     this.meta[i] = metaVal;
+    this.shade[i] = this.rollShade();
     if (ETERNAL_MATS.has(mat)) this.eternals.add(i);
     if (ETERNAL_MATS.has(old)) this.eternals.delete(i);
     const W = this.W;
     const y = (i / W) | 0;
     const x = i - y * W;
     this.chunks.wakeCell(x, y);
-    this.chunks.dirty[(y >> CHUNK_SHIFT) * CHUNKS_X + (x >> CHUNK_SHIFT)] = 1;
+    this.markDirty(x, y);
   }
 
   clearEternals(): void {
@@ -166,15 +216,17 @@ export class Grid {
     const ca = this.cells[a], cb = this.cells[b];
     const ma = this.meta[a], mb = this.meta[b];
     const ka = this.clock[a], kb = this.clock[b];
+    const sa = this.shade[a], sb = this.shade[b];
     this.cells[a] = cb; this.cells[b] = ca;
     this.meta[a] = mb; this.meta[b] = ma;
     this.clock[a] = kb; this.clock[b] = ka;
+    this.shade[a] = sb; this.shade[b] = sa;
     const W = this.W;
     const ay = (a / W) | 0, ax = a - ay * W;
     const by = (b / W) | 0, bx = b - by * W;
     this.chunks.wakeCell(ax, ay);
     this.chunks.wakeCell(bx, by);
-    this.chunks.dirty[(ay >> CHUNK_SHIFT) * CHUNKS_X + (ax >> CHUNK_SHIFT)] = 1;
-    this.chunks.dirty[(by >> CHUNK_SHIFT) * CHUNKS_X + (bx >> CHUNK_SHIFT)] = 1;
+    this.markDirty(ax, ay);
+    this.markDirty(bx, by);
   }
 }

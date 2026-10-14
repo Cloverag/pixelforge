@@ -98,6 +98,7 @@ ctx.onmessage = (e: MessageEvent<Req>) => {
         used: st.used,
         budget: st.budget,
         shake: w.shake,
+        events: w.takeEvents(),
         result: w.challenge && w.challenge.done ? w.challenge.result : null,
       };
       const transfer = [msg.buf];

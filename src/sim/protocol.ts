@@ -62,6 +62,26 @@ export interface SaveData {
   frame: number;
 }
 
+/**
+ * Things the sim did since the last frame message, for sound and screen
+ * effects. Counts, not per-cell records: a burning forest ignites hundreds of
+ * cells a second and the listener only needs "how much".
+ */
+export interface SimEvents {
+  /** flat [x, y, radius] triples in sim cells */
+  booms: number[];
+  ignites: number;
+  sizzles: number;
+  /** wire pulses fired (leading edges) */
+  zaps: number;
+  /** TNT cells newly lit */
+  fuses: number;
+}
+
+export function emptyEvents(): SimEvents {
+  return { booms: [], ignites: 0, sizzles: 0, zaps: 0, fuses: 0 };
+}
+
 export interface Res {
   t: 'ready' | 'frame' | 'state';
   buf?: ArrayBuffer;
@@ -69,6 +89,7 @@ export interface Res {
   used?: number[];
   budget?: (number | null)[];
   shake?: number;
+  events?: SimEvents;
   result?: ChallengeResult | null;
   save?: SaveData | null;
   /** downsampled material map for the 3D view and the fluid (transferable) */

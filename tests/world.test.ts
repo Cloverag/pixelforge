@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { World } from '../src/sim/world';
+import { TNT_FUSE, World } from '../src/sim/world';
 import { Mat } from '../src/sim/materials';
 import { SIM_H, SIM_W } from '../src/sim/protocol';
 
@@ -259,13 +259,16 @@ describe('falling sand world', () => {
 
   // ---------- P2: TNT ----------
 
-  it('TNT ignores fire but detonates via wire spark', () => {
+  it('fire lights TNT on a short fuse; a wire spark is instant', () => {
     const w = new World(43);
-    // fire alone does nothing
+    // fire lights it, but it does not go off at once - the blink is the warning
     w.grid.setXY(60, 100, Mat.TNT);
     w.grid.setXY(61, 100, Mat.FIRE, 60);
-    stepN(w, 120);
-    expect(w.grid.counts[Mat.TNT]).toBe(1); // stable
+    stepN(w, TNT_FUSE - 20);
+    expect(w.grid.counts[Mat.TNT]).toBe(1);
+    expect(w.grid.meta[w.grid.idx(60, 100)]).toBeGreaterThan(0); // lit
+    stepN(w, 40);
+    expect(w.grid.counts[Mat.TNT]).toBe(0);
     // wire spark detonates it
     w.grid.setXY(40, 100, Mat.TORCH);
     for (let x = 41; x <= 53; x++) w.grid.setXY(x, 100, Mat.WIRE);
@@ -273,5 +276,44 @@ describe('falling sand world', () => {
     for (let x = 55; x <= 75; x++) w.grid.setXY(x, 100, Mat.WALL); // backstop
     stepN(w, 240);
     expect(w.grid.counts[Mat.TNT]).toBe(0);
+  });
+
+  /**
+   * Through paint(), the way a player does it. The fuse test above places
+   * fire with an explicit life, which hid that painted fire had life 0 and
+   * died before checking its neighbours.
+   */
+  it('painted fire lights TNT and catches wood', () => {
+    const w = new World(45);
+    for (let x = 100; x < 200; x++)
+      for (let y = 300; y < 320; y++) {
+        w.grid.setXY(x, y, Mat.TNT);
+        w.grid.setXY(x + 200, y, Mat.WOOD);
+      }
+    w.paint([105, 299, 305, 299], Mat.FIRE, 6, 'brush');
+    stepN(w, 4);
+    let lit = 0;
+    for (let x = 100; x < 200; x++)
+      for (let y = 300; y < 320; y++)
+        if (w.grid.get(x, y) === Mat.TNT && w.grid.meta[w.grid.idx(x, y)] > 0) lit++;
+    expect(lit).toBeGreaterThan(0);
+    // wood catches at 6% per contact tick, so give it the fire's lifetime
+    stepN(w, 30);
+    expect(w.grid.counts[Mat.EMBER]).toBeGreaterThan(0);
+  });
+
+  it('a blast chains through a TNT stack instead of erasing it', () => {
+    const w = new World(44);
+    for (let x = 0; x < SIM_W; x++) w.grid.setXY(x, 200, Mat.WALL);
+    for (let y = 190; y < 200; y++)
+      for (let x = 100; x < 160; x++) w.grid.setXY(x, y, Mat.TNT);
+    // one blast at the left end: r=9 cannot reach the far end on its own
+    w.explode(100, 195, 9);
+    expect(w.grid.counts[Mat.TNT]).toBeGreaterThan(400);
+    let booms = w.takeEvents().booms.length / 3;
+    stepN(w, 200);
+    booms += w.takeEvents().booms.length / 3;
+    expect(w.grid.counts[Mat.TNT]).toBe(0);
+    expect(booms).toBeGreaterThan(3); // a chain, not one pop
   });
 });

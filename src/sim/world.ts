@@ -1,6 +1,9 @@
 import { RNG, hash2d } from '../core/rng';
 import { Grid } from './grid';
-import { Cat, MATS, Mat, NMATS, WIND_SUSC, colorAt, SPARK_LIFE } from './materials';
+import {
+  Cat, GRAINY, LIT, Lit, MATS, Mat, NMATS, OPEN, SHADED, Shade, WIND_SUSC,
+  applyShade, colorAt, offRamp, rampIndexAt, SPARK_LIFE,
+} from './materials';
 import {
   CHUNK,
   CHUNK_SHIFT,
@@ -12,12 +15,17 @@ import {
   ChallengeResult,
   Mode,
   PaintKind,
+  SimEvents,
+  emptyEvents,
 } from './protocol';
 import { PSys } from './particles';
 import { Wind } from './wind';
 import { CHALLENGES, ChallengeDef, starsFor } from './challenges';
 
 const BG = MATS[Mat.EMPTY].ramp[0];
+/** frames from fire touching TNT to the blast: long enough to see it blink
+ *  and back away, short enough that it still reads as cause and effect */
+export const TNT_FUSE = 70;
 /** drifting dust mote in a windy empty cell; ABGR for a dim slate blue */
 const WIND_DUST = 0xff3a2c22;
 
@@ -109,6 +117,8 @@ export class World {
   /** global velocity field; still (and free) until something disturbs it */
   wind = new Wind();
   shake = 0;
+  /** what happened since the last takeEvents() - drives sound and flashes */
+  events: SimEvents = emptyEvents();
   /** total sim frames elapsed (drives animation + row hashes) */
   f = 0;
 
@@ -130,6 +140,14 @@ export class World {
     g.chunks.wakeAll();
     this.wind.clear();
     this.shake = 0;
+    this.events = emptyEvents();
+  }
+
+  /** Hand over everything that happened since the last call, and reset. */
+  takeEvents(): SimEvents {
+    const e = this.events;
+    this.events = emptyEvents();
+    return e;
   }
 
   loadChallenge(id: string): boolean {
@@ -160,6 +178,12 @@ export class World {
       return;
     }
     const ch = this.challenge;
+    // Timed materials (fire, smoke, steam) keep their remaining life in meta.
+    // Painting them with meta 0 meant they died on their first tick, before
+    // fire ever looked at its neighbours - so painted fire could not light
+    // wood, oil or TNT, and only gunpowder (which checks for fire itself)
+    // ever reacted to it.
+    const life = MATS[mat].life;
     for (let p = 0; p < pts.length; p += 2) {
       const cx = pts[p];
       const cy = pts[p + 1];
@@ -181,7 +205,7 @@ export class World {
             if (budget !== undefined && ch.used[mat] >= budget) continue;
             ch.used[mat]++;
           }
-          this.grid.setXY(x, y, mat);
+          this.grid.setXY(x, y, mat, life ? this.rng.range(life[0], life[1]) : 0);
         }
       }
     }
@@ -355,7 +379,8 @@ export class World {
         this.salt(x, y);
         break;
       case Mat.TNT:
-        break; // stable until sparked or fuse-lit (see sparkBurst / fuse)
+        this.tnt(x, y, i);
+        break;
       case Mat.WIRE:
         this.wire(x, y, i);
         break;
@@ -607,6 +632,7 @@ export class World {
       case Mat.WATER:
         g.setXY(x, y, Mat.STONE);
         g.setXY(nx, ny, Mat.STEAM, this.rng.range(90, 220));
+        this.events.sizzles++;
         return;
       case Mat.ICE:
       case Mat.SNOW:
@@ -633,6 +659,9 @@ export class World {
       case Mat.GUNPOWDER:
         this.explode(nx, ny, 5);
         return;
+      case Mat.TNT:
+        this.lightTnt(nx, ny, TNT_FUSE);
+        break;
       default:
         break;
     }
@@ -661,6 +690,7 @@ export class World {
       if (t === Mat.WATER) {
         g.setXY(x, y, Mat.EMPTY);
         if (this.rng.chance(0.4)) g.setXY(nx, ny, Mat.STEAM, this.rng.range(90, 220));
+        this.events.sizzles++;
         return;
       }
       if (t === Mat.ICE) {
@@ -676,11 +706,13 @@ export class World {
         }
         if (t === Mat.WOOD) g.setXY(nx, ny, Mat.EMBER, this.rng.range(70, 150));
         else g.setXY(nx, ny, Mat.FIRE, this.rng.range(12, 42));
+        this.events.ignites++;
       }
       if (t === Mat.FUSE) {
         g.meta[g.idx(nx, ny)] = Math.max(g.meta[g.idx(nx, ny)], 6);
         g.chunks.wakeCell(nx, ny);
       }
+      if (t === Mat.TNT) this.lightTnt(nx, ny, TNT_FUSE);
     }
 
     // stick to fuel while there is any: burning clings instead of floating off
@@ -845,7 +877,10 @@ export class World {
     const m = g.meta[i];
     if (m === 0) return; // idle wire sleeps (chunk-friendly)
     g.chunks.wakeCell(x, y);
-    if (m === SPARK_LIFE) this.sparkBurst(x, y); // leading edge of the pulse
+    if (m === SPARK_LIFE) {
+      this.sparkBurst(x, y); // leading edge of the pulse
+      this.events.zaps++;
+    }
     g.meta[i] = m - 1;
     // live wire continuously electrifies water resting on/next to it
     if (this.rng.chance(0.06)) {
@@ -991,6 +1026,36 @@ export class World {
     );
   }
 
+  /**
+   * A lit TNT cell counts down in its meta byte and blows at 1. Unlit TNT
+   * (meta 0) never ticks, so a settled stack costs nothing.
+   */
+  private tnt(x: number, y: number, i: number): void {
+    const g = this.grid;
+    const left = g.meta[i];
+    if (left === 0) return;
+    if (left <= 1) {
+      this.explode(x, y, 9);
+      return;
+    }
+    g.meta[i] = left - 1;
+    g.chunks.wakeCell(x, y);
+    g.touch(x, y); // the blink is drawn from meta, so repaint every tick
+  }
+
+  /** Start (or shorten) a TNT cell's fuse. Never lengthens a running one. */
+  private lightTnt(x: number, y: number, frames: number): void {
+    const g = this.grid;
+    if (g.get(x, y) !== Mat.TNT) return;
+    const i = g.idx(x, y);
+    const cur = g.meta[i];
+    if (cur !== 0 && cur <= frames) return;
+    if (cur === 0) this.events.fuses++;
+    g.meta[i] = frames;
+    g.chunks.wakeCell(x, y);
+    g.touch(x, y);
+  }
+
   explode(cx: number, cy: number, r: number): void {
     const g = this.grid;
     const r2 = r * r;
@@ -1002,6 +1067,12 @@ export class World {
         const y = cy + dy;
         const t = g.get(x, y);
         if (t === 1 || t === Mat.GLASS) continue;
+        // TNT caught in the outer ring is lit on a hair trigger instead of
+        // erased, so a stack goes off as a rolling chain, not one pop
+        if (t === Mat.TNT && d2 > r2 * 0.45) {
+          this.lightTnt(x, y, this.rng.range(3, 10));
+          continue;
+        }
         if (d2 <= r2 * 0.45) {
           g.setXY(x, y, Mat.FIRE, this.rng.range(14, 40));
         } else if (this.rng.chance(0.75)) {
@@ -1010,6 +1081,7 @@ export class World {
       }
     }
     this.shake = Math.min(30, this.shake + r * 2);
+    this.events.booms.push(cx, cy, r);
     // the shock front is what makes a blast read as a blast: smoke and fire
     // get thrown outward instead of politely rising from the crater
     this.wind.addBlast(cx, cy, r * 5, r * 0.22);
@@ -1027,7 +1099,7 @@ export class World {
       for (let i = 0; i < n; i++) {
         const m = g.cells[i];
         if (m === Mat.EMPTY) continue;
-        pix[i] = colorAt(m, i % g.W, (i / g.W) | 0, this.f, g.meta[i]);
+        pix[i] = this.shadeCell(i, i % g.W, (i / g.W) | 0, m);
       }
       dirty.fill(0);
       return;
@@ -1051,7 +1123,7 @@ export class World {
           for (let x = x0; x < x0 + CHUNK; x++, i++) {
             const m = g.cells[i];
             if (m !== Mat.EMPTY) {
-              pix[i] = colorAt(m, x, y, this.f, g.meta[i]);
+              pix[i] = this.shadeCell(i, x, y, m);
             } else if (specks === 0) {
               pix[i] = BG;
             } else {
@@ -1061,6 +1133,41 @@ export class World {
         }
       }
     }
+  }
+
+  /**
+   * One cell's final colour: the grain's own ramp entry, then lit by what it
+   * borders. Reads at most two cells up and one down/sideways - Grid.markDirty
+   * repaints across chunk edges to exactly that reach, so keep them in step.
+   */
+  private shadeCell(i: number, x: number, y: number, m: number): number {
+    const g = this.grid;
+    const cells = g.cells;
+    const W = g.W;
+    const v = this.shadeOf(i, x, y, m, cells, W);
+    const meta = g.meta[i];
+    // energized wire and lit TNT leave the ramp, so they are not in the table
+    if (offRamp(m, meta)) return applyShade(colorAt(m, x, y, this.f, meta), v);
+    const r = GRAINY[m] ? g.shade[i] & 3 : rampIndexAt(m, x, y, this.f, meta);
+    return SHADED[(((m << 2) | r) << 3) | v];
+  }
+
+  /** Which lit version (Shade.*) a cell shows, from its neighbours alone. */
+  private shadeOf(i: number, x: number, y: number, m: number, cells: Uint8Array, W: number): number {
+    const lit = LIT[m];
+    if (lit === Lit.NONE) return Shade.BASE;
+    // out of bounds counts as closed, so nothing lights up against the frame
+    const openUp = y > 0 && OPEN[cells[i - W]] === 1;
+    if (lit === Lit.SURFACE) {
+      if (openUp) return Shade.WATERLINE;
+      return y > 1 && OPEN[cells[i - 2 * W]] === 1 ? Shade.SECOND_ROW : Shade.BASE;
+    }
+    if (lit === Lit.TOP) return openUp ? Shade.POWDER_TOP : Shade.BASE;
+    if (openUp) return Shade.SOLID_TOP;
+    if (y < this.grid.H - 1 && OPEN[cells[i + W]] === 1) return Shade.UNDER;
+    if (x > 0 && OPEN[cells[i - 1]] === 1) return Shade.LEFT;
+    if (x < W - 1 && OPEN[cells[i + 1]] === 1) return Shade.RIGHT;
+    return Shade.BASE;
   }
 
   /**

@@ -172,10 +172,126 @@ export function rampIndexAt(mat: number, x: number, y: number, frame: number, me
   }
 }
 
-/** Animated color pick for a cell (worker-side rasterizer). */
+/**
+ * Materials whose colour belongs to the grain rather than the position.
+ *
+ * Powders are the case that matters: they move as discrete grains, and a
+ * position-keyed colour made a falling stream boil. Liquids keep the
+ * position rule - water flowing through a still sparkle reads as water.
+ * Solids never move, so for them the two rules are the same picture.
+ */
+export const GRAINY = new Uint8Array(NMATS);
+for (let m = 0; m < NMATS; m++) if (MATS[m]?.cat === Cat.POWDER) GRAINY[m] = 1;
+
+/** True when a cell's colour comes from its state, not its ramp. */
+export function offRamp(mat: number, meta: number): boolean {
+  return meta > 0 && (mat === Mat.WIRE || mat === Mat.TNT);
+}
+
+/** Animated color pick for a cell, without surface lighting. */
 export function colorAt(mat: number, x: number, y: number, frame: number, meta: number): number {
   // energized wire glows hot yellow/white and leaves the ramp entirely
   if (mat === Mat.WIRE && meta > 0)
     return (frame >> 1) & 1 ? 0xffb0f8ff : 0xff3cd2ff; // #fff8b0 / #ffd23c in ABGR
+  // lit TNT flashes white, twice as fast in its last third - the warning
+  // has to be readable from across the screen, so it beats the stripe
+  if (mat === Mat.TNT && meta > 0)
+    return (frame >> (meta < 24 ? 1 : 2)) & 1 ? 0xfff0f8ff : MATS[mat].ramp[2];
   return MATS[mat].ramp[rampIndexAt(mat, x, y, frame, meta)];
+}
+
+/**
+ * Surface lighting - one fixed light, up and to the left.
+ *
+ * Pixel-art shading rather than physical shading: a lit edge also shifts warm
+ * and a shadowed edge shifts cool, which is what keeps it from reading as
+ * plain brightness noise. Gases are never lit (they are the light), and VOID
+ * is a hole, so a bevel would make it look like a lid.
+ */
+export const Lit = {
+  NONE: 0,
+  /** shades the top face where it meets open air or gas */
+  TOP: 1,
+  /** TOP plus left/right/under bevel - only for things that never move */
+  BEVEL: 2,
+  /** bright waterline and a softer second row */
+  SURFACE: 3,
+} as const;
+
+export const LIT = new Uint8Array(NMATS);
+/** 1 where the material counts as open air for lighting: empty or gas */
+export const OPEN = new Uint8Array(NMATS);
+for (let m = 0; m < NMATS; m++) {
+  const d = MATS[m];
+  if (!d) continue;
+  if (d.cat === Cat.EMPTY || d.cat === Cat.GAS) OPEN[m] = 1;
+  if (d.cat === Cat.POWDER) LIT[m] = Lit.TOP;
+  else if (d.cat === Cat.LIQUID) LIT[m] = Lit.SURFACE;
+  else if (d.cat === Cat.SOLID) LIT[m] = Lit.BEVEL;
+}
+LIT[Mat.VOID] = Lit.NONE;
+
+/** Lighten toward warm white. `k` in 0..1 is how far; ABGR in and out. */
+export function lighten(c: number, k: number): number {
+  const r = c & 255, g = (c >>> 8) & 255, b = (c >>> 16) & 255;
+  const nr = r + (((255 - r) * k * 1.1) | 0);
+  const ng = g + (((255 - g) * k) | 0);
+  const nb = b + (((255 - b) * k * 0.75) | 0);
+  return ((255 << 24) | (nb << 16) | (ng << 8) | nr) >>> 0;
+}
+
+/** Darken toward cool blue. Blue loses least, so shadows read violet. */
+export function darken(c: number, k: number): number {
+  const r = c & 255, g = (c >>> 8) & 255, b = (c >>> 16) & 255;
+  const nr = (r * (1 - k)) | 0;
+  const ng = (g * (1 - k * 0.9)) | 0;
+  const nb = (b * (1 - k * 0.6)) | 0;
+  return ((255 << 24) | (nb << 16) | (ng << 8) | nr) >>> 0;
+}
+
+/**
+ * Which lit version of a colour a cell shows. Index into SHADED's last axis.
+ * The strengths live here, once, so the table and the rare off-ramp path
+ * (energized wire) cannot drift apart.
+ */
+export const Shade = {
+  BASE: 0,
+  /** a powder's grains already vary by a full ramp step, so its rim needs a
+   *  stronger lift than a flat solid's to read as an edge, not a grain */
+  POWDER_TOP: 1,
+  SOLID_TOP: 2,
+  UNDER: 3,
+  LEFT: 4,
+  RIGHT: 5,
+  WATERLINE: 6,
+  SECOND_ROW: 7,
+} as const;
+
+export function applyShade(c: number, v: number): number {
+  switch (v) {
+    case Shade.POWDER_TOP: return lighten(c, 0.4);
+    case Shade.SOLID_TOP: return lighten(c, 0.24);
+    case Shade.UNDER: return darken(c, 0.32);
+    case Shade.LEFT: return lighten(c, 0.1);
+    case Shade.RIGHT: return darken(c, 0.16);
+    case Shade.WATERLINE: return lighten(c, 0.42);
+    case Shade.SECOND_ROW: return lighten(c, 0.14);
+    default: return c;
+  }
+}
+
+/**
+ * Every ramp colour of every material in all eight lit versions, built once.
+ * Index `((mat << 2 | rampIndex) << 3) | shade`, so a lit cell costs one
+ * array read, like an unlit one. Measured bundled under node, a worst-case
+ * full-screen repaint went 1.2 ms -> ~2.2 ms with lighting on; normal frames
+ * repaint only dirty chunks. (Do not benchmark under vite-node: it turns
+ * every imported binding into a getter and inflated this to 4x.)
+ */
+export const SHADED = new Uint32Array(NMATS * 4 * 8);
+for (let m = 0; m < NMATS; m++) {
+  if (!MATS[m]) continue;
+  for (let r = 0; r < 4; r++)
+    for (let v = 0; v < 8; v++)
+      SHADED[(((m << 2) | r) << 3) | v] = applyShade(MATS[m].ramp[r], v);
 }
