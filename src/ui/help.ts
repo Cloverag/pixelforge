@@ -42,6 +42,10 @@ export const ELEMENT_NOTES: Record<string, string> = {
   SALT: 'Melts ice and snow. Dissolves in water.',
   ASH: 'What burnt wood leaves. The lightest powder - wind carries it.',
   TNT: 'Fire lights a short fuse (it blinks). Sparks and fuses set it off at once. Chains.',
+  MUD: 'Wet sand. Heavy and sticky - holds a tunnel roof. Heat bakes it back to sand.',
+  TURBINE: 'Spins in wind or under falling water, and sparks any wire it touches.',
+  ANT: 'Walks, climbs, digs through sand and mud, and piles the dirt outside.',
+  BIRD: 'Flies, rides the wind, perches on plants, flowers, wood and stone.',
 };
 
 function cssHex(u: number): string {

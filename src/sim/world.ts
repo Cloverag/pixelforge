@@ -36,6 +36,8 @@ const LQ_V_MAX = 7;
 /** fall speed at which an impact splashes (about 4 cells of free fall) */
 const LQ_SPLASH = 4;
 const code2 = (d: number) => (d > 0 ? LQ_RIGHT : LQ_LEFT);
+/** turbine spin at which it starts sparking wire */
+const TURBINE_LIVE = 40;
 /** slide reach at which a liquid flows freely; below it, it oozes */
 const LQ_RUNNY = 4;
 /** how far a liquid looks along its surface for somewhere lower */
@@ -344,6 +346,25 @@ export class World {
     g.clock[i] = 1;
     switch (m) {
       case Mat.SAND:
+        // wet sand turns to mud; the water stays (GARDENER budgets water)
+        if (this.rng.chance(0.03) && this.adjacent(x, y, Mat.WATER)) {
+          this.grid.setXY(x, y, Mat.MUD);
+          break;
+        }
+        this.powder(x, y, m);
+        break;
+      case Mat.MUD:
+        this.mud(x, y);
+        break;
+      case Mat.TURBINE:
+        this.turbine(x, y, i);
+        break;
+      case Mat.ANT:
+        this.ant(x, y, i);
+        break;
+      case Mat.BIRD:
+        this.bird(x, y, i);
+        break;
       case Mat.GUNPOWDER:
         this.powder(x, y, m);
         break;
@@ -797,9 +818,8 @@ export class World {
   // ---------- behaviors & reactions ----------
 
   private seed(x: number, y: number): void {
-    if (
-      this.adjacent(x, y, Mat.WATER)
-    ) {
+    // "sprouts on wet ground": water, or mud
+    if (this.adjacent(x, y, Mat.WATER) || this.adjacent(x, y, Mat.MUD)) {
       this.grid.setXY(x, y, Mat.PLANT, 0);
       return;
     }
@@ -959,6 +979,280 @@ export class World {
         if (d2 > 10 || (dx === 0 && dy >= 1)) continue;
         put(dx, dy, d2 <= 2 ? Flora.CENTER_DARK : d2 >= 7 ? yelTip : yel);
       }
+  }
+
+  // ---------- mud, turbines and creatures ----------
+
+  /**
+   * Mud: heavy and sticky. Gripped on both sides (by mud or a solid) it
+   * holds instead of falling, which is what lets a tunnel roof or a bridge
+   * stand; it slumps away only very slowly. Free mud falls, and slides
+   * diagonally only now and then, so it piles steep. Heat bakes it to sand.
+   */
+  private mud(x: number, y: number): void {
+    const g = this.grid;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+      const t = g.get(x + dx, y + dy);
+      if ((t === Mat.FIRE || t === Mat.LAVA || t === Mat.EMBER) && this.rng.chance(0.08)) {
+        g.setXY(x, y, Mat.SAND);
+        if (g.get(x, y - 1) === Mat.EMPTY) g.setXY(x, y - 1, Mat.STEAM, this.rng.range(60, 140));
+        this.events.sizzles++;
+        return;
+      }
+    }
+    const grips = (t: number) => t === Mat.MUD || t === 1 || (t !== Mat.EMPTY && MATS[t].cat === Cat.SOLID);
+    if (grips(g.get(x - 1, y)) && grips(g.get(x + 1, y)) && !this.rng.chance(0.002)) return;
+    const dens = MATS[Mat.MUD].dens;
+    if (this.tryMoveTo(x, y, x, y + 1, dens)) return;
+    if (!this.rng.chance(0.12)) return;
+    // Buried mud never slumps - only a grain with nothing on it does. With
+    // every cell free to slide, shaft walls slid into the shaft and ants
+    // could never dig deeper than a dent.
+    if (g.get(x, y - 1) === Mat.MUD) return;
+    // only slide where the drop is two deep: mud stands at ~2:1 where sand
+    // lies at 45 degrees (it slumped exactly like sand before this)
+    const d = this.rng.chance(0.5) ? 1 : -1;
+    // ...and only toward an open face at least two cells wide: the rims of
+    // a one-cell shaft slumped in and refilled it (measured: dug to 3 deep,
+    // back to 1 twenty frames later with no ant involved)
+    for (const dx of [d, -d]) {
+      if (
+        this.isOpen(g.get(x + dx, y + 2)) &&
+        this.isOpen(g.get(x + dx * 2, y + 1)) &&
+        this.tryMoveTo(x, y, x + dx, y + 1, dens)
+      ) return;
+    }
+  }
+
+  /**
+   * Turbine: meta is spin (0..255). Wind across it, or liquid falling past
+   * it (a water wheel), spins it up; otherwise it spins down. While it spins
+   * hard enough it pulses sparks into touching wire, faster with more spin -
+   * so it slots straight into the WIRE / TNT / TORCH kit.
+   */
+  private turbine(x: number, y: number, i: number): void {
+    const g = this.grid;
+    let spin = g.meta[i];
+    let drive = 0;
+    if (this.wind.isMoving) drive += Math.hypot(this.wind.atX(x, y), this.wind.atY(x, y));
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, -1], [0, 1]] as const) {
+      const ni = g.idx(x + dx, y + dy);
+      const t = g.get(x + dx, y + dy);
+      if (t !== 1 && MATS[t].cat === Cat.LIQUID && ((g.meta[ni] >> LQ_V_SHIFT) & LQ_V_MAX) > 0) drive += 0.5;
+    }
+    if (drive > 0.15) spin = Math.min(255, spin + 6 + Math.round(drive * 20));
+    else spin = Math.max(0, spin - 3);
+    if (spin !== g.meta[i]) {
+      g.meta[i] = spin;
+      g.touch(x, y);
+    }
+    if (spin === 0) return;
+    g.chunks.wakeCell(x, y); // keep turning (and spinning down) while it moves
+    if (spin < TURBINE_LIVE) return;
+    const period = spin > 180 ? 3 : spin > 100 ? 6 : 12;
+    if (this.f % period !== 0) return;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (g.get(nx, ny) === Mat.WIRE && g.meta[g.idx(nx, ny)] === 0) {
+        g.meta[g.idx(nx, ny)] = SPARK_LIFE;
+        g.chunks.wakeCell(nx, ny);
+      }
+    }
+  }
+
+  /** Something an ant can dig out and carry. */
+  private diggable(t: number): boolean {
+    return t === Mat.SAND || t === Mat.MUD;
+  }
+
+  /**
+   * Ant. meta bit 0: facing left; bit 1: carrying a grain; bit 2: the grain
+   * is mud (else sand); bits 3-5: steps walked on the surface while carrying.
+   *
+   * Two modes. Empty-handed it digs: from the surface now and then straight
+   * down (a shaft), underground mostly straight ahead (a gallery, whose mud
+   * roof holds because it is gripped on both sides). Carrying, it heads for
+   * open air - climbing, clinging to shaft walls - and only drops the grain
+   * after walking a few steps on the surface. Dropping it as soon as it saw
+   * sky meant every ant refilled its own hole and nothing was ever dug.
+   */
+  private ant(x: number, y: number, i: number): void {
+    const g = this.grid;
+    g.chunks.wakeCell(x, y);
+    const dens = MATS[Mat.ANT].dens;
+    const open = (dx: number, dy: number) => this.isOpen(g.get(x + dx, y + dy));
+    // cling to anything beside it; fall only with nothing to hold
+    if (open(0, 1) && open(-1, 0) && open(1, 0)) {
+      this.tryMoveTo(x, y, x, y + 1, dens);
+      return;
+    }
+    if (!this.rng.chance(0.8)) return;
+    let meta = g.meta[i];
+    let d = meta & 1 ? -1 : 1;
+    const flip = () => {
+      d = -d;
+      meta ^= 1;
+    };
+    const carrying = (meta & 2) !== 0;
+    const surface = open(0, -1);
+    let nx = x;
+    let ny = y;
+
+    // between two walls (a shaft) or under a roof (a gallery)
+    const enclosed = (!open(-1, 0) && !open(1, 0)) || !surface;
+
+    if (carrying) {
+      if (surface && !open(0, 1) && !enclosed) {
+        const steps = (meta >> 3) & 7;
+        if (steps >= 6) {
+          // far enough from the hole: put the grain down behind
+          const grain = meta & 4 ? Mat.MUD : Mat.SAND;
+          if (open(-d, 0)) g.setXY(x - d, y, grain);
+          else g.setXY(x, y - 1, grain);
+          meta &= 1;
+          flip(); // and head back to the hole for the next grain
+        } else {
+          meta = (meta & ~(7 << 3)) | ((steps + 1) << 3);
+        }
+      }
+      if (enclosed && open(0, -1)) {
+        // climbing out of a shaft: at the mouth, step out onto the rim
+        // (climbing straight up just fell back in)
+        if (open(d, -1) && !open(d, 0)) {
+          nx = x + d;
+          ny = y - 1;
+        } else if (open(-d, -1) && !open(-d, 0)) {
+          flip();
+          nx = x + d;
+          ny = y - 1;
+        } else {
+          ny = y - 1;
+        }
+      }
+    } else {
+      // Clinging to the walls is how a loaded ant climbs out - and without
+      // this it is also how an empty one stayed stuck at the mouth of every
+      // shaft, so no hole ever got deeper than the first cell.
+      if (enclosed && open(0, 1)) {
+        g.meta[i] = meta;
+        this.tryMoveTo(x, y, x, y + 1, dens);
+        return;
+      }
+      const below = g.get(x, y + 1);
+      const ahead = g.get(x + d, y);
+      const inShaft = !open(-1, 0) && !open(1, 0) && surface;
+      // how far down the shaft: walled, open cells above this one
+      let depth = 0;
+      if (inShaft)
+        while (depth < 8 && open(0, -depth - 1) && !open(-1, -depth - 1) && !open(1, -depth - 1)) depth++;
+      // Start a shaft from the surface now and then and sink it straight
+      // down; only once it is deep, branch galleries off it. Branching from a
+      // one-cell pit just widened every pit into a shallow trench.
+      const deepShaft = inShaft && depth >= 4;
+      // starting a new shaft is rare, so an ant comes back to the one it has
+      // (at 3% a step it began a fresh hole on every trip home)
+      const digDown = inShaft ? (deepShaft ? 0.04 : 0.15) : enclosed ? 0.02 : 0.006;
+      const digAhead = inShaft ? (deepShaft ? 0.15 : 0) : enclosed ? 0.3 : 0;
+      if (this.diggable(below) && this.rng.chance(digDown)) {
+        g.setXY(x, y + 1, Mat.EMPTY);
+        g.meta[i] = meta | 2 | (below === Mat.MUD ? 4 : 0);
+        return;
+      }
+      if (this.diggable(ahead) && this.rng.chance(digAhead)) {
+        g.setXY(x + d, y, Mat.EMPTY);
+        meta |= 2 | (ahead === Mat.MUD ? 4 : 0);
+        flip(); // turn round and carry it out
+        g.meta[i] = meta;
+        return;
+      }
+      // down the hole with empty hands: stay and keep digging; wandering
+      // straight back out left every hole one cell deep
+      if (enclosed && !this.rng.chance(0.15)) {
+        g.meta[i] = meta;
+        return;
+      }
+    }
+
+    if (ny === y) {
+      if (this.rng.chance(0.01)) flip();
+      if (open(d, 0)) {
+        // A cliff ahead (deep AND wide): usually turn back. A narrow hole is
+        // a shaft, and down a shaft is where an ant wants to go - treating
+        // any 2-deep drop as a cliff kept ants out of their own holes.
+        const cliff = open(d, 1) && open(d, 2) && open(d, 3) && open(d * 2, 1);
+        if (cliff && this.rng.chance(0.9)) flip();
+        else nx = x + d;
+      } else if (open(d, -1)) {
+        nx = x + d; // step up
+        ny = y - 1;
+      } else if (open(d, 1)) {
+        nx = x + d; // step down into a dip or a tunnel mouth
+        ny = y + 1;
+      } else if (surface && !carrying && this.diggable(g.get(x + d, y)) && this.rng.chance(0.2)) {
+        const t = g.get(x + d, y);
+        g.setXY(x + d, y, Mat.EMPTY);
+        meta |= 2 | (t === Mat.MUD ? 4 : 0);
+        flip();
+      } else {
+        flip();
+      }
+    }
+    g.meta[i] = meta;
+    if (nx !== x || ny !== y) this.tryMoveTo(x, y, nx, ny, dens);
+  }
+
+  /** Where a bird can sit. */
+  private perchable(t: number): boolean {
+    return t === Mat.FLORA || t === Mat.PLANT || t === Mat.WOOD || t === Mat.STONE || t === Mat.WALL || t === 1;
+  }
+
+  /**
+   * Bird. meta bit 0: heading left; bits 3-7: perch timer (x8 frames).
+   * Flies with a random bob, keeps a few cells clear of the ground or water,
+   * goes over or turns at obstacles, is pushed by wind, and now and then
+   * settles on a plant, flower, wood or stone for a while.
+   */
+  private bird(x: number, y: number, i: number): void {
+    const g = this.grid;
+    g.chunks.wakeCell(x, y);
+    let meta = g.meta[i];
+    let perch = meta >> 3;
+    if (perch > 0) {
+      if (!this.perchable(g.get(x, y + 1))) perch = 0;
+      else if (this.f % 8 === 0) perch--;
+      g.meta[i] = (meta & 7) | (perch << 3);
+      if (perch > 0) return;
+    }
+    if (!this.rng.chance(0.75)) return;
+    let d = meta & 1 ? -1 : 1;
+    // how close is the ground (or water) below?
+    let clear = 0;
+    while (clear < 16 && this.isOpen(g.get(x, y + clear + 1))) clear++;
+    if (clear === 0 && this.perchable(g.get(x, y + 1)) && this.rng.chance(0.04)) {
+      g.meta[i] = (meta & 7) | ((6 + this.rng.int(25)) << 3);
+      return;
+    }
+    // cruise: well clear of the ground, climbing when lower than that (birds
+    // that only kept 4 cells off the floor skimmed along it)
+    const bob = this.rng.chance(0.3) ? (this.rng.chance(0.5) ? -1 : 1) : 0;
+    let dy = clear < 4 ? -1 : clear < 14 && this.rng.chance(0.5) ? -1 : y < 12 ? 1 : bob;
+    let dx = d;
+    if (this.wind.isMoving) {
+      const wx = Wind.nudge(this.wind.atX(x, y), 0.9, this.rng.next());
+      const wy = Wind.nudge(this.wind.atY(x, y), 0.9, this.rng.next());
+      if (wx !== 0) dx = wx;
+      if (wy !== 0) dy = wy;
+    }
+    if (this.rng.chance(0.006)) {
+      d = -d;
+      meta ^= 1;
+    }
+    const dens = MATS[Mat.BIRD].dens;
+    g.meta[i] = meta;
+    if (this.isOpen(g.get(x + dx, y + dy)) && this.tryMoveTo(x, y, x + dx, y + dy, dens)) return;
+    if (this.isOpen(g.get(x + dx, y - 1)) && this.tryMoveTo(x, y, x + dx, y - 1, dens)) return;
+    g.meta[i] = meta ^ 1; // blocked: turn round
   }
 
   private acid(x: number, y: number): void {

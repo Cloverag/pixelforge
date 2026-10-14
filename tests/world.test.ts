@@ -35,10 +35,13 @@ describe('falling sand world', () => {
     for (let x = 39; x <= 60; x++) w.grid.setXY(x, 40, Mat.WALL); // pool floor
     w.grid.setXY(50, 10, Mat.SAND);
     stepN(w, 300);
-    // grain rests on the pool floor (may drift a little while sinking)
+    // grain rests on the pool floor (may drift a little while sinking). Wet
+    // sand turns to mud, so the grain may arrive as either - both sink.
     let found = false;
-    for (let x = 42; x < 58; x++)
-      if (w.grid.get(x, 39) === Mat.SAND) found = true;
+    for (let x = 42; x < 58; x++) {
+      const t = w.grid.get(x, 39);
+      if (t === Mat.SAND || t === Mat.MUD) found = true;
+    }
     expect(found).toBe(true);
     expect(w.grid.counts[Mat.WATER]).toBe(400);
   });
@@ -454,3 +457,82 @@ describe('flora', () => {
       if (w.grid.cells[i] === Mat.FLORA) expect(Math.floor(i / SIM_W)).toBeLessThan(300);
   });
 });
+
+describe('mud, turbines and creatures', () => {
+  const floor = (w: World, y = 330) => { for (let x = 0; x < SIM_W; x++) w.grid.setXY(x, y, Mat.STONE); };
+
+  it('sand touching water turns to mud, and the water is not used up', () => {
+    const w = new World(51);
+    floor(w);
+    for (let y = 300; y < 330; y++) {
+      for (let x = 100; x < 140; x++) w.grid.setXY(x, y, Mat.SAND);
+      for (let x = 140; x < 170; x++) w.grid.setXY(x, y, Mat.WATER);
+      w.grid.setXY(170, y, Mat.STONE);
+    }
+    const water0 = w.grid.counts[Mat.WATER];
+    stepN(w, 400);
+    expect(w.grid.counts[Mat.MUD]).toBeGreaterThan(10);
+    expect(w.grid.counts[Mat.WATER]).toBe(water0);
+  });
+
+  it('a mud gallery roof holds; the same gap in sand collapses', () => {
+    const run = (m: number) => {
+      const w = new World(52);
+      floor(w);
+      for (let x = 100; x < 160; x++) for (let y = 290; y < 330; y++) w.grid.setXY(x, y, m);
+      for (let x = 110; x < 150; x++) w.grid.setXY(x, 310, Mat.EMPTY); // a gallery
+      stepN(w, 300);
+      let open = 0;
+      for (let x = 110; x < 150; x++) if (w.grid.get(x, 310) === Mat.EMPTY) open++;
+      return open;
+    };
+    expect(run(Mat.MUD)).toBeGreaterThan(30);
+    expect(run(Mat.SAND)).toBeLessThan(10);
+  });
+
+  it('a turbine in wind sparks its wire and sets off TNT; in still air it does not', () => {
+    const run = (wind: boolean) => {
+      const w = new World(53);
+      for (let x = 480; x < 484; x++) for (let y = 250; y < 254; y++) w.grid.setXY(x, y, Mat.TURBINE);
+      for (let x = 484; x < 520; x++) w.grid.setXY(x, 252, Mat.WIRE);
+      for (let x = 520; x < 526; x++) for (let y = 249; y < 256; y++) w.grid.setXY(x, y, Mat.TNT);
+      for (let n = 0; n < 300; n++) {
+        if (wind) w.wind.addGust(470, 252, 1.8, 0, 14);
+        w.step();
+      }
+      return w.grid.counts[Mat.TNT];
+    };
+    expect(run(false)).toBe(42);
+    expect(run(true)).toBe(0);
+  });
+
+  it('ants dig down into mud', () => {
+    const w = new World(54);
+    floor(w);
+    for (let x = 60; x < 260; x++) for (let y = 290; y < 330; y++) w.grid.setXY(x, y, Mat.MUD);
+    for (let k = 0; k < 12; k++) w.grid.setXY(80 + k * 14, 289, Mat.ANT);
+    stepN(w, 1500);
+    let dug = 0;
+    for (let x = 70; x < 250; x++) for (let y = 292; y < 320; y++) if (w.grid.get(x, y) === Mat.EMPTY) dug++;
+    expect(w.grid.counts[Mat.ANT]).toBe(12);
+    expect(dug).toBeGreaterThan(5);
+  });
+
+  /**
+   * Started just above the floor: birds started high stayed high on their
+   * random bob alone, so the first version passed even with birds steered
+   * at the ground.
+   */
+  it('birds climb away from the ground and keep flying', () => {
+    const w = new World(55);
+    floor(w);
+    for (let k = 0; k < 10; k++) w.grid.setXY(100 + k * 30, 327, Mat.BIRD);
+    stepN(w, 400);
+    expect(w.grid.counts[Mat.BIRD]).toBe(10);
+    let high = 0;
+    for (let i = 0; i < w.grid.cells.length; i++)
+      if (w.grid.cells[i] === Mat.BIRD && Math.floor(i / SIM_W) < 318) high++;
+    expect(high).toBeGreaterThanOrEqual(7);
+  });
+});
+

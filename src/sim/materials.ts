@@ -27,6 +27,10 @@ export const Mat = {
   TNT: 25,
   ASH: 26,
   FLORA: 27,
+  MUD: 28,
+  TURBINE: 29,
+  ANT: 30,
+  BIRD: 31,
 } as const;
 
 export type MatId = (typeof Mat)[keyof typeof Mat];
@@ -120,6 +124,18 @@ MATS[Mat.ASH] = def(Mat.ASH, 'ASH', Cat.POWDER, 0.5, ['#5c5764', '#4c4754', '#6c
 // stem's, which is what the 3D view and anything ramp-based will show.
 MATS[Mat.FLORA] = def(Mat.FLORA, 'FLORA', Cat.SOLID, 100, ['#3c8a37', '#337a30', '#46993f', '#2c6c2a'], { flam: 0.16, acidChance: 0.05, placeable: false });
 
+// sand that has met water: heavy, sticky, holds a tunnel roof
+MATS[Mat.MUD] = def(Mat.MUD, 'MUD', Cat.POWDER, 1.8, ['#6b4a2e', '#5e3f27', '#7a5636', '#523621'], { acidChance: 0.03 });
+// spins in wind or under falling water; a spinning turbine sparks wire
+MATS[Mat.TURBINE] = def(Mat.TURBINE, 'TURBINE', Cat.SOLID, 100, ['#8fa3b3', '#7d909f', '#a9bccb', '#6a7b88'], { acidChance: 0.01 });
+// creatures: SOLID so nothing else displaces them - they move themselves.
+// dens < water so an ant that falls in floats.
+MATS[Mat.ANT] = def(Mat.ANT, 'ANT', Cat.SOLID, 0.9, ['#d0482f', '#b83c27', '#e0583b', '#a8341f'], { flam: 0.4, acidChance: 0.3 });
+MATS[Mat.BIRD] = def(Mat.BIRD, 'BIRD', Cat.SOLID, 0.5, ['#f4f3ee', '#d6dade', '#ffffff', '#b4bac2'], { flam: 0.5, acidChance: 0.3 });
+
+/** Materials that live: grouped together in the palette, drawn unlit. */
+export const LIFE_MATS = new Set<number>([Mat.SEED, Mat.PLANT, Mat.ANT, Mat.BIRD]);
+
 /**
  * FLORA meta: a static part (1..7, or a petal 8..23) or a growing bud
  * (0x80 | height left). A petal's meta encodes its hue and tone, so a
@@ -182,6 +198,8 @@ for (let m = 0; m < NMATS; m++) {
   else if (d.cat === Cat.LIQUID) WIND_SUSC[m] = 0.35;
   else WIND_SUSC[m] = 0;
 }
+// mud is too heavy and sticky to blow around
+WIND_SUSC[Mat.MUD] = 0;
 
 /** spark pulse length on wire = refractory period in frames */
 export const SPARK_LIFE = 8;
@@ -239,6 +257,12 @@ export function rampIndexAt(mat: number, x: number, y: number, frame: number, me
       return (v + ((x + y) & 1)) & 3; // static sparkle per grain
     case Mat.TNT:
       return ((x * 7 + y * 13) & 8) ? 0 : v % 4; // striped charge look
+    case Mat.TURBINE:
+      // spinning: the light band sweeps round; still: plain metal
+      return meta > 0 ? (((x + y + (frame >> 1)) & 3) === 0 ? 2 : v & 1) : v & 1 ? 0 : 3;
+    case Mat.BIRD:
+      // wing beat: alternates light and shadow, out of step bird to bird
+      return ((frame >> 2) + x) & 1 ? 2 : 1;
     default:
       return v % 4;
   }
@@ -307,6 +331,9 @@ for (let m = 0; m < NMATS; m++) {
   else if (d.cat === Cat.SOLID) LIT[m] = Lit.BEVEL;
 }
 LIT[Mat.VOID] = Lit.NONE;
+// creatures are single cells: a bevel would just darken them into the dark
+LIT[Mat.ANT] = Lit.NONE;
+LIT[Mat.BIRD] = Lit.NONE;
 
 /** Lighten toward warm white. `k` in 0..1 is how far; ABGR in and out. */
 export function lighten(c: number, k: number): number {

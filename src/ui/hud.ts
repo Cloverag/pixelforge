@@ -1,4 +1,4 @@
-import { Cat, MATS, NMATS } from '../sim/materials';
+import { Cat, LIFE_MATS, MATS, NMATS } from '../sim/materials';
 import type { PaintKind, Stats } from '../sim/protocol';
 import { BrushCursor } from './cursor';
 import { ELEMENT_NOTES } from './help';
@@ -291,8 +291,13 @@ export class Hud {
     const list = allowed ?? MATS.filter((m) => m.placeable).map((m) => m.id);
     const usable = list.filter((id) => MATS[id]?.placeable);
 
-    for (const [cat, label] of CAT_ORDER) {
-      const inCat = usable.filter((id) => MATS[id].cat === cat);
+    // living things get their own group, whatever their physics category
+    const groups: [string, number[]][] = CAT_ORDER.map(([cat, label]) => [
+      label,
+      usable.filter((id) => MATS[id].cat === cat && !LIFE_MATS.has(id)),
+    ]);
+    groups.splice(1, 0, ['LIFE', usable.filter((id) => LIFE_MATS.has(id))]);
+    for (const [label, inCat] of groups) {
       if (inCat.length === 0) continue; // challenges only allow a few materials
       const group = h('div', 'matgroup');
       group.appendChild(h('span', 'glabel', label));
