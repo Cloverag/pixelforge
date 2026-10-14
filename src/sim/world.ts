@@ -2,7 +2,7 @@ import { RNG, hash2d } from '../core/rng';
 import { Grid } from './grid';
 import {
   Cat, GRAINY, LIT, Lit, MATS, Mat, NMATS, OPEN, SHADED, Shade, WIND_SUSC,
-  Flora, applyShade, colorAt, offRamp, rampIndexAt, SPARK_LIFE,
+  Flora, applyShade, colorAt, offRamp, petal, rampIndexAt, SPARK_LIFE,
 } from './materials';
 import {
   CHUNK,
@@ -26,10 +26,18 @@ const BG = MATS[Mat.EMPTY].ramp[0];
 /** frames from fire touching TNT to the blast: long enough to see it blink
  *  and back away, short enough that it still reads as cause and effect */
 export const TNT_FUSE = 70;
-/** liquid meta: last flow direction */
+/** liquid meta bits 0-1: last flow direction */
 const LQ_DIR = 3;
 const LQ_RIGHT = 1;
 const LQ_LEFT = 2;
+/** liquid meta bits 2-4: fall speed, built while free-falling */
+const LQ_V_SHIFT = 2;
+const LQ_V_MAX = 7;
+/** fall speed at which an impact splashes (about 4 cells of free fall) */
+const LQ_SPLASH = 4;
+const code2 = (d: number) => (d > 0 ? LQ_RIGHT : LQ_LEFT);
+/** slide reach at which a liquid flows freely; below it, it oozes */
+const LQ_RUNNY = 4;
 /** how far a liquid looks along its surface for somewhere lower */
 const LQ_SCAN = 128;
 /** drifting dust mote in a windy empty cell; ABGR for a dim slate blue */
@@ -516,16 +524,41 @@ export class World {
       // is the only way a liquid ever moves upward, so it stays rare
       if (wy < 0 && this.tryMoveTo(x, y, x + wx, y - 1, dens)) return;
     }
-    const stored = g.meta[i] & LQ_DIR;
+    const meta = g.meta[i];
+    const stored = meta & LQ_DIR;
+    const v = (meta >> LQ_V_SHIFT) & LQ_V_MAX;
     const d1 = wx !== 0 ? wx : stored === LQ_RIGHT ? 1 : stored === LQ_LEFT ? -1 : this.rng.chance(0.5) ? 1 : -1;
     const d2 = -d1;
     const code = (d: number) => (d > 0 ? LQ_RIGHT : LQ_LEFT);
 
+    // free fall with momentum: speed builds a step per tick while nothing is
+    // under it, and a fast drop covers several cells per tick
     if (this.tryMoveTo(x, y, x, y + 1, dens)) {
-      this.setLiquidDir(x, y + 1, m, code(d1));
+      let cy = y + 1;
+      const extra = v >> 1;
+      for (let s = 0; s < extra; s++) {
+        if (g.cells[g.idx(x, cy)] !== m) break; // caught fire on the way
+        if (!this.tryMoveTo(x, cy, x, cy + 1, dens)) break;
+        cy++;
+      }
+      this.setLiquidState(x, cy, m, code(d1), Math.min(LQ_V_MAX, v + 1));
       this.wakeSurface(x, y);
       return;
     }
+    if (v > 0) {
+      // Caught up with liquid that is itself still in the air: not an
+      // impact. Keep the speed and wait. Splashing off it threw sideways
+      // streaks out of the middle of every waterfall.
+      const b = g.get(x, y + 1);
+      const bLiquid = b !== 1 && MATS[b].cat === Cat.LIQUID;
+      if (bLiquid && this.isOpen(g.get(x, y + 2))) return;
+      // landed hard: the speed has to go somewhere
+      if (v >= LQ_SPLASH && this.splash(x, y, m, d1, v)) return;
+      // Stopped falling, so the speed is gone. Leaving it set froze whole
+      // columns: the cell above saw "still falling" below and waited forever.
+      g.meta[i] = meta & LQ_DIR;
+    }
+
     if (this.tryMoveTo(x, y, x + d1, y + 1, dens)) {
       this.setLiquidDir(x + d1, y + 1, m, code(d1));
       this.wakeSurface(x, y);
@@ -548,6 +581,11 @@ export class World {
       }
       return;
     }
+    // Viscosity: thick liquids ooze. Sliding a full cell every tick toward
+    // the nearest drop, lava (disp 1) ran off a 7-cell ledge in 7 frames;
+    // the old random wobble only ever drifted it slowly. Water and acid
+    // always slide, oil 3/4 of the time, lava 1/4.
+    if (disp < LQ_RUNNY && !this.rng.chance(disp / LQ_RUNNY)) return;
     // slide toward the nearest drop, travel direction first. Look far, move
     // at most disp: with the search capped at disp a pool froze as a ramp
     // falling one row per ~disp cells, since a cell further than that from
@@ -557,17 +595,86 @@ export class World {
     // instead of one edge cell at a time, which levelled a pool too slowly.
     // Runny liquids only: lava (disp 1) jumping a whole terrace in a frame
     // poured off a 7-cell ledge in 3 frames, which is not how lava moves.
-    const surface = disp >= 3 && this.isOpen(g.get(x, y - 1));
+    // a floating grain on top still makes this the surface - otherwise the
+    // flow went round floating ash and never carried it anywhere
+    const above = g.get(x, y - 1);
+    const floater = above !== 1 && MATS[above].cat === Cat.POWDER && MATS[above].dens < dens;
+    const surface = disp >= 3 && (this.isOpen(above) || floater);
     for (const dx of [d1, d2]) {
       const k = this.dropStep(x, y, dx, disp, surface ? m : -1);
       if (k > 0) {
         const tx = x + dx * k;
         g.swap(i, g.idx(tx, y));
         this.setLiquidDir(tx, y, m, code(dx));
+        this.carryRun(x, y - 1, dx, k, dens);
         this.wakeSurface(x, y);
         return;
       }
     }
+  }
+
+  /**
+   * A fast-falling liquid hit something. Its speed becomes, in order of
+   * preference: a kicked-aside grain of powder (waterfalls dig), a droplet
+   * thrown up and out (spray), or a dash sideways along the surface. Returns
+   * false if there was nowhere for any of it to go.
+   */
+  private splash(x: number, y: number, m: number, d: number, v: number): boolean {
+    const g = this.grid;
+    const i = g.idx(x, y);
+    const side = this.rng.chance(0.65) ? d : -d;
+    const below = g.get(x, y + 1);
+    if (below !== 1 && MATS[below].cat === Cat.POWDER && this.rng.chance(0.4)) {
+      // knock the grain up and aside; the liquid drops into its place next tick
+      for (const [kx, ky] of [[side, 0], [side, 1], [-side, 0]] as const) {
+        if (this.isOpen(g.get(x + kx, y + ky))) {
+          g.swap(g.idx(x, y + 1), g.idx(x + kx, y + ky));
+          this.setLiquidState(x, y, m, code2(side), v - 2);
+          return true;
+        }
+      }
+    }
+    if (this.rng.chance(0.5)) {
+      const up = 1 + this.rng.int(2);
+      const out = 1 + this.rng.int(2);
+      const tx = x + side * out;
+      const ty = y - up;
+      if (this.isOpen(g.get(x + side, y - 1)) && this.isOpen(g.get(tx, ty))) {
+        g.swap(i, g.idx(tx, ty));
+        this.setLiquidState(tx, ty, m, code2(side), 0);
+        return true;
+      }
+    }
+    const tx = this.openRun(x, y, side, MATS[m].disp + v);
+    if (tx !== x) {
+      g.swap(i, g.idx(tx, y));
+      this.setLiquidState(tx, y, m, code2(side), 0);
+      this.carry(x, y - 1, side, MATS[m].dens);
+      return true;
+    }
+    this.setLiquidState(x, y, m, code2(d), 0);
+    return false;
+  }
+
+  /**
+   * A surface cell just flowed k cells toward dx, so that whole stretch of
+   * surface is moving: nudge the floating grains above it downstream.
+   * Nudging only the grain over the starting cell moved floating ash ~3
+   * cells in 400 frames - it mostly sank into the hole instead. Walk from
+   * the far end so a grain is not pushed twice in one pass.
+   */
+  private carryRun(x: number, y: number, dx: number, k: number, dens: number): void {
+    for (let j = k - 1; j >= 0; j--) {
+      if (this.rng.chance(0.5)) this.carry(x + dx * j, y, dx, dens);
+    }
+  }
+
+  /** Flowing liquid drags a floating grain (lighter than it) one cell along. */
+  private carry(x: number, y: number, dx: number, dens: number): void {
+    const g = this.grid;
+    const t = g.get(x, y);
+    if (t === 1 || MATS[t].cat !== Cat.POWDER || MATS[t].dens >= dens) return;
+    if (this.isOpen(g.get(x + dx, y))) g.swap(g.idx(x, y), g.idx(x + dx, y));
   }
 
   /**
@@ -580,11 +687,16 @@ export class World {
     if (y > 0) this.grid.chunks.wakeRect(x - LQ_SCAN, y - 1, x + LQ_SCAN, y - 1);
   }
 
+  /** Direction only: any sideways or diagonal move spends the fall speed. */
   private setLiquidDir(x: number, y: number, m: number, dir: number): void {
+    this.setLiquidState(x, y, m, dir, 0);
+  }
+
+  private setLiquidState(x: number, y: number, m: number, dir: number, v: number): void {
     const g = this.grid;
     const i = g.idx(x, y);
     // tryMoveTo can turn the mover into something else (fire); leave that be
-    if (g.cells[i] === m) g.meta[i] = dir;
+    if (g.cells[i] === m) g.meta[i] = dir | (Math.max(0, v) << LQ_V_SHIFT);
   }
 
   private isOpen(t: number): boolean {
@@ -729,10 +841,11 @@ export class World {
     const g = this.grid;
     if (g.get(x, y - 1) !== Mat.EMPTY) return;
     if (!this.rng.chance(0.3)) return;
-    for (let dy = 1; dy <= 3; dy++)
-      for (let dx = -3; dx <= 3; dx++)
+    // big blooms are up to 7 wide, so keep sprouts further apart than that
+    for (let dy = 1; dy <= 4; dy++)
+      for (let dx = -5; dx <= 5; dx++)
         if (g.get(x + dx, y - dy) === Mat.FLORA) return;
-    g.setXY(x, y - 1, Mat.FLORA, Flora.BUD | this.rng.range(4, 16));
+    g.setXY(x, y - 1, Mat.FLORA, Flora.BUD | this.rng.range(7, 22));
   }
 
   /**
@@ -752,14 +865,7 @@ export class World {
       this.bloom(x, y, i);
       return;
     }
-    if (this.rng.chance(0.22)) {
-      const side = this.rng.chance(0.5) ? 1 : -1;
-      if (g.get(x + side, y) === Mat.EMPTY) {
-        g.setXY(x + side, y, Mat.FLORA, Flora.LEAF);
-        if (this.rng.chance(0.5) && g.get(x + side * 2, y - 1) === Mat.EMPTY)
-          g.setXY(x + side * 2, y - 1, Mat.FLORA, Flora.LEAF);
-      }
-    }
+    if (this.rng.chance(0.2)) this.leaf(x, y, this.rng.chance(0.5) ? 1 : -1);
     const drift = this.rng.chance(0.18) ? (this.rng.chance(0.5) ? 1 : -1) : 0;
     const tx = x + drift;
     if (g.get(tx, y - 1) !== Mat.EMPTY) {
@@ -772,31 +878,87 @@ export class World {
     g.setXY(tx, y - 1, Mat.FLORA, Flora.BUD | (height - 1));
   }
 
-  /** End of a stem: usually a flower in one of four colours, sometimes leaves. */
-  private bloom(x: number, y: number, i: number): void {
+  /**
+   * A leaf off the stem at (x, y): a two-tone blade angled up and out,
+   * light on top and darker underneath.
+   */
+  private leaf(x: number, y: number, side: number): void {
     const g = this.grid;
-    g.touch(x, y);
     const put = (px: number, py: number, part: number) => {
       if (g.get(px, py) === Mat.EMPTY) g.setXY(px, py, Mat.FLORA, part);
     };
-    if (this.rng.chance(0.25)) {
+    put(x + side, y, Flora.LEAF_DARK);
+    put(x + side * 2, y - 1, Flora.LEAF);
+    put(x + side * 2, y, Flora.LEAF_DARK);
+    if (this.rng.chance(0.6)) put(x + side * 3, y - 1, Flora.LEAF);
+    if (this.rng.chance(0.4)) put(x + side * 3, y - 2, Flora.LEAF);
+  }
+
+  /**
+   * End of a stem. Usually a flower - daisy, full bloom, tulip or sunflower,
+   * in one of Flora.HUES colours with lighter tips - sometimes a leafy tip.
+   * Shapes are written as offsets from the bud; put() only fills empty
+   * cells, so a bloom never overwrites its own stem or a neighbour.
+   */
+  private bloom(x: number, y: number, i: number): void {
+    const g = this.grid;
+    g.touch(x, y);
+    const put = (dx: number, dy: number, part: number) => {
+      if (g.get(x + dx, y + dy) === Mat.EMPTY) g.setXY(x + dx, y + dy, Mat.FLORA, part);
+    };
+    const roll = this.rng.next();
+    const hue = this.rng.int(Flora.HUES);
+    const main = petal(hue, 0);
+    const tip = petal(hue, 1);
+
+    if (roll < 0.14) {
+      // leafy tip: a little fan of leaves instead of a flower
       g.meta[i] = Flora.LEAF;
-      put(x - 1, y - 1, Flora.LEAF);
-      put(x + 1, y - 1, Flora.LEAF);
+      put(-1, -1, Flora.LEAF);
+      put(1, -1, Flora.LEAF);
+      put(0, -2, Flora.LEAF);
+      put(-2, -1, Flora.LEAF_DARK);
+      put(2, -1, Flora.LEAF_DARK);
       return;
     }
-    const petal = Flora.PETAL + this.rng.int(4);
-    g.meta[i] = Flora.CENTER;
-    put(x - 1, y, petal);
-    put(x + 1, y, petal);
-    put(x, y - 1, petal);
-    if (this.rng.chance(0.45)) {
-      put(x - 1, y - 1, petal);
-      put(x + 1, y - 1, petal);
-      put(x - 2, y, petal);
-      put(x + 2, y, petal);
-      put(x, y - 2, petal);
+    if (roll < 0.42) {
+      // daisy: a cross of petals with lighter tips round a yellow eye
+      g.meta[i] = Flora.CENTER;
+      for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [-1, -1], [1, -1], [-1, 1], [1, 1]] as const) put(dx, dy, main);
+      for (const [dx, dy] of [[-2, 0], [2, 0], [0, -2], [-2, -1], [2, -1], [-1, -2], [1, -2]] as const) put(dx, dy, tip);
+      return;
     }
+    if (roll < 0.66) {
+      // full bloom: a round head, darker heart, light rim
+      g.meta[i] = main;
+      for (let dy = -3; dy <= 1; dy++)
+        for (let dx = -2; dx <= 2; dx++) {
+          const cy = dy + 1; // centre the disc a cell above the bud
+          const d2 = dx * dx + cy * cy;
+          if (d2 > 5 || (dx === 0 && dy === 1)) continue;
+          put(dx, dy, d2 >= 4 ? tip : main);
+        }
+      put(0, -1, Flora.CENTER);
+      return;
+    }
+    if (roll < 0.88) {
+      // tulip: a cup, open at the top
+      g.meta[i] = main;
+      for (const [dx, dy] of [[-1, 0], [1, 0], [-1, -1], [0, -1], [1, -1], [-2, -1], [2, -1], [-1, -2], [1, -2]] as const) put(dx, dy, main);
+      for (const [dx, dy] of [[-2, -2], [2, -2], [-1, -3], [1, -3], [0, -2]] as const) put(dx, dy, tip);
+      return;
+    }
+    // sunflower: big, always yellow, with a brown seed head
+    const yel = petal(4, 0);
+    const yelTip = petal(4, 1);
+    g.meta[i] = Flora.CENTER_DARK;
+    for (let dy = -4; dy <= 2; dy++)
+      for (let dx = -3; dx <= 3; dx++) {
+        const cy = dy + 1;
+        const d2 = dx * dx + cy * cy;
+        if (d2 > 10 || (dx === 0 && dy >= 1)) continue;
+        put(dx, dy, d2 <= 2 ? Flora.CENTER_DARK : d2 >= 7 ? yelTip : yel);
+      }
   }
 
   private acid(x: number, y: number): void {

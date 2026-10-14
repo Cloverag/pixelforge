@@ -121,30 +121,46 @@ MATS[Mat.ASH] = def(Mat.ASH, 'ASH', Cat.POWDER, 0.5, ['#5c5764', '#4c4754', '#6c
 MATS[Mat.FLORA] = def(Mat.FLORA, 'FLORA', Cat.SOLID, 100, ['#3c8a37', '#337a30', '#46993f', '#2c6c2a'], { flam: 0.16, acidChance: 0.05, placeable: false });
 
 /**
- * FLORA meta: a static part (1..7) or a growing bud (0x80 | height left).
- * Petals carry their hue as an offset from PETAL, so a whole flower is one
- * colour without any per-flower bookkeeping.
+ * FLORA meta: a static part (1..7, or a petal 8..23) or a growing bud
+ * (0x80 | height left). A petal's meta encodes its hue and tone, so a
+ * whole flower is one colour (with lighter tips) without any per-flower
+ * bookkeeping.
  */
 export const Flora = {
   STEM: 1,
   LEAF: 2,
   CENTER: 3,
-  PETAL: 4, // 4..7 = four petal hues
+  CENTER_DARK: 4,
+  LEAF_DARK: 5,
+  PETAL: 8, // 8 + hue * 2 + tone
+  HUES: 8,
   BUD: 0x80,
 } as const;
 
+/** meta for a petal of hue h (0..HUES-1); tone 1 is the lighter tip */
+export function petal(h: number, tone: 0 | 1): number {
+  return Flora.PETAL + h * 2 + tone;
+}
+
 const hex = (s: string) => u32(s);
+/** four close variations of a colour, so a petal reads as one hue with grain */
+function ramp4(base: string, d = 0.1): number[] {
+  const c = hex(base);
+  return [c, darken(c, d), lighten(c, d), c];
+}
+/** pink, white, violet, red, yellow, orange, sky, magenta */
+const PETAL_BASE = ['#f27aae', '#f5efe2', '#a685ea', '#e8473c', '#ffd23f', '#ff8a2b', '#6cc4f2', '#d94fc0'];
 /** ABGR colours per FLORA part; index by meta for static parts */
-const FLORA_COLS: number[][] = [
-  [],
-  [hex('#3c8a37'), hex('#337a30'), hex('#46993f'), hex('#2c6c2a')], // stem
-  [hex('#6cc24a'), hex('#5bb03e'), hex('#80d35a'), hex('#4f9d36')], // leaf
-  [hex('#ffd54a'), hex('#f2b632'), hex('#ffe27a'), hex('#e8a628')], // centre
-  [hex('#f47fb0'), hex('#e86a9f'), hex('#ff97c1'), hex('#f47fb0')], // pink
-  [hex('#f6f0e4'), hex('#e9e1d2'), hex('#fffaf0'), hex('#f6f0e4')], // white
-  [hex('#a989e8'), hex('#9473d9'), hex('#bea2f2'), hex('#a989e8')], // violet
-  [hex('#ea564c'), hex('#d8463d'), hex('#f56e63'), hex('#ea564c')], // red
-];
+const FLORA_COLS: number[][] = [];
+FLORA_COLS[Flora.STEM] = [hex('#3c8a37'), hex('#337a30'), hex('#46993f'), hex('#2c6c2a')];
+FLORA_COLS[Flora.LEAF] = [hex('#6cc24a'), hex('#5bb03e'), hex('#80d35a'), hex('#62b843')];
+FLORA_COLS[Flora.LEAF_DARK] = [hex('#3f8e34'), hex('#367e2d'), hex('#4a9b3c'), hex('#3a8530')];
+FLORA_COLS[Flora.CENTER] = [hex('#ffd54a'), hex('#f2b632'), hex('#ffe27a'), hex('#e8a628')];
+FLORA_COLS[Flora.CENTER_DARK] = [hex('#6b3e1e'), hex('#5a3218'), hex('#7d4a24'), hex('#4f2b14')];
+PETAL_BASE.forEach((b, h) => {
+  FLORA_COLS[petal(h, 0)] = ramp4(b, 0.08);
+  FLORA_COLS[petal(h, 1)] = ramp4(b, 0.08).map((c) => lighten(c, 0.38));
+});
 const BUD_COL = hex('#8fdc6a');
 
 /**

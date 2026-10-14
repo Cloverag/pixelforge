@@ -367,6 +367,71 @@ describe('water flow', () => {
   }, 30_000);
 });
 
+describe('water momentum', () => {
+  it('falling water picks up speed', () => {
+    const w = new World(31);
+    w.grid.setXY(200, 10, Mat.WATER);
+    stepN(w, 20);
+    let y = -1;
+    for (let yy = 0; yy < SIM_H; yy++) if (w.grid.get(200, yy) === Mat.WATER) y = yy;
+    // one cell per tick would put it at 30; momentum carries it further
+    expect(y).toBeGreaterThan(40);
+  });
+
+  /**
+   * Built directly rather than by dropping a column: a landing column also
+   * sheds droplets just by spreading off its own pile, so a "droplets near
+   * the floor" check passed with splashing switched off entirely.
+   * meta 29 = flow right (1) | fall speed 7 (7 << 2).
+   */
+  it('a fast landing splashes up or out instead of stopping dead', () => {
+    let moved = 0;
+    let rose = 0;
+    for (let seed = 1; seed <= 20; seed++) {
+      const w = new World(seed);
+      for (let x = 0; x < SIM_W; x++) w.grid.setXY(x, 300, Mat.STONE);
+      w.grid.setXY(200, 299, Mat.WATER, 29);
+      w.step();
+      if (w.grid.get(200, 299) !== Mat.WATER) moved++;
+      for (let y = 280; y < 299; y++)
+        for (let x = 190; x <= 210; x++) if (w.grid.get(x, y) === Mat.WATER) rose++;
+    }
+    expect(moved).toBe(20);
+    expect(rose).toBeGreaterThan(0);
+  });
+
+  it('a waterfall digs into dry sand', () => {
+    const w = new World(33);
+    for (let x = 0; x < SIM_W; x++) w.grid.setXY(x, 300, Mat.STONE);
+    for (let x = 60; x < 140; x++) for (let y = 290; y < 300; y++) w.grid.setXY(x, y, Mat.SAND);
+    for (let x = 98; x < 102; x++) for (let y = 40; y < 120; y++) w.grid.setXY(x, y, Mat.WATER);
+    let kicked = 0;
+    for (let n = 0; n < 200; n++) {
+      w.step();
+      for (let x = 60; x < 140; x++) for (let y = 270; y < 290; y++) if (w.grid.get(x, y) === Mat.SAND) kicked++;
+    }
+    // sand only ever rises above its original top if something knocked it up
+    expect(kicked).toBeGreaterThan(0);
+  });
+
+  it('the current carries floating ash along', () => {
+    const w = new World(34);
+    for (let x = 40; x <= 320; x++) w.grid.setXY(x, 200, Mat.STONE); // trough floor, drop past 320
+    for (let y = 180; y < 200; y++) w.grid.setXY(40, y, Mat.STONE);
+    for (let x = 41; x < 160; x++) for (let y = 195; y < 200; y++) w.grid.setXY(x, y, Mat.WATER);
+    const ashX0: number[] = [];
+    for (let x = 50; x < 150; x += 4) { w.grid.setXY(x, 194, Mat.ASH); ashX0.push(x); }
+    stepN(w, 400);
+    let sum = 0, n = 0;
+    for (let i = 0; i < w.grid.cells.length; i++)
+      if (w.grid.cells[i] === Mat.ASH) { sum += i % SIM_W; n++; }
+    const mean0 = ashX0.reduce((a, b) => a + b, 0) / ashX0.length;
+    expect(n).toBeGreaterThan(0);
+    // measured: ~28 cells of drift with the current carrying, ~0.4 without
+    expect(sum / n - mean0).toBeGreaterThan(12);
+  });
+});
+
 describe('flora', () => {
   it('plants at a pond surface grow stems, leaves and flowers - as FLORA, not PLANT', () => {
     const w = new World(11);
