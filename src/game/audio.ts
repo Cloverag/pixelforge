@@ -1,4 +1,10 @@
 import type { PgStats } from '../sim/particles';
+import { SIM_W } from '../sim/protocol';
+
+/** bumper notes: C major pentatonic, three octaves up from middle C */
+const NOTE_FREQS: number[] = [];
+for (let oct = 0; oct < 3; oct++)
+  for (const semi of [0, 2, 4, 7, 9]) NOTE_FREQS.push(261.63 * 2 ** ((semi + oct * 12) / 12));
 
 /** pentatonic notes the fireflies chime on (C major pentatonic, octave 5) */
 const CHIME = [523.25, 587.33, 659.25, 783.99, 880.0, 1046.5];
@@ -14,7 +20,8 @@ export class Sfx {
   private lastZap = 0;
   private lastIgnite = 0;
   private lastFuse = 0;
-  private lastBump = 0;
+  /** last time each bumper note played, so a hose plays a rhythm, not a buzz */
+  private noteAt = new Float64Array(16);
   private lastSwallow = 0;
   /** the playground's continuous voices, built on first use */
   private pg: {
@@ -231,17 +238,30 @@ export class Sfx {
 
     if (this.muted) return;
     if (st.sparkler > 0) this.crackle(st.sparks * 4 + 300);
-    if (st.bumps > 0) this.bump(st.bumps);
+    if (st.notes.length) this.bumperNotes(st.notes);
     if (st.swallowed > 0) this.swallow(st.swallowed);
     if (st.fireflies > 0 && Math.random() < Math.min(0.08, st.fireflies / 900)) this.chime();
   }
 
-  /** a glassy tick off a bumper, brighter the more hit at once */
-  private bump(n: number): void {
+  /**
+   * Bumper notes: a marimba-like voice - a sine with a fast-dying partial
+   * near 4x (where a marimba bar's first overtone sits) and a soft octave.
+   * Each note has a short cooldown and at most four play per frame.
+   */
+  private bumperNotes(notes: number[]): void {
     const now = performance.now();
-    if (now - this.lastBump < 45) return;
-    this.lastBump = now;
-    this.blip(2200 + Math.random() * 1600, 0.05, 'triangle', Math.min(0.06, 0.02 + n * 0.004), undefined, 0, Math.random() * 1.4 - 0.7);
+    let played = 0;
+    for (let k = 0; k < notes.length && played < 4; k += 2) {
+      const n = notes[k];
+      if (now - this.noteAt[n] < 85) continue;
+      this.noteAt[n] = now;
+      played++;
+      const f = NOTE_FREQS[n];
+      const pan = (notes[k + 1] / SIM_W) * 1.6 - 0.8;
+      this.blip(f, 0.9, 'sine', 0.05, undefined, 0, pan);
+      this.blip(f * 3.99, 0.13, 'sine', 0.013, undefined, 0, pan);
+      this.blip(f * 2, 0.35, 'triangle', 0.007, undefined, 0, pan);
+    }
   }
 
   /** the black hole eating: a short sucking sweep down */

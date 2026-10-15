@@ -393,7 +393,7 @@ export class Hud {
       ['vortex', 'VORTEX', 'linear-gradient(135deg,#e0f79f 0 50%,#8fc42b 50% 100%)', 'FORCES', 'Swirls particles around the cursor'],
       ['blackhole', 'BLACK HOLE', 'radial-gradient(circle,#000 0 35%,#ffb36b 40% 55%,#3a2410 60%)', 'FORCES', 'Pulls everything in and swallows it'],
       ['wall', 'WALL', 'linear-gradient(135deg,#a0a0bc 0 50%,#5c5c72 50% 100%)', 'TOOLS', 'Draw a solid barrier'],
-      ['bumper', 'BUMPER', 'linear-gradient(135deg,#c8f4ff 0 50%,#5fb0d0 50% 100%)', 'TOOLS', 'A bouncy wall: particles keep all their speed'],
+      ['bumper', 'BUMPER', 'linear-gradient(135deg,#c8f4ff 0 50%,#5fb0d0 50% 100%)', 'TOOLS', 'A bouncy wall that plays a note when hit - higher up, higher pitch'],
       ['erase', 'ERASE', 'linear-gradient(135deg,#ff8a8a 0 50%,#a82c2c 50% 100%)', 'TOOLS', 'Clear walls and particles'],
     ];
     for (const groupName of ['EMITTERS', 'FORCES', 'TOOLS']) {

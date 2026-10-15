@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { World } from '../src/sim/world';
-import { PG_BG, PG_BUMPER } from '../src/sim/particles';
+import { NOTE_COUNT, noteAt, PG_BG, PG_BUMPER } from '../src/sim/particles';
 import { Mat } from '../src/sim/materials';
 import { SIM_H, SIM_W } from '../src/sim/protocol';
 
@@ -186,6 +186,51 @@ describe('particle playground', () => {
     expect(st.particles).toBe(w.parts!.count);
     // and the counters reset after being taken
     expect(w.parts!.takeStats().fountain).toBe(0);
+  });
+
+  describe('musical bumpers', () => {
+    const strikeAt = (mat: number, y: number) => {
+      const w = playground();
+      for (let x = 200; x < 440; x++) w.grid.setXY(x, y, mat);
+      w.parts!.tool({ kind: 'hose', x: 320, y: y - 80, phase: 'down' });
+      for (let k = 0; k < 20; k++) w.parts!.tool({ kind: 'hose', x: 320, y: y - 74, phase: 'move' });
+      const pix = new Uint32Array(N).fill(PG_BG);
+      const notes: number[] = [];
+      for (let n = 0; n < 30; n++) {
+        w.parts!.fullRender(pix, false, n);
+        const st = w.parts!.takeStats();
+        for (let k = 0; k < st.notes.length; k += 2) notes.push(st.notes[k]);
+      }
+      // drop every particle and render once more: particles are drawn as
+      // light too, so only the wall's own pixels may count as lit
+      w.parts!.eraseNear(320, y, 1000);
+      w.parts!.fullRender(pix, false, 30);
+      let lit = 0;
+      for (let x = 200; x < 440; x++) if (pix[y * SIM_W + x] >>> 24 === 255) lit++;
+      return { notes, lit };
+    };
+
+    it('higher on screen plays a higher note', () => {
+      expect(noteAt(20)).toBeGreaterThan(noteAt(180));
+      expect(noteAt(180)).toBeGreaterThan(noteAt(340));
+      expect(noteAt(0)).toBe(NOTE_COUNT - 1);
+      expect(noteAt(SIM_H - 1)).toBe(0);
+    });
+
+    it('a stream hitting a bumper plays that height\'s note', () => {
+      const { notes } = strikeAt(PG_BUMPER, 300);
+      expect(notes.length).toBeGreaterThan(0);
+      expect(new Set(notes)).toEqual(new Set([noteAt(300)]));
+    });
+
+    it('a plain wall stays silent', () => {
+      expect(strikeAt(Mat.WALL, 300).notes.length).toBe(0);
+    });
+
+    it('a struck bumper lights up as light, not wall', () => {
+      expect(strikeAt(PG_BUMPER, 300).lit).toBeGreaterThan(0);
+      expect(strikeAt(Mat.WALL, 300).lit).toBe(0);
+    });
   });
 });
 

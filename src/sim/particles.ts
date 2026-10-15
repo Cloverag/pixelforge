@@ -51,6 +51,21 @@ const PK_FIREFLY = 2;
 /** the playground's bouncy wall is painted as GLASS: it reads as a bumper */
 export const PG_BUMPER = Mat.GLASS;
 
+/**
+ * Bumpers are an instrument: a hit plays one of NOTE_COUNT notes (three
+ * octaves of a pentatonic scale, so any mix sounds consonant), chosen by
+ * height - higher on screen, higher pitch.
+ */
+export const NOTE_COUNT = 15;
+export function noteAt(y: number): number {
+  const n = Math.floor(((SIM_H - y) / SIM_H) * NOTE_COUNT);
+  return Math.max(0, Math.min(NOTE_COUNT - 1, n));
+}
+/** flash colour for a note: low notes red, high notes violet */
+function noteHue(note: number): number {
+  return Math.round((note / (NOTE_COUNT - 1)) * 50);
+}
+
 /** Playground activity since the last frame, for the sound design. */
 export interface PgStats {
   particles: number;
@@ -60,6 +75,8 @@ export interface PgStats {
   sparks: number;
   fireflies: number;
   bumps: number;
+  /** bumper notes struck this frame, as [note, x] pairs, one per note */
+  notes: number[];
   swallowed: number;
   holes: number;
   vortices: number;
@@ -68,7 +85,7 @@ export interface PgStats {
 }
 
 export function emptyPgStats(): PgStats {
-  return { particles: 0, fountain: 0, hose: 0, sparkler: 0, sparks: 0, fireflies: 0, bumps: 0, swallowed: 0, holes: 0, vortices: 0, pulls: 0, rockets: 0 };
+  return { particles: 0, fountain: 0, hose: 0, sparkler: 0, sparks: 0, fireflies: 0, bumps: 0, notes: [], swallowed: 0, holes: 0, vortices: 0, pulls: 0, rockets: 0 };
 }
 const BG_R = PG_BG & 255;
 const BG_G = (PG_BG >>> 8) & 255;
@@ -121,6 +138,10 @@ export class PSys {
   private hoseDy = -1;
   /** activity since the last takeStats(), for the sound design */
   private st = emptyPgStats();
+  /** per-cell bumper flash, 0..255, decaying each frame */
+  private flash = new Uint8Array(SIM_W * SIM_H);
+  /** notes already struck this frame: one entry per note is plenty */
+  private noteSeen = new Uint8Array(NOTE_COUNT);
 
   forces: Force[] = [];
   gravityOn = true;
@@ -133,6 +154,7 @@ export class PSys {
   constructor(private grid: import('./grid').Grid) {}
 
   reset(): void {
+    this.flash.fill(0);
     this.n = 0;
     this.forces.length = 0;
     this.rockets.length = 0;
@@ -332,6 +354,26 @@ export class PSys {
     return this.grid.cells[(y | 0) * SIM_W + (x | 0)] !== Mat.EMPTY;
   }
 
+  /** A particle hit the bumper at (x, y): play its note and light it up. */
+  private strike(x: number, y: number): void {
+    this.st.bumps++;
+    const note = noteAt(y);
+    if (!this.noteSeen[note] && this.st.notes.length < 16) {
+      this.noteSeen[note] = 1;
+      this.st.notes.push(note, x | 0);
+    }
+    const cx = x | 0;
+    const cy = y | 0;
+    for (let dy = -3; dy <= 3; dy++)
+      for (let dx = -3; dx <= 3; dx++) {
+        const fx = cx + dx;
+        const fy = cy + dy;
+        if (fx < 0 || fy < 0 || fx >= SIM_W || fy >= SIM_H) continue;
+        const k = fy * SIM_W + fx;
+        if (this.grid.cells[k] === PG_BUMPER) this.flash[k] = 255;
+      }
+  }
+
   /** How much speed a bounce off (x, y) keeps: bumpers give it all back. */
   private restitution(x: number, y: number): number {
     if (x < 0 || y < 0 || x >= SIM_W || y >= SIM_H) return 0.55;
@@ -443,6 +485,7 @@ export class PSys {
   fullRender(pix: Uint32Array, forceFull: boolean, frame: number): void {
     if (forceFull) pix.fill(PG_BG);
     this.frame = frame;
+    this.noteSeen.fill(0);
     this.holes = this.forces.filter((f) => f.kind === 'hole');
     const ts = this.timeScale;
     const drag = 1 - (1 - DRAG) * ts;
@@ -467,9 +510,24 @@ export class PSys {
       const cells = this.grid.cells;
       for (let i = 0; i < nPx; i++) {
         const c = cells[i];
+        if (c === Mat.EMPTY) continue;
+        const y = (i / SIM_W) | 0;
+        const base = colorAt(c, i % SIM_W, y, frame, 0);
+        const f = this.flash[i];
+        if (f > 0 && c === PG_BUMPER) {
+          // a struck bumper glows in its note's colour, and is drawn as
+          // light (alpha 255) so the cinematic pass blooms it
+          const k = f / 255;
+          const h = RAINBOW[noteHue(noteAt(y))];
+          const mix = (sh: number) =>
+            // the hue alone: brightened further, the bloom washed it to white
+            Math.min(255, (((base >>> sh) & 255) * (1 - k) + ((h >>> sh) & 255) * k) | 0);
+          pix[i] = ((255 << 24) | (mix(16) << 16) | (mix(8) << 8) | mix(0)) >>> 0;
+          this.flash[i] = f > 14 ? f - 14 : 0;
+          continue;
+        }
         // alpha 253 tags a wall for the cinematic composite to light
-        if (c !== Mat.EMPTY)
-          pix[i] = ((colorAt(c, i % SIM_W, (i / SIM_W) | 0, frame, 0) & 0x00ffffff) | (253 << 24)) >>> 0;
+        pix[i] = ((base & 0x00ffffff) | (253 << 24)) >>> 0;
       }
     }
 
@@ -584,7 +642,7 @@ export class PSys {
           vx = -vx * e;
           sx = -sx * e;
           bounced = true;
-          if (e >= 1) this.st.bumps++;
+          if (e >= 1) this.strike(px + sx, py);
         }
         if (!this.solidAt(px, py + sy)) py += sy;
         else {
@@ -592,7 +650,7 @@ export class PSys {
           vy = -vy * e;
           sy = -sy * e;
           bounced = true;
-          if (e >= 1) this.st.bumps++;
+          if (e >= 1) this.strike(px, py + sy);
         }
       }
       this.px[i] = px;
