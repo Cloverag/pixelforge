@@ -11,6 +11,7 @@ import { showMenu } from './ui/menu';
 import { hideOverlay, showResult, toast } from './ui/widgets';
 import { Mat } from './sim/materials';
 import { PG_BUMPER } from './sim/particles';
+import { PRESET_INFO } from './sim/presets';
 import { Mode, PaintKind, Req, Res, SIM_H, SIM_W, SimEvents, Stats } from './sim/protocol';
 import { CHALLENGES } from './sim/challenges';
 import { recordStars } from './game/progress';
@@ -464,12 +465,23 @@ const HELD_TOOLS = new Set<PgTool>(['fountain', 'sparkler', 'hose', 'fireflies']
 
 let pgSlowmo = false;
 
-function setPgGravity(on: boolean): void {
+function setPgGravity(on: boolean, quiet = false): void {
   pgGravityOn = on;
   post({ t: 'pgGravity', on });
   hud.setGravityLamp(on);
+  if (quiet) return;
   sfx.ui();
   toast(`GRAVITY ${on ? 'ON' : 'OFF'}`);
+}
+
+/** Replace the playground with a demo scene; it sets its own gravity. */
+function loadPgPreset(id: string): void {
+  const p = PRESET_INFO.find((q) => q.id === id);
+  if (!p) return;
+  post({ t: 'pgPreset', id });
+  setPgGravity(p.gravity, true);
+  sfx.ui();
+  toast(`SCENE: ${p.label}`);
 }
 
 function setPgSlowmo(on: boolean): void {
@@ -559,6 +571,8 @@ function startPlayground(): void {
     onGravity: () => setPgGravity(!pgGravityOn),
     onSlowmo: () => setPgSlowmo(!pgSlowmo),
     onClear: clearPlayground,
+    presets: PRESET_INFO.map((p) => [p.id, p.label, p.tip]),
+    onPreset: loadPgPreset,
   });
   hud.setGravityLamp(pgGravityOn);
   hud.setSlowmoLamp(pgSlowmo);

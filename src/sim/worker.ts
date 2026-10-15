@@ -63,6 +63,13 @@ ctx.onmessage = (e: MessageEvent<Req>) => {
       if (w.parts) w.parts.timeScale = msg.scale;
       break;
 
+    case 'pgPreset':
+      if (w.loadPreset(msg.id)) {
+        forceFull = true;
+        pgWallsDirty = true;
+      }
+      break;
+
     case 'pgClear':
       w.clearPlayground();
       forceFull = true; // wipe the trails too

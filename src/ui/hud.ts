@@ -75,6 +75,9 @@ interface PgPaletteCallbacks {
   onGravity?(): void;
   onSlowmo?(): void;
   onClear?(): void;
+  /** demo scenes: [id, label, tooltip] */
+  presets?: [string, string, string][];
+  onPreset?(id: string): void;
 }
 
 export class Hud {
@@ -417,6 +420,16 @@ export class Hud {
       group.appendChild(grid);
       pal.appendChild(group);
     }
+    // demo scenes, one click each
+    if (cbs.presets?.length) {
+      const scenes = h('div', 'matgroup');
+      scenes.appendChild(h('span', 'glabel', 'SCENES'));
+      const grid = h('div', 'scenebtns');
+      for (const [id, label, tip] of cbs.presets) grid.appendChild(this.mkBtn(label, () => cbs.onPreset?.(id), tip));
+      scenes.appendChild(grid);
+      pal.appendChild(scenes);
+    }
+
     // world-wide actions: things that are not a brush
     const actions = h('div', 'matgroup');
     actions.appendChild(h('span', 'glabel', 'ACTIONS'));

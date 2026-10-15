@@ -1133,6 +1133,19 @@ kbd, .mode-key {
   flex: 1;
   white-space: nowrap;
 }
+/* playground demo scenes: two columns of small buttons */
+.scenebtns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.scenebtns .px {
+  font-size: 9.5px;
+  padding-inline: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 /* ==== MANAGER LANE ==== (manager-owned CSS goes BELOW this line; builder won't touch) */
 

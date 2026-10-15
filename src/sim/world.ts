@@ -1,4 +1,5 @@
 import { RNG, hash2d } from '../core/rng';
+import { buildPreset } from './presets';
 import { Grid } from './grid';
 import {
   Cat, GRAINY, LIT, Lit, MATS, Mat, NMATS, OPEN, SHADED, Shade, WIND_SUSC,
@@ -169,6 +170,13 @@ export class World {
   clearPlayground(): void {
     this.clear();
     this.parts?.reset();
+  }
+
+  /** Replace the playground with one of the demo scenes. */
+  loadPreset(id: string): boolean {
+    if (!this.parts) return false;
+    this.clearPlayground();
+    return buildPreset(id, this.grid, this.parts);
   }
 
   /** Hand over everything that happened since the last call, and reset. */

@@ -103,6 +103,27 @@ function addSat(a: number, b: number): number {
   return ((255 << 24) | (Math.max(0, bl) << 16) | (Math.max(0, g) << 8) | Math.max(0, r)) >>> 0;
 }
 
+/** a self-running emitter, placed by the preset scenes */
+export interface Emitter {
+  kind: 'fountain' | 'jet' | 'sparkler' | 'fireflies' | 'firework';
+  x: number;
+  y: number;
+  /** unit direction, for jets */
+  dx: number;
+  dy: number;
+  /** fire every this many frames */
+  every: number;
+  /** jets: speed and lifetime multipliers */
+  speed?: number;
+  life?: number;
+  /** fireflies / fireworks: random spread of the spawn x */
+  spread?: number;
+  t: number;
+}
+const MAX_EMITTERS = 12;
+/** fireflies stop spawning past this many, so a meadow does not fill up */
+const FIREFLY_CAP = 260;
+
 /** a pair of portals; b is null until the second click links it */
 interface PortalPair {
   a: { x: number; y: number };
@@ -160,6 +181,9 @@ export class PSys {
   gravityOn = true;
   private rockets: Rocket[] = [];
   private portals: PortalPair[] = [];
+  private emitters: Emitter[] = [];
+  /** fireflies alive at the end of the last frame */
+  private liveFireflies = 0;
   /** walks the rainbow so a fountain stream changes colour over time */
   private hueClock = 0;
   /** called with each firework burst position (for sound and screen flash) */
@@ -170,6 +194,7 @@ export class PSys {
   reset(): void {
     this.flash.fill(0);
     this.portals.length = 0;
+    this.emitters.length = 0;
     this.n = 0;
     this.forces.length = 0;
     this.rockets.length = 0;
@@ -256,15 +281,53 @@ export class PSys {
       this.hoseX = x;
       this.hoseY = y;
     }
+    this.jet(x, y, this.hoseDx, this.hoseDy);
+  }
+
+  /** A burst of five particles along unit direction (dx, dy): the hose's spray. */
+  jet(x: number, y: number, dx: number, dy: number, speed = 1, life = 1): void {
     this.hueClock = (this.hueClock + 0.2) % RAINBOW_N;
     for (let k = 0; k < 5; k++) {
-      const sp = 3.6 + this.rng.next() * 1.4;
+      const sp = (3.6 + this.rng.next() * 1.4) * speed;
       const jx = (this.rng.next() - 0.5) * 0.5;
       const jy = (this.rng.next() - 0.5) * 0.5;
       const hue = ((this.hueClock | 0) + this.rng.int(3)) % RAINBOW_N;
-      this.push(x, y, (this.hoseDx + jx) * sp, (this.hoseDy + jy) * sp, 110 + this.rng.int(60), hue, 0, (this.rng.next() - 0.5) * 0.8);
+      this.push(x, y, (dx + jx) * sp, (dy + jy) * sp, (110 + this.rng.int(60)) * life, hue, 0, (this.rng.next() - 0.5) * 0.8);
     }
     this.st.hose += 5;
+  }
+
+  /**
+   * An emitter that runs by itself, for the preset scenes: it fires every
+   * `every` frames until erased or cleared.
+   */
+  addEmitter(e: Omit<Emitter, 't'>): void {
+    if (this.emitters.length >= MAX_EMITTERS) this.emitters.shift();
+    this.emitters.push({ ...e, t: 0 });
+  }
+
+  private runEmitters(): void {
+    for (const e of this.emitters) {
+      e.t++;
+      if (e.t % e.every !== 0) continue;
+      switch (e.kind) {
+        case 'fountain':
+          this.fountain(e.x, e.y);
+          break;
+        case 'jet':
+          this.jet(e.x, e.y, e.dx, e.dy, e.speed ?? 1, e.life ?? 1);
+          break;
+        case 'sparkler':
+          this.sparkler(e.x, e.y);
+          break;
+        case 'fireflies':
+          if (this.liveFireflies < FIREFLY_CAP) this.fireflies(e.x + (this.rng.next() - 0.5) * (e.spread ?? 0), e.y);
+          break;
+        case 'firework':
+          this.launch(e.x + (this.rng.next() - 0.5) * (e.spread ?? 0), e.y + (this.rng.next() - 0.5) * 40);
+          break;
+      }
+    }
   }
 
   /** Fireflies: slow, wandering, blinking, and they ignore gravity. */
@@ -387,6 +450,7 @@ export class PSys {
     this.forces = this.forces.filter((f) => (f.x - x) ** 2 + (f.y - y) ** 2 > r * r);
     const near = (q: { x: number; y: number } | null) => q !== null && (q.x - x) ** 2 + (q.y - y) ** 2 <= r * r;
     this.portals = this.portals.filter((p) => !near(p.a) && !near(p.b));
+    this.emitters = this.emitters.filter((e) => !near(e));
     for (let i = 0; i < this.n; ) {
       const dx = this.px[i] - x;
       const dy = this.py[i] - y;
@@ -598,6 +662,8 @@ export class PSys {
       }
     }
 
+    this.runEmitters();
+
     // rockets: climb with a wobble, shed sparks, burst at their target height
     for (let k = this.rockets.length - 1; k >= 0; k--) {
       const r = this.rockets[k];
@@ -618,10 +684,12 @@ export class PSys {
 
     // integrate
     const g = this.grid;
+    let fireflies = 0;
     for (let i = 0; i < this.n; i++) {
       let vx = this.vx[i];
       let vy = this.vy[i];
       const firefly = this.kind[i] === PK_FIREFLY;
+      if (firefly) fireflies++;
 
       if (firefly) {
         // wander, unhurried, and never fall
@@ -741,6 +809,8 @@ export class PSys {
       }
     }
 
+    this.liveFireflies = fireflies;
+
     // rasterize heads (+ motion stretch)
     for (let i = 0; i < this.n; i++) {
       const x = this.px[i] | 0;
@@ -795,6 +865,18 @@ export class PSys {
         if (ix >= 0 && iy >= 0 && ix < SIM_W && iy < SIM_H) pix[iy * SIM_W + ix] = col;
       }
     };
+    // emitter nozzles: a small glowing block that breathes
+    for (const e of this.emitters) {
+      const k = 0.6 + 0.4 * Math.sin((frame + e.x) * 0.12);
+      const c = e.kind === 'fireflies' ? [200, 255, 120] : e.kind === 'firework' ? [255, 200, 120] : e.kind === 'sparkler' ? [255, 210, 90] : [120, 200, 255];
+      const col = ((255 << 24) | (((c[2] * k) | 0) << 16) | (((c[1] * k) | 0) << 8) | ((c[0] * k) | 0)) >>> 0;
+      for (let dy = -1; dy <= 1; dy++)
+        for (let dx = -1; dx <= 1; dx++) {
+          const ix = (e.x + dx) | 0;
+          const iy = (e.y + dy) | 0;
+          if (ix >= 0 && iy >= 0 && ix < SIM_W && iy < SIM_H) pix[iy * SIM_W + ix] = col;
+        }
+    }
     for (const p of this.portals) {
       ring(p.a, pOrange, p.b !== null, 1);
       if (p.b) ring(p.b, pBlue, true, -1);
