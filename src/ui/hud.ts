@@ -78,6 +78,7 @@ interface PgPaletteCallbacks {
   /** demo scenes: [id, label, tooltip] */
   presets?: [string, string, string][];
   onPreset?(id: string): void;
+  onSurprise?(): void;
 }
 
 export class Hud {
@@ -426,6 +427,11 @@ export class Hud {
       scenes.appendChild(h('span', 'glabel', 'SCENES'));
       const grid = h('div', 'scenebtns');
       for (const [id, label, tip] of cbs.presets) grid.appendChild(this.mkBtn(label, () => cbs.onPreset?.(id), tip));
+      if (cbs.onSurprise) {
+        const sur = this.mkBtn('SURPRISE ME', () => cbs.onSurprise?.(), 'A brand-new generated scene, every time (R)');
+        sur.classList.add('surprise');
+        grid.appendChild(sur);
+      }
       scenes.appendChild(grid);
       pal.appendChild(scenes);
     }

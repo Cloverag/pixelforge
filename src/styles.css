@@ -1133,6 +1133,25 @@ kbd, .mode-key {
   flex: 1;
   white-space: nowrap;
 }
+/* SURPRISE ME: spans the scene grid; a slow shimmer says "press me" */
+.scenebtns .px.surprise {
+  grid-column: 1 / -1;
+}
+.px.surprise {
+  background-image: linear-gradient(110deg, transparent 30%, rgba(var(--accent-rgb), 0.22) 50%, transparent 70%);
+  background-size: 250% 100%;
+  animation: surprise-shimmer 3.2s ease-in-out infinite;
+  border-color: rgba(var(--accent-rgb), 0.55);
+  color: var(--accent);
+}
+.mode-btn.surprise .mode-name { color: var(--accent); }
+@keyframes surprise-shimmer {
+  0% { background-position: 120% 0; }
+  60%, 100% { background-position: -120% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .px.surprise { animation: none; }
+}
 /* playground demo scenes: two columns of small buttons */
 .scenebtns {
   display: grid;

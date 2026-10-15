@@ -3,6 +3,7 @@ import type { PSys } from './particles';
 import { PG_BUMPER } from './particles';
 import { SIM_H, SIM_W } from './protocol';
 import type { Grid } from './grid';
+import type { SurprisePlan } from './surprise';
 
 /**
  * One-click demo scenes for the particle playground. Each one shows off a
@@ -157,10 +158,7 @@ const PRESETS: Preset[] = [
 /** What the HUD and main need to know: no build functions. */
 export const PRESET_INFO: PresetInfo[] = PRESETS.map(({ id, label, tip, gravity }) => ({ id, label, tip, gravity }));
 
-/** Build preset `id` into an already cleared playground. */
-export function buildPreset(id: string, grid: Grid, parts: PSys): boolean {
-  const p = PRESETS.find((q) => q.id === id);
-  if (!p) return false;
+function makeBuilder(grid: Grid, parts: PSys): Builder {
   const set = (x: number, y: number, mat: number) => {
     x |= 0;
     y |= 0;
@@ -180,7 +178,25 @@ export function buildPreset(id: string, grid: Grid, parts: PSys): boolean {
       else disc(x, y, Math.round(r), mat);
     }
   };
+  return { parts, line, disc, set };
+}
+
+/** Build preset `id` into an already cleared playground. */
+export function buildPreset(id: string, grid: Grid, parts: PSys): boolean {
+  const p = PRESETS.find((q) => q.id === id);
+  if (!p) return false;
   parts.gravityOn = p.gravity;
-  p.build({ parts, line, disc, set });
+  p.build(makeBuilder(grid, parts));
   return true;
+}
+
+/** Build a SURPRISE ME scene into an already cleared playground. */
+export function buildSurprise(plan: SurprisePlan, grid: Grid, parts: PSys): void {
+  const b = makeBuilder(grid, parts);
+  parts.gravityOn = plan.gravity;
+  for (const [x0, y0, x1, y1, mat, thick] of plan.lines) b.line(x0, y0, x1, y1, mat, thick);
+  for (const [x, y, r, mat] of plan.discs) b.disc(x, y, r, mat);
+  for (const [kind, x, y] of plan.forces) parts.placeForce(kind, x, y);
+  for (const [x, y] of plan.portals) parts.placePortal(x, y);
+  for (const e of plan.emitters) parts.addEmitter(e);
 }

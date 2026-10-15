@@ -9,6 +9,7 @@ const PLACEABLE = MATS.filter((m) => m?.placeable).length;
 export interface MenuCallbacks {
   onSandbox(): void;
   onPlayground(): void;
+  onSurprise(): void;
   onChallenge(id: string): void;
   onToggleMute(): void;
   onToggleCrt(): void;
@@ -67,7 +68,7 @@ const TIPS: string[] = [
 
 const KEYS: [string, string][] = [
   ['LMB', 'paint'], ['RMB', 'erase'], ['WHEEL', 'brush size'], ['SPACE', 'pause'],
-  ['N', 'step'], ['F', 'bucket'], ['W', 'wind'], ['M', 'sound'], ['C', 'crt'], ['T', 'theme'], ['ESC', 'menu'],
+  ['R', 'surprise'], ['N', 'step'], ['F', 'bucket'], ['W', 'wind'], ['M', 'sound'], ['C', 'crt'], ['T', 'theme'], ['ESC', 'menu'],
 ];
 
 export function showMenu(cbs: MenuCallbacks): void {
@@ -119,8 +120,11 @@ export function showMenu(cbs: MenuCallbacks): void {
     modeButton('SANDBOX', `Paint ${PLACEABLE} materials. No rules, no timer.`, 'ENTER', true, cbs.onSandbox),
   );
   modes.appendChild(
-    modeButton('PLAYGROUND', 'Fountains, vortices and gravity toys.', 'P', false, cbs.onPlayground),
+    modeButton('PLAYGROUND', 'Fireworks, portals, black holes and musical bumpers.', 'P', false, cbs.onPlayground),
   );
+  const sur = modeButton('SURPRISE ME', 'A brand-new light show, made up on the spot.', 'R', false, cbs.onSurprise);
+  sur.classList.add('surprise');
+  modes.appendChild(sur);
   const tip = h('aside', 'menu-tip');
   tip.appendChild(h('span', 'tip-label', 'TIP'));
   tip.appendChild(h('p', 'tip-text', TIPS[Math.floor(Math.random() * TIPS.length)]));

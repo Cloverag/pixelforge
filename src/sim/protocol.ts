@@ -53,6 +53,7 @@ export type Req =
   | { t: 'pgTime'; scale: number }
   | { t: 'pgClear' }
   | { t: 'pgPreset'; id: string }
+  | { t: 'pgSurprise'; seed: number }
   | { t: 'watch3d'; on: boolean }
   | { t: 'watchFluid'; on: boolean }
   | { t: 'step'; buf: ArrayBuffer }

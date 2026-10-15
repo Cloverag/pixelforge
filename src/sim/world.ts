@@ -1,5 +1,6 @@
 import { RNG, hash2d } from '../core/rng';
-import { buildPreset } from './presets';
+import { buildPreset, buildSurprise } from './presets';
+import { planSurprise } from './surprise';
 import { Grid } from './grid';
 import {
   Cat, GRAINY, LIT, Lit, MATS, Mat, NMATS, OPEN, SHADED, Shade, WIND_SUSC,
@@ -170,6 +171,13 @@ export class World {
   clearPlayground(): void {
     this.clear();
     this.parts?.reset();
+  }
+
+  /** Replace the playground with a SURPRISE ME scene for `seed`. */
+  loadSurprise(seed: number): void {
+    if (!this.parts) return;
+    this.clearPlayground();
+    buildSurprise(planSurprise(seed), this.grid, this.parts);
   }
 
   /** Replace the playground with one of the demo scenes. */

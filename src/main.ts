@@ -12,6 +12,7 @@ import { hideOverlay, showResult, toast } from './ui/widgets';
 import { Mat } from './sim/materials';
 import { PG_BUMPER } from './sim/particles';
 import { PRESET_INFO } from './sim/presets';
+import { planSurprise } from './sim/surprise';
 import { Mode, PaintKind, Req, Res, SIM_H, SIM_W, SimEvents, Stats } from './sim/protocol';
 import { CHALLENGES } from './sim/challenges';
 import { recordStars } from './game/progress';
@@ -474,6 +475,19 @@ function setPgGravity(on: boolean, quiet = false): void {
   toast(`GRAVITY ${on ? 'ON' : 'OFF'}`);
 }
 
+/**
+ * SURPRISE ME: a brand-new generated scene. The seed goes to the worker,
+ * which builds the same plan; main reads the plan only for name and gravity.
+ */
+function surprise(): void {
+  const seed = (Math.random() * 0x7fffffff) | 0;
+  const plan = planSurprise(seed);
+  post({ t: 'pgSurprise', seed });
+  setPgGravity(plan.gravity, true);
+  sfx.ui();
+  toast(`SURPRISE: ${plan.name}`);
+}
+
 /** Replace the playground with a demo scene; it sets its own gravity. */
 function loadPgPreset(id: string): void {
   const p = PRESET_INFO.find((q) => q.id === id);
@@ -573,6 +587,7 @@ function startPlayground(): void {
     onClear: clearPlayground,
     presets: PRESET_INFO.map((p) => [p.id, p.label, p.tip]),
     onPreset: loadPgPreset,
+    onSurprise: surprise,
   });
   hud.setGravityLamp(pgGravityOn);
   hud.setSlowmoLamp(pgSlowmo);
@@ -614,6 +629,11 @@ function openMenu(): void {
       sfx.ensure();
       sfx.ui();
       startPlayground();
+    },
+    onSurprise: () => {
+      sfx.ensure();
+      startPlayground();
+      surprise();
     },
     onChallenge: (id) => {
       sfx.ensure();
@@ -798,6 +818,12 @@ new Input(
         startPlayground();
         return;
       }
+      if (k === 'r') {
+        sfx.ensure();
+        startPlayground();
+        surprise();
+        return;
+      }
     }
     switch (k) {
       case ' ':
@@ -849,6 +875,9 @@ new Input(
         break;
       case 'x':
         if (mode === 'playground' && screen === 'game') clearPlayground();
+        break;
+      case 'r':
+        if (mode === 'playground' && screen === 'game') surprise();
         break;
       default:
         if (/^[1-9]$/.test(k) && screen === 'game' && mode === 'sand') {

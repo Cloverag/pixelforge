@@ -70,6 +70,12 @@ ctx.onmessage = (e: MessageEvent<Req>) => {
       }
       break;
 
+    case 'pgSurprise':
+      w.loadSurprise(msg.seed);
+      forceFull = true;
+      pgWallsDirty = true;
+      break;
+
     case 'pgClear':
       w.clearPlayground();
       forceFull = true; // wipe the trails too
