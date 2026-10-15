@@ -77,6 +77,10 @@ export interface PgStats {
   bumps: number;
   /** bumper notes struck this frame, as [note, x] pairs, one per note */
   notes: number[];
+  /** particles that went through a portal */
+  warps: number;
+  /** portals opened this frame */
+  portalsPlaced: number;
   swallowed: number;
   holes: number;
   vortices: number;
@@ -85,7 +89,7 @@ export interface PgStats {
 }
 
 export function emptyPgStats(): PgStats {
-  return { particles: 0, fountain: 0, hose: 0, sparkler: 0, sparks: 0, fireflies: 0, bumps: 0, notes: [], swallowed: 0, holes: 0, vortices: 0, pulls: 0, rockets: 0 };
+  return { particles: 0, fountain: 0, hose: 0, sparkler: 0, sparks: 0, fireflies: 0, bumps: 0, notes: [], warps: 0, portalsPlaced: 0, swallowed: 0, holes: 0, vortices: 0, pulls: 0, rockets: 0 };
 }
 const BG_R = PG_BG & 255;
 const BG_G = (PG_BG >>> 8) & 255;
@@ -98,6 +102,15 @@ function addSat(a: number, b: number): number {
   const bl = Math.min(255, ((a >>> 16) & 255) + ((b >>> 16) & 255) - BG_B);
   return ((255 << 24) | (Math.max(0, bl) << 16) | (Math.max(0, g) << 8) | Math.max(0, r)) >>> 0;
 }
+
+/** a pair of portals; b is null until the second click links it */
+interface PortalPair {
+  a: { x: number; y: number };
+  b: { x: number; y: number } | null;
+}
+/** portal mouth radius, in cells */
+const PORTAL_R = 6;
+const MAX_PAIRS = 3;
 
 interface Rocket {
   x: number;
@@ -146,6 +159,7 @@ export class PSys {
   forces: Force[] = [];
   gravityOn = true;
   private rockets: Rocket[] = [];
+  private portals: PortalPair[] = [];
   /** walks the rainbow so a fountain stream changes colour over time */
   private hueClock = 0;
   /** called with each firework burst position (for sound and screen flash) */
@@ -155,6 +169,7 @@ export class PSys {
 
   reset(): void {
     this.flash.fill(0);
+    this.portals.length = 0;
     this.n = 0;
     this.forces.length = 0;
     this.rockets.length = 0;
@@ -326,8 +341,52 @@ export class PSys {
     });
   }
 
+  /**
+   * Portals come in pairs: a click opens an orange portal, the next click
+   * its blue partner. Beyond MAX_PAIRS the oldest pair closes.
+   */
+  placePortal(x: number, y: number): void {
+    const last = this.portals[this.portals.length - 1];
+    if (last && !last.b) last.b = { x, y };
+    else {
+      if (this.portals.length >= MAX_PAIRS) this.portals.shift();
+      this.portals.push({ a: { x, y }, b: null });
+    }
+    this.st.portalsPlaced++;
+  }
+
+  /**
+   * Through a portal: a particle inside one mouth leaves the other, just
+   * outside it along its direction of travel, with its velocity unchanged.
+   * Skipped if that spot is inside a wall - the particle would be stuck.
+   */
+  private warp(i: number): void {
+    const x = this.px[i];
+    const y = this.py[i];
+    for (const p of this.portals) {
+      if (!p.b) continue;
+      for (const [from, to] of [[p.a, p.b], [p.b, p.a]] as const) {
+        const dx = x - from.x;
+        const dy = y - from.y;
+        if (dx * dx + dy * dy > PORTAL_R * PORTAL_R) continue;
+        const sp = Math.hypot(this.vx[i], this.vy[i]);
+        const ux = sp > 0.05 ? this.vx[i] / sp : 0;
+        const uy = sp > 0.05 ? this.vy[i] / sp : 1;
+        const nx = to.x + ux * (PORTAL_R + 2);
+        const ny = to.y + uy * (PORTAL_R + 2);
+        if (this.solidAt(nx, ny)) return;
+        this.px[i] = nx;
+        this.py[i] = ny;
+        this.st.warps++;
+        return;
+      }
+    }
+  }
+
   eraseNear(x: number, y: number, r = 14): void {
     this.forces = this.forces.filter((f) => (f.x - x) ** 2 + (f.y - y) ** 2 > r * r);
+    const near = (q: { x: number; y: number } | null) => q !== null && (q.x - x) ** 2 + (q.y - y) ** 2 <= r * r;
+    this.portals = this.portals.filter((p) => !near(p.a) && !near(p.b));
     for (let i = 0; i < this.n; ) {
       const dx = this.px[i] - x;
       const dy = this.py[i] - y;
@@ -425,6 +484,9 @@ export class PSys {
       case 'blackhole':
         if (msg.phase === 'down') this.placeForce(msg.kind, msg.x, msg.y);
         break;
+      case 'portal':
+        if (msg.phase === 'down') this.placePortal(msg.x, msg.y);
+        break;
       case 'erase':
         if (msg.phase !== 'up') {
           this.eraseNear(msg.x, msg.y);
@@ -478,6 +540,11 @@ export class PSys {
     const out: number[] = [];
     for (const f of this.forces)
       out.push(f.kind === 'attract' ? 0 : f.kind === 'repel' ? 1 : f.kind === 'vortex' ? 2 : 3, f.x, f.y);
+    // portals: 4 orange, 5 blue, 6 an orange still waiting for its partner
+    for (const p of this.portals) {
+      out.push(p.b ? 4 : 6, p.a.x, p.a.y);
+      if (p.b) out.push(5, p.b.x, p.b.y);
+    }
     return out;
   }
 
@@ -657,6 +724,7 @@ export class PSys {
       this.py[i] = py;
       this.vx[i] = vx;
       this.vy[i] = vy;
+      if (this.portals.length) this.warp(i);
 
       this.life[i] -= ts;
       const ix = this.px[i] | 0;
@@ -700,6 +768,36 @@ export class PSys {
         if (mx >= 0 && my >= 0 && mx < SIM_W && my < SIM_H)
           pix[my * SIM_W + mx] = addSat(pix[my * SIM_W + mx], col);
       }
+    }
+
+    // portals: a turning ring of light, orange and blue; one still waiting
+    // for its partner pulses dim
+    const pOrange = [255, 150, 60];
+    const pBlue = [80, 180, 255];
+    const ring = (q: { x: number; y: number }, rgb: number[], live: boolean, dir: number) => {
+      const k = live ? 1 : 0.35 + 0.25 * Math.sin(frame * 0.15);
+      for (let j = 0; j < 36; j++) {
+        const a = (j / 36) * Math.PI * 2 + frame * 0.08 * dir;
+        const bright = (j % 6 < 3 ? 1 : 0.55) * k;
+        const col = ((255 << 24) | (((rgb[2] * bright) | 0) << 16) | (((rgb[1] * bright) | 0) << 8) | ((rgb[0] * bright) | 0)) >>> 0;
+        const ix = (q.x + Math.cos(a) * PORTAL_R) | 0;
+        const iy = (q.y + Math.sin(a) * PORTAL_R) | 0;
+        if (ix >= 0 && iy >= 0 && ix < SIM_W && iy < SIM_H) pix[iy * SIM_W + ix] = col;
+      }
+      if (!live) return;
+      // a swirl inside the mouth
+      for (let j = 0; j < 10; j++) {
+        const a = frame * 0.2 * dir + j * 0.9;
+        const rr = 1 + (j % 5);
+        const ix = (q.x + Math.cos(a) * rr) | 0;
+        const iy = (q.y + Math.sin(a) * rr) | 0;
+        const col = ((255 << 24) | (((rgb[2] * 0.6) | 0) << 16) | (((rgb[1] * 0.6) | 0) << 8) | ((rgb[0] * 0.6) | 0)) >>> 0;
+        if (ix >= 0 && iy >= 0 && ix < SIM_W && iy < SIM_H) pix[iy * SIM_W + ix] = col;
+      }
+    };
+    for (const p of this.portals) {
+      ring(p.a, pOrange, p.b !== null, 1);
+      if (p.b) ring(p.b, pBlue, true, -1);
     }
 
     // force markers, animated: attractors pull a ring inward, repulsors

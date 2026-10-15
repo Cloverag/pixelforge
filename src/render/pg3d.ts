@@ -136,6 +136,9 @@ export class PG3D {
       new THREE.MeshBasicMaterial({ color: new THREE.Color(2.4, 0.5, 1.2) }),
       new THREE.MeshBasicMaterial({ color: new THREE.Color(1.6, 2.4, 0.5) }),
       new THREE.MeshBasicMaterial({ color: new THREE.Color(3.2, 1.4, 0.4) }), // black hole's hot ring
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(3.4, 1.5, 0.4) }), // portal, orange
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(0.4, 1.6, 3.6) }), // portal, blue
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(0.9, 0.45, 0.15) }), // portal, waiting
     ];
 
     this.composer = new EffectComposer(r);
@@ -307,7 +310,11 @@ export class PG3D {
       mesh.position.set(toX(forces[k * 3 + 1]), toY(forces[k * 3 + 2]), 0);
       const t = this.frame * 0.05;
       mesh.children[0].visible = kind === 3;
-      if (kind === 3) {
+      if (kind >= 4) {
+        // portals face the camera's side of the stage and turn in opposite senses
+        mesh.rotation.set(0, 0, t * (kind === 5 ? -3 : 3));
+        mesh.scale.setScalar(kind === 6 ? 1.0 + 0.15 * Math.sin(t * 3) : 1.3);
+      } else if (kind === 3) {
         // black hole: a fast-turning ring, tilted like an accretion disc
         mesh.rotation.set(Math.PI / 2.6, 0, t * 4);
         mesh.scale.setScalar(1.5);

@@ -45,6 +45,7 @@ export type PgTool =
   | 'blackhole'
   | 'wall'
   | 'bumper'
+  | 'portal'
   | 'erase';
 
 interface TopbarCallbacks {
@@ -394,6 +395,7 @@ export class Hud {
       ['blackhole', 'BLACK HOLE', 'radial-gradient(circle,#000 0 35%,#ffb36b 40% 55%,#3a2410 60%)', 'FORCES', 'Pulls everything in and swallows it'],
       ['wall', 'WALL', 'linear-gradient(135deg,#a0a0bc 0 50%,#5c5c72 50% 100%)', 'TOOLS', 'Draw a solid barrier'],
       ['bumper', 'BUMPER', 'linear-gradient(135deg,#c8f4ff 0 50%,#5fb0d0 50% 100%)', 'TOOLS', 'A bouncy wall that plays a note when hit - higher up, higher pitch'],
+      ['portal', 'PORTAL', 'linear-gradient(135deg,#ffb066 0 50%,#4cb4ff 50% 100%)', 'TOOLS', 'Click twice to open a linked pair - what goes in one comes out the other'],
       ['erase', 'ERASE', 'linear-gradient(135deg,#ff8a8a 0 50%,#a82c2c 50% 100%)', 'TOOLS', 'Clear walls and particles'],
     ];
     for (const groupName of ['EMITTERS', 'FORCES', 'TOOLS']) {
@@ -422,7 +424,7 @@ export class Hud {
     this.gravityBtn = this.mkBtn('GRAVITY', () => cbs.onGravity?.(), 'Particles fall (G)', true);
     this.gravityBtn.classList.add('toggled');
     this.slowBtn = this.mkBtn('SLOW-MO', () => cbs.onSlowmo?.(), 'Run the playground at a third of the speed (Q)', true);
-    const clearBtn = this.mkBtn('CLEAR', () => cbs.onClear?.(), 'Remove every particle and force (X)');
+    const clearBtn = this.mkBtn('CLEAR', () => cbs.onClear?.(), 'Remove everything: particles, forces, portals, walls and bumpers (X)');
     row.append(this.gravityBtn, this.slowBtn, clearBtn);
     actions.appendChild(row);
     pal.appendChild(actions);

@@ -64,7 +64,9 @@ ctx.onmessage = (e: MessageEvent<Req>) => {
       break;
 
     case 'pgClear':
-      w.parts?.reset();
+      w.clearPlayground();
+      forceFull = true; // wipe the trails too
+      pgWallsDirty = true; // and the 3D view's walls
       break;
 
     case 'pgGravity':

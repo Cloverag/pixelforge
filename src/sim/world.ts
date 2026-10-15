@@ -161,6 +161,16 @@ export class World {
     this.events = emptyEvents();
   }
 
+  /**
+   * The playground's CLEAR: walls and bumpers live in the grid, particles,
+   * forces and portals in the particle system - clearing only the second
+   * left every wall standing.
+   */
+  clearPlayground(): void {
+    this.clear();
+    this.parts?.reset();
+  }
+
   /** Hand over everything that happened since the last call, and reset. */
   takeEvents(): SimEvents {
     const e = this.events;

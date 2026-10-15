@@ -232,5 +232,79 @@ describe('particle playground', () => {
       expect(strikeAt(Mat.WALL, 300).lit).toBe(0);
     });
   });
+
+  describe('portals', () => {
+    /** one particle at (x, y) moving (vx, vy), gravity off */
+    const shoot = (w: World, x: number, y: number, vx: number, vy: number) => {
+      w.parts!.gravityOn = false;
+      (w.parts as unknown as { push: (...a: number[]) => void }).push(x, y, vx, vy, 400, 10);
+    };
+    const one = (w: World) => {
+      const out = new Float32Array(6);
+      w.parts!.pack3d(out);
+      return { x: out[0], y: out[1] };
+    };
+
+    it('what goes into one comes out of the other, still moving the same way', () => {
+      const w = playground();
+      w.parts!.placePortal(200, 180);
+      w.parts!.placePortal(500, 100);
+      shoot(w, 180, 180, 2, 0);
+      run(w, 20);
+      const p = one(w);
+      // came out of the blue portal and kept travelling right
+      expect(p.x).toBeGreaterThan(510);
+      expect(Math.abs(p.y - 100)).toBeLessThan(4);
+      expect(w.parts!.takeStats().warps).toBe(1);
+    });
+
+    it('a portal without its partner does nothing', () => {
+      const w = playground();
+      w.parts!.placePortal(200, 180);
+      shoot(w, 180, 180, 2, 0);
+      run(w, 20);
+      expect(one(w).x).toBeGreaterThan(200);
+      expect(one(w).x).toBeLessThan(240);
+    });
+
+    it('never drops a particle inside a wall', () => {
+      const w = playground();
+      for (let y = 80; y < 120; y++) for (let x = 495; x < 525; x++) w.grid.setXY(x, y, Mat.WALL);
+      w.parts!.placePortal(200, 180);
+      w.parts!.placePortal(500, 100); // exit buried in the wall
+      shoot(w, 180, 180, 2, 0);
+      run(w, 20);
+      expect(one(w).x).toBeLessThan(300);
+    });
+
+    it('erasing one end closes the pair; a fourth pair replaces the oldest', () => {
+      const w = playground();
+      w.parts!.placePortal(100, 100);
+      w.parts!.placePortal(200, 100);
+      w.parts!.eraseNear(200, 100);
+      expect(w.parts!.packForces().length).toBe(0);
+      for (let k = 0; k < 8; k++) w.parts!.placePortal(50 + k * 60, 200);
+      // three complete pairs = six portal markers
+      expect(w.parts!.packForces().length / 3).toBe(6);
+    });
+  });
+
+  it('CLEAR removes walls and bumpers too, not just particles', () => {
+    const w = playground();
+    for (let x = 100; x < 300; x++) {
+      w.grid.setXY(x, 200, Mat.WALL);
+      w.grid.setXY(x, 250, PG_BUMPER);
+    }
+    w.parts!.placePortal(100, 100);
+    w.parts!.placePortal(200, 100);
+    w.parts!.placeForce('vortex', 300, 100);
+    w.parts!.fountain(320, 300);
+    w.clearPlayground();
+    let solid = 0;
+    for (let i = 0; i < w.grid.cells.length; i++) if (w.grid.cells[i] !== Mat.EMPTY) solid++;
+    expect(solid).toBe(0);
+    expect(w.parts!.count).toBe(0);
+    expect(w.parts!.packForces().length).toBe(0);
+  });
 });
 

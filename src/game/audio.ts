@@ -22,6 +22,7 @@ export class Sfx {
   private lastFuse = 0;
   /** last time each bumper note played, so a hose plays a rhythm, not a buzz */
   private noteAt = new Float64Array(16);
+  private lastWarp = 0;
   private lastSwallow = 0;
   /** the playground's continuous voices, built on first use */
   private pg: {
@@ -239,6 +240,8 @@ export class Sfx {
     if (this.muted) return;
     if (st.sparkler > 0) this.crackle(st.sparks * 4 + 300);
     if (st.notes.length) this.bumperNotes(st.notes);
+    if (st.portalsPlaced > 0) this.portalOpen();
+    if (st.warps > 0) this.warp(st.warps);
     if (st.swallowed > 0) this.swallow(st.swallowed);
     if (st.fireflies > 0 && Math.random() < Math.min(0.08, st.fireflies / 900)) this.chime();
   }
@@ -262,6 +265,22 @@ export class Sfx {
       this.blip(f * 3.99, 0.13, 'sine', 0.013, undefined, 0, pan);
       this.blip(f * 2, 0.35, 'triangle', 0.007, undefined, 0, pan);
     }
+  }
+
+  /** a portal opening: a rising whoom with a shimmer on top */
+  private portalOpen(): void {
+    this.blip(90, 0.55, 'sine', 0.08, 420);
+    this.blip(900, 0.4, 'sine', 0.018, 2600);
+    this.noise(0.45, 400, 3500, 0.03, 0, 'bandpass');
+  }
+
+  /** things going through: a soft rising zip, rate-limited */
+  private warp(n: number): void {
+    const now = performance.now();
+    if (now - this.lastWarp < 110) return;
+    this.lastWarp = now;
+    const f = 1200 + Math.random() * 500;
+    this.blip(f, 0.12, 'sine', Math.min(0.03, 0.012 + n * 0.002), f * 1.8);
   }
 
   /** the black hole eating: a short sucking sweep down */

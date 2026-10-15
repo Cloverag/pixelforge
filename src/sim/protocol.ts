@@ -20,6 +20,7 @@ export type PgToolKind =
   | 'repulsor'
   | 'vortex'
   | 'blackhole'
+  | 'portal'
   | 'erase';
 
 export interface PgToolMsg {
