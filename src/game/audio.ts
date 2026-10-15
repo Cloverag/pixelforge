@@ -49,7 +49,23 @@ export class Sfx {
       const d = this.noiseBuf.getChannelData(0);
       for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
     }
-    if (this.ac.state === 'suspended') void this.ac.resume();
+    // a hidden tab stays silent until it is shown again
+    if (this.ac.state === 'suspended' && !document.hidden) void this.ac.resume();
+  }
+
+  /**
+   * Silence the game while its tab is hidden. Without this the playground's
+   * drones and pad kept playing from a background tab, over whatever the
+   * player was listening to (reported, over Spotify).
+   */
+  private onVisibility = (): void => {
+    if (!this.ac) return;
+    if (document.hidden) void this.ac.suspend();
+    else void this.ac.resume();
+  };
+
+  constructor() {
+    document.addEventListener('visibilitychange', this.onVisibility);
   }
 
   /**

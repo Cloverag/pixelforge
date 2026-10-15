@@ -54,8 +54,15 @@ function ensureCtx(): void {
     const d = noiseBuf.getChannelData(0);
     for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
   }
-  if (ac.state === 'suspended') void ac.resume();
+  if (ac.state === 'suspended' && !document.hidden) void ac.resume();
 }
+
+// silent while the tab is hidden, like the sound effects (game/audio.ts)
+document.addEventListener('visibilitychange', () => {
+  if (!ac) return;
+  if (document.hidden) void ac.suspend();
+  else if (on) void ac.resume();
+});
 
 function tone(
   freq: number,
