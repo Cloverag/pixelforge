@@ -1,3 +1,8 @@
+import type { PgStats } from '../sim/particles';
+
+/** pentatonic notes the fireflies chime on (C major pentatonic, octave 5) */
+const CHIME = [523.25, 587.33, 659.25, 783.99, 880.0, 1046.5];
+
 /** Procedural chiptune SFX - no audio assets required. */
 export class Sfx {
   private ac: AudioContext | null = null;
@@ -9,6 +14,19 @@ export class Sfx {
   private lastZap = 0;
   private lastIgnite = 0;
   private lastFuse = 0;
+  private lastBump = 0;
+  private lastSwallow = 0;
+  /** the playground's continuous voices, built on first use */
+  private pg: {
+    jetGain: GainNode;
+    jetFilter: BiquadFilterNode;
+    humGain: GainNode;
+    rumbleGain: GainNode;
+    padGain: GainNode;
+    padFilter: BiquadFilterNode;
+    oscs: OscillatorNode[];
+  } | null = null;
+  private slow = false;
   muted = false;
 
   /** call from a user gesture */
@@ -97,12 +115,182 @@ export class Sfx {
     this.blip(280 + Math.random() * 160, 0.03, 'square', 0.04);
   }
 
+  // ---------- playground sound design ----------
+
+  /** A looping noise source, for voices that hold for as long as they play. */
+  private loopNoise(): AudioBufferSourceNode {
+    const ac = this.ac!;
+    const len = ac.sampleRate * 2;
+    const buf = ac.createBuffer(1, len, ac.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    const src = ac.createBufferSource();
+    src.buffer = buf;
+    src.loop = true;
+    src.start();
+    return src;
+  }
+
+  private buildPg(): void {
+    if (this.pg || !this.ac || !this.master) return;
+    const ac = this.ac;
+    const out = this.master;
+    // water jet: hiss through a band-pass, brighter for the hose
+    const jetFilter = ac.createBiquadFilter();
+    jetFilter.type = 'bandpass';
+    jetFilter.frequency.value = 1600;
+    jetFilter.Q.value = 0.8;
+    const jetGain = ac.createGain();
+    jetGain.gain.value = 0;
+    this.loopNoise().connect(jetFilter).connect(jetGain).connect(out);
+
+    // force hum: two low sines a fifth apart, pulsing slowly
+    const humGain = ac.createGain();
+    humGain.gain.value = 0;
+    const humLfo = ac.createOscillator();
+    const humLfoAmt = ac.createGain();
+    humLfo.frequency.value = 0.7;
+    humLfoAmt.gain.value = 0.3;
+    const humPulse = ac.createGain();
+    humPulse.gain.value = 0.7;
+    humLfo.connect(humLfoAmt).connect(humPulse.gain);
+    const oscs: OscillatorNode[] = [];
+    for (const f of [55, 82.4]) {
+      const o = ac.createOscillator();
+      o.type = 'sine';
+      o.frequency.value = f;
+      o.connect(humPulse);
+      oscs.push(o);
+    }
+    humPulse.connect(humGain).connect(out);
+
+    // black hole: a sub sine under low-passed rumble
+    const rumbleGain = ac.createGain();
+    rumbleGain.gain.value = 0;
+    const rumbleFilter = ac.createBiquadFilter();
+    rumbleFilter.type = 'lowpass';
+    rumbleFilter.frequency.value = 140;
+    this.loopNoise().connect(rumbleFilter).connect(rumbleGain);
+    const sub = ac.createOscillator();
+    sub.frequency.value = 36;
+    sub.connect(rumbleGain);
+    oscs.push(sub);
+    rumbleGain.connect(out);
+
+    // ambient pad: a soft A-major chord whose filter breathes
+    const padFilter = ac.createBiquadFilter();
+    padFilter.type = 'lowpass';
+    padFilter.frequency.value = 700;
+    padFilter.Q.value = 0.6;
+    const padLfo = ac.createOscillator();
+    const padLfoAmt = ac.createGain();
+    padLfo.frequency.value = 0.06;
+    padLfoAmt.gain.value = 380;
+    padLfo.connect(padLfoAmt).connect(padFilter.frequency);
+    const padGain = ac.createGain();
+    padGain.gain.value = 0;
+    for (const f of [110, 164.8, 277.2, 329.6]) {
+      const o = ac.createOscillator();
+      o.type = 'triangle';
+      o.frequency.value = f;
+      o.detune.value = (Math.random() - 0.5) * 10;
+      o.connect(padFilter);
+      oscs.push(o);
+    }
+    padFilter.connect(padGain).connect(out);
+
+    for (const o of [humLfo, padLfo, ...oscs]) o.start();
+    if (this.slow) for (const o of oscs) o.detune.value = -700; // slow-mo already on
+    this.pg = { jetGain, jetFilter, humGain, rumbleGain, padGain, padFilter, oscs };
+  }
+
+  /**
+   * Called every frame in the playground with what the sim did; null when
+   * leaving it. Continuous voices glide toward their new levels; one-shots
+   * (bumps, swallows, sparkler crackle, firefly chimes) fire from counts.
+   */
+  playground(st: PgStats | null): void {
+    if (!this.ac) return;
+    if (st) this.buildPg();
+    const pg = this.pg;
+    if (!pg) return;
+    const t = this.ac.currentTime;
+    const on = st !== null && !this.muted;
+    const glide = (g: AudioParam, v: number) => g.setTargetAtTime(on ? v : 0, t, 0.09);
+    if (!st) {
+      for (const g of [pg.jetGain.gain, pg.humGain.gain, pg.rumbleGain.gain, pg.padGain.gain]) glide(g, 0);
+      return;
+    }
+    const jet = Math.min(1, (st.fountain + st.hose) / 8);
+    glide(pg.jetGain.gain, jet * 0.07);
+    pg.jetFilter.frequency.setTargetAtTime(st.hose > st.fountain ? 2600 : 1500, t, 0.1);
+    glide(pg.humGain.gain, Math.min(0.06, (st.pulls + st.vortices) * 0.018));
+    glide(pg.rumbleGain.gain, Math.min(0.16, st.holes * 0.09));
+    glide(pg.padGain.gain, Math.min(0.04, Math.log2(1 + st.particles) * 0.0032));
+    pg.padFilter.Q.setTargetAtTime(0.6 + Math.min(4, st.vortices), t, 0.3);
+
+    if (this.muted) return;
+    if (st.sparkler > 0) this.crackle(st.sparks * 4 + 300);
+    if (st.bumps > 0) this.bump(st.bumps);
+    if (st.swallowed > 0) this.swallow(st.swallowed);
+    if (st.fireflies > 0 && Math.random() < Math.min(0.08, st.fireflies / 900)) this.chime();
+  }
+
+  /** a glassy tick off a bumper, brighter the more hit at once */
+  private bump(n: number): void {
+    const now = performance.now();
+    if (now - this.lastBump < 45) return;
+    this.lastBump = now;
+    this.blip(2200 + Math.random() * 1600, 0.05, 'triangle', Math.min(0.06, 0.02 + n * 0.004), undefined, 0, Math.random() * 1.4 - 0.7);
+  }
+
+  /** the black hole eating: a short sucking sweep down */
+  private swallow(n: number): void {
+    const now = performance.now();
+    if (now - this.lastSwallow < 180) return;
+    this.lastSwallow = now;
+    this.noise(0.32, 1400, 70, Math.min(0.09, 0.03 + n * 0.006));
+  }
+
+  /** a firefly: one soft pentatonic bell, somewhere in the stereo field */
+  private chime(): void {
+    const f = CHIME[Math.floor(Math.random() * CHIME.length)];
+    const pan = Math.random() * 1.6 - 0.8;
+    this.blip(f, 0.9, 'sine', 0.025, undefined, 0, pan);
+    this.blip(f * 2, 0.5, 'sine', 0.008, undefined, 0, pan);
+  }
+
+  /** after a burst: a scatter of tiny pops as the sparks burn out */
+  crackleTail(pan = 0): void {
+    if (!this.ac || this.muted) return;
+    const n = 16 + Math.floor(Math.random() * 14);
+    for (let k = 0; k < n; k++) {
+      const delay = 180 + Math.random() * 1300;
+      const p = Math.max(-1, Math.min(1, pan + (Math.random() - 0.5) * 0.8));
+      this.noise(0.015 + Math.random() * 0.02, 5000, 2000, 0.015 + Math.random() * 0.03, p, 'bandpass', delay);
+    }
+  }
+
+  /** slow-mo: a tape-stop whoosh, and the drones drop a fifth while it lasts */
+  slowmo(on: boolean): void {
+    this.slow = on;
+    if (this.pg && this.ac) {
+      const t = this.ac.currentTime;
+      for (const o of this.pg.oscs) o.detune.setTargetAtTime(on ? -700 : 0, t, 0.25);
+    }
+    if (on) this.noise(0.7, 3200, 160, 0.09);
+    else this.noise(0.5, 300, 3000, 0.07, 0, 'lowpass');
+  }
+
   ui(): void {
     this.blip(640, 0.05, 'square', 0.05);
   }
 
+  /** a rocket going up: a rising whistle over a little hiss */
   fireworkLaunch(): void {
-    this.blip(200, 0.25, 'square', 0.06, 700);
+    this.blip(700, 0.85, 'sine', 0.045, 2300);
+    this.blip(1400, 0.85, 'sine', 0.012, 4600);
+    this.noise(0.6, 4500, 1500, 0.025, 0, 'highpass');
   }
 
   /** Something caught fire: a soft whoosh, louder for a bigger flare-up. */

@@ -99,9 +99,12 @@ void main() {
     c = pow(max(c, 0.0), vec3(2.2));
     float a = texelFetch(uFrame, p, 0).a;
     if (abs(a - 253.0 / 255.0) < 0.002) {
-      // a wall: dim on its own, lit by whatever glows nearby
-      vec3 L = texture(uLight, vUv).rgb;
-      c *= 0.28 + 2.4 * L;
+      // A wall: dim on its own, lit by whatever glows nearby - but kept below
+      // the bloom threshold. Lit by last frame's bloom and allowed to bloom
+      // itself, a wall beside a bright source fed itself until the float
+      // buffer overflowed and NaN spread black across the screen.
+      vec3 L = min(texture(uLight, vUv).rgb, vec3(1.0));
+      c = min(c * (0.28 + 2.4 * L), vec3(0.6));
     } else {
       // particles are light sources: push bright cores past 1.0 so they bloom
       float l = dot(c, vec3(0.2126, 0.7152, 0.0722));

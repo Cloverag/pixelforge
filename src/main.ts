@@ -10,6 +10,7 @@ import { Hud, PgTool } from './ui/hud';
 import { showMenu } from './ui/menu';
 import { hideOverlay, showResult, toast } from './ui/widgets';
 import { Mat } from './sim/materials';
+import { PG_BUMPER } from './sim/particles';
 import { Mode, PaintKind, Req, Res, SIM_H, SIM_W, SimEvents, Stats } from './sim/protocol';
 import { CHALLENGES } from './sim/challenges';
 import { recordStars } from './game/progress';
@@ -249,6 +250,8 @@ function restoreGrid(): void {
 }
 let challengeId: string | null = null;
 let pgHeld = false;
+/** steps sent, for tools that emit on a slower beat than every step */
+let frameNo = 0;
 let lastPg = { x: 240, y: 128 };
 let strokeLast: { x: number; y: number } | null = null;
 let resultOpen = false;
@@ -261,6 +264,7 @@ function playEvents(ev: SimEvents): void {
     const pan = (b[k] / SIM_W) * 2 - 1;
     sfx.boom(b[k + 2], pan);
     juice.boom(b[k], b[k + 1], b[k + 2]);
+    if (mode === 'playground') sfx.crackleTail(pan);
     if (pgView?.visible) pgView.flash(b[k], b[k + 1]);
   }
   if (ev.fuses) sfx.fuse();
@@ -300,6 +304,8 @@ worker.onmessage = (e: MessageEvent<Res>) => {
     if (r.pgWalls && pgView) pgView.setWalls(new Uint8Array(r.pgWalls));
     if (r.events) playEvents(r.events);
     if (r.parts !== undefined) hud.setParticles(r.parts);
+    // the playground's sound follows the sim; leaving it fades the voices out
+    sfx.playground(r.pgStats ?? null);
     if (r.counts) sfx.crackle(r.counts[Mat.FIRE] + r.counts[Mat.EMBER]);
     if (r.counts && r.used && r.budget) {
       hud.updateStats({
@@ -384,16 +390,13 @@ function loop(now: number): void {
       sendStep();
       acc -= STEP_MS;
       guard++;
-      if (
-        mode === 'playground' &&
-        pgHeld &&
-        pgTool === 'fountain'
-      ) {
-        post({
-          t: 'pg',
-          tool: { kind: 'fountain', x: lastPg.x, y: lastPg.y, phase: 'move' },
-        });
+      if (mode === 'playground' && pgHeld && HELD_TOOLS.has(pgTool)) {
+        // fireflies trickle out; the jets fire every step
+        const kind = pgTool as 'fountain' | 'sparkler' | 'hose' | 'fireflies';
+        if (kind !== 'fireflies' || frameNo % 8 === 0)
+          post({ t: 'pg', tool: { kind, x: lastPg.x, y: lastPg.y, phase: 'move' } });
       }
+      frameNo++;
     }
   } else {
     acc = 0;
@@ -456,6 +459,31 @@ function paintAt(e: PointerEvt, forcedMat?: number): void {
   if (paused && !inFlight) sendStep(); // visual feedback while paused
 }
 
+/** Tools that keep emitting while the button is held, even standing still. */
+const HELD_TOOLS = new Set<PgTool>(['fountain', 'sparkler', 'hose', 'fireflies']);
+
+let pgSlowmo = false;
+
+function setPgGravity(on: boolean): void {
+  pgGravityOn = on;
+  post({ t: 'pgGravity', on });
+  hud.setGravityLamp(on);
+  sfx.ui();
+  toast(`GRAVITY ${on ? 'ON' : 'OFF'}`);
+}
+
+function setPgSlowmo(on: boolean): void {
+  pgSlowmo = on;
+  post({ t: 'pgTime', scale: on ? 0.33 : 1 });
+  hud.setSlowmoLamp(on);
+  sfx.slowmo(on);
+}
+
+function clearPlayground(): void {
+  post({ t: 'pgClear' });
+  sfx.ui();
+}
+
 function pgAt(e: PointerEvt, forced?: PgTool): void {
   const tool: PgTool = forced ?? (e.button === 2 ? 'erase' : pgTool);
   if (e.phase === 'up') {
@@ -463,13 +491,13 @@ function pgAt(e: PointerEvt, forced?: PgTool): void {
     return;
   }
   lastPg = { x: e.x, y: e.y };
-  if (tool === 'wall') {
-    paintAt(e, Mat.WALL);
+  if (tool === 'wall' || tool === 'bumper') {
+    paintAt(e, tool === 'bumper' ? PG_BUMPER : Mat.WALL);
     return;
   }
   const kind =
     tool === 'attract' ? 'attractor' : tool === 'repel' ? 'repulsor' : tool;
-  pgHeld = tool === 'fountain';
+  pgHeld = HELD_TOOLS.has(tool);
   post({
     t: 'pg',
     tool: { kind, x: e.x, y: e.y, phase: e.phase },
@@ -528,7 +556,12 @@ function startPlayground(): void {
       pgTool = t;
       sfx.ui();
     },
+    onGravity: () => setPgGravity(!pgGravityOn),
+    onSlowmo: () => setPgSlowmo(!pgSlowmo),
+    onClear: clearPlayground,
   });
+  hud.setGravityLamp(pgGravityOn);
+  hud.setSlowmoLamp(pgSlowmo);
   enterGame('PARTICLE PLAYGROUND');
 }
 
@@ -552,6 +585,7 @@ function startChallenge(id: string): void {
 }
 
 function openMenu(): void {
+  sfx.playground(null); // no frames in the menu, so nothing else would fade it
   screen = 'menu';
   strokeLast = null;
   pgHeld = false;
@@ -636,6 +670,8 @@ function togglePause(): void {
   paused = !paused;
   hud.setPaused(paused);
   sfx.ui();
+  // paused: no frames arrive, so fade the playground's voices explicitly
+  if (paused) sfx.playground(null);
 }
 
 function stepOnce(): void {
@@ -792,11 +828,13 @@ new Input(
           setPaintKind(paintKind === 'wind' ? 'brush' : 'wind');
         break;
       case 'g':
-        if (mode === 'playground' && screen === 'game') {
-          pgGravityOn = !pgGravityOn;
-          post({ t: 'pgGravity', on: pgGravityOn });
-          toast(`GRAVITY ${pgGravityOn ? 'ON' : 'OFF'}`);
-        }
+        if (mode === 'playground' && screen === 'game') setPgGravity(!pgGravityOn);
+        break;
+      case 'q':
+        if (mode === 'playground' && screen === 'game') setPgSlowmo(!pgSlowmo);
+        break;
+      case 'x':
+        if (mode === 'playground' && screen === 'game') clearPlayground();
         break;
       default:
         if (/^[1-9]$/.test(k) && screen === 'game' && mode === 'sand') {

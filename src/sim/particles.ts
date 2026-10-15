@@ -9,7 +9,7 @@ const MAXV = 5;
 const GRAVITY = 0.09;
 
 interface Force {
-  kind: 'attract' | 'repel' | 'vortex';
+  kind: 'attract' | 'repel' | 'vortex' | 'hole';
   x: number;
   y: number;
   str: number;
@@ -42,6 +42,34 @@ for (let k = 0; k < RAINBOW_N; k++) {
 }
 
 export const PG_BG = u32('#0b0b14');
+
+/** particle kinds */
+const PK_PLAIN = 0;
+const PK_SPARK = 1;
+const PK_FIREFLY = 2;
+
+/** the playground's bouncy wall is painted as GLASS: it reads as a bumper */
+export const PG_BUMPER = Mat.GLASS;
+
+/** Playground activity since the last frame, for the sound design. */
+export interface PgStats {
+  particles: number;
+  fountain: number;
+  hose: number;
+  sparkler: number;
+  sparks: number;
+  fireflies: number;
+  bumps: number;
+  swallowed: number;
+  holes: number;
+  vortices: number;
+  pulls: number;
+  rockets: number;
+}
+
+export function emptyPgStats(): PgStats {
+  return { particles: 0, fountain: 0, hose: 0, sparkler: 0, sparks: 0, fireflies: 0, bumps: 0, swallowed: 0, holes: 0, vortices: 0, pulls: 0, rockets: 0 };
+}
 const BG_R = PG_BG & 255;
 const BG_G = (PG_BG >>> 8) & 255;
 const BG_B = (PG_BG >>> 16) & 255;
@@ -78,7 +106,21 @@ export class PSys {
   private vz = new Float32Array(CAP);
   private life = new Float32Array(CAP);
   private hue = new Uint8Array(CAP);
+  /** what a particle is: PK_* (plain, spark, firefly) */
+  private kind = new Uint8Array(CAP);
   private rng = new RNG(987654321);
+  private frame = 0;
+  /** this frame's black holes, for dimming what falls in */
+  private holes: Force[] = [];
+  /** 1 = normal speed; slow-mo runs the playground at a fraction of it */
+  timeScale = 1;
+  /** last hose point and direction, so a held hose keeps spraying its way */
+  private hoseX = -1;
+  private hoseY = -1;
+  private hoseDx = 0;
+  private hoseDy = -1;
+  /** activity since the last takeStats(), for the sound design */
+  private st = emptyPgStats();
 
   forces: Force[] = [];
   gravityOn = true;
@@ -96,13 +138,34 @@ export class PSys {
     this.rockets.length = 0;
   }
 
+  /** Hand over activity counters since the last call, and reset them. */
+  takeStats(): PgStats {
+    const s = this.st;
+    let fireflies = 0;
+    let sparks = 0;
+    for (let i = 0; i < this.n; i++) {
+      if (this.kind[i] === PK_FIREFLY) fireflies++;
+      else if (this.kind[i] === PK_SPARK) sparks++;
+    }
+    s.particles = this.n;
+    s.fireflies = fireflies;
+    s.sparks = sparks;
+    s.holes = this.forces.filter((f) => f.kind === 'hole').length;
+    s.vortices = this.forces.filter((f) => f.kind === 'vortex').length;
+    s.pulls = this.forces.filter((f) => f.kind === 'attract' || f.kind === 'repel').length;
+    s.rockets = this.rockets.length;
+    this.st = emptyPgStats();
+    return s;
+  }
+
   get count(): number {
     return this.n;
   }
 
-  private push(x: number, y: number, vx: number, vy: number, life: number, hue: number, z = 0, vz = 0): void {
+  private push(x: number, y: number, vx: number, vy: number, life: number, hue: number, z = 0, vz = 0, kind = PK_PLAIN): void {
     if (this.n >= CAP) return;
     const i = this.n++;
+    this.kind[i] = kind;
     this.px[i] = x;
     this.py[i] = y;
     this.pz[i] = z;
@@ -121,6 +184,63 @@ export class PSys {
       const sp = 1.5 + this.rng.next() * 2.5;
       const hue = (base + this.rng.int(4)) % RAINBOW_N;
       this.push(x, y, Math.cos(a) * sp, Math.sin(a) * sp, 90 + this.rng.range(30, 90), hue, 0, (this.rng.next() - 0.5) * 1.2);
+    }
+    this.st.fountain += 4;
+  }
+
+  /** Sparkler: short-lived gold sparks spat in every direction. */
+  sparkler(x: number, y: number): void {
+    for (let k = 0; k < 7; k++) {
+      const a = this.rng.next() * Math.PI * 2;
+      const cz = this.rng.next() * 2 - 1;
+      const rxy = Math.sqrt(1 - cz * cz);
+      const sp = 1.5 + this.rng.next() * 3.5;
+      const hue = 6 + this.rng.int(6); // orange through gold
+      this.push(x, y, Math.cos(a) * rxy * sp, Math.sin(a) * rxy * sp, 8 + this.rng.int(16), hue, 0, cz * sp, PK_SPARK);
+    }
+    this.st.sparkler += 7;
+  }
+
+  /**
+   * Hose: sprays the way the pointer is moving; held still, it keeps the
+   * last direction (straight up to begin with).
+   */
+  hose(x: number, y: number, phase: 'down' | 'move' | 'up'): void {
+    if (phase === 'down' || this.hoseX < 0) {
+      this.hoseX = x;
+      this.hoseY = y;
+    }
+    const dx = x - this.hoseX;
+    const dy = y - this.hoseY;
+    const d = Math.hypot(dx, dy);
+    if (d > 2) {
+      this.hoseDx = dx / d;
+      this.hoseDy = dy / d;
+      this.hoseX = x;
+      this.hoseY = y;
+    }
+    this.hueClock = (this.hueClock + 0.2) % RAINBOW_N;
+    for (let k = 0; k < 5; k++) {
+      const sp = 3.6 + this.rng.next() * 1.4;
+      const jx = (this.rng.next() - 0.5) * 0.5;
+      const jy = (this.rng.next() - 0.5) * 0.5;
+      const hue = ((this.hueClock | 0) + this.rng.int(3)) % RAINBOW_N;
+      this.push(x, y, (this.hoseDx + jx) * sp, (this.hoseDy + jy) * sp, 110 + this.rng.int(60), hue, 0, (this.rng.next() - 0.5) * 0.8);
+    }
+    this.st.hose += 5;
+  }
+
+  /** Fireflies: slow, wandering, blinking, and they ignore gravity. */
+  fireflies(x: number, y: number): void {
+    for (let k = 0; k < 5; k++) {
+      const a = this.rng.next() * Math.PI * 2;
+      const r = this.rng.next() * 10;
+      const hue = 13 + this.rng.int(8); // warm yellow-green
+      this.push(
+        x + Math.cos(a) * r, y + Math.sin(a) * r,
+        (this.rng.next() - 0.5) * 0.6, (this.rng.next() - 0.5) * 0.6,
+        700 + this.rng.int(700), hue, (this.rng.next() - 0.5) * 30, (this.rng.next() - 0.5) * 0.3, PK_FIREFLY,
+      );
     }
   }
 
@@ -165,21 +285,22 @@ export class PSys {
       this.vy[i] = Math.sin(a) * rxy * sp;
       this.vz[i] = cz * sp;
       this.life[i] = 50 + this.rng.range(20, 70);
+      this.kind[i] = PK_PLAIN;
       // mostly one colour, a few sparks from the far side of the wheel
       this.hue[i] = this.rng.chance(0.75) ? (baseHue + this.rng.int(3)) % RAINBOW_N : (baseHue + RAINBOW_N / 2) % RAINBOW_N;
     }
     this.onBurst?.(x, y);
   }
 
-  placeForce(kind: 'attractor' | 'repulsor' | 'vortex', x: number, y: number): void {
+  placeForce(kind: 'attractor' | 'repulsor' | 'vortex' | 'blackhole', x: number, y: number): void {
     if (this.forces.length >= 8) this.forces.shift();
     const internal: Force['kind'] =
-      kind === 'attractor' ? 'attract' : kind === 'repulsor' ? 'repel' : 'vortex';
+      kind === 'attractor' ? 'attract' : kind === 'repulsor' ? 'repel' : kind === 'blackhole' ? 'hole' : 'vortex';
     this.forces.push({
       kind: internal,
       x,
       y,
-      str: internal === 'vortex' ? 0.5 : 0.28,
+      str: internal === 'vortex' ? 0.5 : internal === 'hole' ? 0.7 : 0.28,
     });
   }
 
@@ -203,6 +324,7 @@ export class PSys {
     this.vz[i] = this.vz[last];
     this.life[i] = this.life[last];
     this.hue[i] = this.hue[last];
+    this.kind[i] = this.kind[last];
   }
 
   private solidAt(x: number, y: number): boolean {
@@ -210,10 +332,47 @@ export class PSys {
     return this.grid.cells[(y | 0) * SIM_W + (x | 0)] !== Mat.EMPTY;
   }
 
+  /** How much speed a bounce off (x, y) keeps: bumpers give it all back. */
+  private restitution(x: number, y: number): number {
+    if (x < 0 || y < 0 || x >= SIM_W || y >= SIM_H) return 0.55;
+    return this.grid.cells[(y | 0) * SIM_W + (x | 0)] === PG_BUMPER ? 1.0 : 0.55;
+  }
+
+  /**
+   * Brightness multiplier for a particle this frame: fireflies blink, sparks
+   * flicker, everything else is steady.
+   */
+  private glow(i: number): number {
+    const k = this.kind[i];
+    let g = 1;
+    if (k === PK_FIREFLY) {
+      const s = Math.sin(this.frame * 0.07 + (this.hue[i] * 1.7 + i * 0.37));
+      g = 0.12 + 0.95 * Math.max(0, s) ** 3;
+    } else if (k === PK_SPARK) {
+      g = 0.7 + this.rng.next() * 0.7;
+    }
+    // Matter dims as it falls into a black hole. Without this everything
+    // it gathered piled up additively into a white sun over a black core.
+    for (const h of this.holes) {
+      const d = Math.hypot(this.px[i] - h.x, this.py[i] - h.y);
+      if (d < 26) g *= Math.max(0.05, (d - 5) / 21);
+    }
+    return g;
+  }
+
   tool(msg: PgToolMsg): void {
     switch (msg.kind) {
       case 'fountain':
         if (msg.phase !== 'up') this.fountain(msg.x, msg.y);
+        break;
+      case 'sparkler':
+        if (msg.phase !== 'up') this.sparkler(msg.x, msg.y);
+        break;
+      case 'hose':
+        if (msg.phase !== 'up') this.hose(msg.x, msg.y, msg.phase);
+        break;
+      case 'fireflies':
+        if (msg.phase !== 'up') this.fireflies(msg.x, msg.y);
         break;
       case 'firework':
         if (msg.phase === 'down') this.launch(msg.x, msg.y);
@@ -221,8 +380,8 @@ export class PSys {
       case 'attractor':
       case 'repulsor':
       case 'vortex':
-        if (msg.phase === 'down')
-          this.placeForce(msg.kind as 'attractor' | 'repulsor' | 'vortex', msg.x, msg.y);
+      case 'blackhole':
+        if (msg.phase === 'down') this.placeForce(msg.kind, msg.x, msg.y);
         break;
       case 'erase':
         if (msg.phase !== 'up') {
@@ -258,9 +417,9 @@ export class PSys {
       out[o + 2] = this.pz[i];
       const v2 = this.vx[i] * this.vx[i] + this.vy[i] * this.vy[i] + this.vz[i] * this.vz[i];
       const hot = Math.min(0.55, v2 / 30);
-      const fade = Math.min(1, this.life[i] / 40);
+      const fade = this.kind[i] === PK_FIREFLY ? 1 : Math.min(1, this.life[i] / 40);
       const c = RAINBOW[this.hue[i]];
-      const gain = 2.2 * fade;
+      const gain = 2.2 * fade * this.glow(i);
       const ch = (v: number) => {
         const s = (v + (255 - v) * hot) / 255;
         return s * s * gain; // ~sRGB -> linear, then over-bright
@@ -275,13 +434,18 @@ export class PSys {
   /** Force markers for the 3D view: [kind 0/1/2, x, y] triples. */
   packForces(): number[] {
     const out: number[] = [];
-    for (const f of this.forces) out.push(f.kind === 'attract' ? 0 : f.kind === 'repel' ? 1 : 2, f.x, f.y);
+    for (const f of this.forces)
+      out.push(f.kind === 'attract' ? 0 : f.kind === 'repel' ? 1 : f.kind === 'vortex' ? 2 : 3, f.x, f.y);
     return out;
   }
 
   /** decay trails -> integrate -> rasterize heads */
   fullRender(pix: Uint32Array, forceFull: boolean, frame: number): void {
     if (forceFull) pix.fill(PG_BG);
+    this.frame = frame;
+    this.holes = this.forces.filter((f) => f.kind === 'hole');
+    const ts = this.timeScale;
+    const drag = 1 - (1 - DRAG) * ts;
 
     // Trail decay, toward the background. Scaling toward black instead left
     // trails darker than the background - a black wedge under every fountain.
@@ -313,10 +477,10 @@ export class PSys {
     for (let k = this.rockets.length - 1; k >= 0; k--) {
       const r = this.rockets[k];
       r.vx = Math.max(-0.6, Math.min(0.6, r.vx + (this.rng.next() - 0.5) * 0.15));
-      r.x += r.vx;
-      r.y += r.vy;
-      r.vy *= 0.985;
-      if (this.rng.chance(0.8)) this.push(r.x, r.y + 1, (this.rng.next() - 0.5) * 0.4, 0.6, 18 + this.rng.int(14), (r.hue + 2) % RAINBOW_N);
+      r.x += r.vx * ts;
+      r.y += r.vy * ts;
+      r.vy *= 1 - 0.015 * ts;
+      if (this.rng.chance(0.8 * ts)) this.push(r.x, r.y + 1, (this.rng.next() - 0.5) * 0.4, 0.6, 18 + this.rng.int(14), (r.hue + 2) % RAINBOW_N);
       if (r.y <= r.ty || r.vy > -0.6 || this.solidAt(r.x, r.y)) {
         this.firework(r.x, r.y, r.hue);
         this.rockets.splice(k, 1);
@@ -332,38 +496,68 @@ export class PSys {
     for (let i = 0; i < this.n; i++) {
       let vx = this.vx[i];
       let vy = this.vy[i];
+      const firefly = this.kind[i] === PK_FIREFLY;
 
-      if (this.gravityOn) vy += GRAVITY;
+      if (firefly) {
+        // wander, unhurried, and never fall
+        vx = (vx + (this.rng.next() - 0.5) * 0.14 * ts) * (1 - 0.04 * ts);
+        vy = (vy + (this.rng.next() - 0.5) * 0.14 * ts) * (1 - 0.04 * ts);
+      } else if (this.gravityOn) {
+        vy += GRAVITY * (this.kind[i] === PK_SPARK ? 0.5 : 1) * ts;
+      }
 
+      let swallowed = false;
       for (const f of this.forces) {
         const dx = f.x - this.px[i];
         const dy = f.y - this.py[i];
         const d2 = dx * dx + dy * dy;
-        const R = 130;
+        const R = f.kind === 'hole' ? 120 : 130;
         if (d2 > R * R || d2 < 1) continue;
         const d = Math.sqrt(d2);
         const falloff = 1 - d / R;
         const ux = dx / d;
         const uy = dy / d;
+        const k = f.str * falloff * ts;
         if (f.kind === 'attract') {
-          vx += ux * f.str * falloff * 2;
-          vy += uy * f.str * falloff * 2;
+          vx += ux * k * 2;
+          vy += uy * k * 2;
         } else if (f.kind === 'repel') {
-          vx -= ux * f.str * falloff * 2;
-          vy -= uy * f.str * falloff * 2;
+          vx -= ux * k * 2;
+          vy -= uy * k * 2;
+        } else if (f.kind === 'vortex') {
+          vx += -uy * k * 3;
+          vy += ux * k * 3;
         } else {
-          vx += -uy * f.str * falloff * 3;
-          vy += ux * f.str * falloff * 3;
+          // black hole: a hard pull with a swirl, so matter spirals in
+          if (d < 7) {
+            swallowed = true;
+            break;
+          }
+          vx += ux * k * 3 - uy * k * 1.1;
+          vy += uy * k * 3 + ux * k * 1.1;
+          // Close in, matter loses energy (the accretion disc). Without it a
+          // particle moving 5 cells a frame skipped past the core and
+          // slingshot into a permanent orbit instead of falling in.
+          if (d < 30) {
+            vx *= 1 - 0.08 * ts;
+            vy *= 1 - 0.08 * ts;
+          }
         }
       }
+      if (swallowed) {
+        this.st.swallowed++;
+        this.kill(i);
+        i--;
+        continue;
+      }
 
-      vx *= DRAG;
-      vy *= DRAG;
+      vx *= drag;
+      vy *= drag;
       // depth: drag, an attractor pulls toward its plane, and a soft wall
       // keeps the cloud from drifting off the stage
-      let vz = this.vz[i] * DRAG;
-      for (const f of this.forces) if (f.kind === 'attract') vz -= this.pz[i] * 0.004;
-      this.pz[i] += vz;
+      let vz = this.vz[i] * drag;
+      for (const f of this.forces) if (f.kind === 'attract' || f.kind === 'hole') vz -= this.pz[i] * 0.004 * ts;
+      this.pz[i] += vz * ts;
       if (this.pz[i] > 70 || this.pz[i] < -70) vz = -vz * 0.5;
       this.vz[i] = vz;
       const spd2 = vx * vx + vy * vy;
@@ -373,16 +567,40 @@ export class PSys {
         vy *= s;
       }
 
-      // axis-separated collision with painted walls
-      const nx = this.px[i] + vx;
-      const ny = this.py[i] + vy;
+      // Axis-separated collision with painted walls, in sub-steps of at most
+      // one cell: moving up to MAXV cells at once, a particle jumped clean
+      // over a one-cell wall (measured: through a bumper to the screen's
+      // bottom). Bumpers give back all the speed.
       let bounced = false;
-      if (!this.solidAt(nx, this.py[i])) this.px[i] = nx;
-      else { this.vx[i] = -vx * 0.55; bounced = true; }
-      if (!this.solidAt(this.px[i], ny)) this.py[i] = ny;
-      else { this.vy[i] = -vy * 0.55; bounced = true; }
+      const steps = Math.max(1, Math.ceil(Math.max(Math.abs(vx), Math.abs(vy)) * ts));
+      let sx = (vx * ts) / steps;
+      let sy = (vy * ts) / steps;
+      let px = this.px[i];
+      let py = this.py[i];
+      for (let k = 0; k < steps; k++) {
+        if (!this.solidAt(px + sx, py)) px += sx;
+        else {
+          const e = this.restitution(px + sx, py);
+          vx = -vx * e;
+          sx = -sx * e;
+          bounced = true;
+          if (e >= 1) this.st.bumps++;
+        }
+        if (!this.solidAt(px, py + sy)) py += sy;
+        else {
+          const e = this.restitution(px, py + sy);
+          vy = -vy * e;
+          sy = -sy * e;
+          bounced = true;
+          if (e >= 1) this.st.bumps++;
+        }
+      }
+      this.px[i] = px;
+      this.py[i] = py;
+      this.vx[i] = vx;
+      this.vy[i] = vy;
 
-      this.life[i] -= 1;
+      this.life[i] -= ts;
       const ix = this.px[i] | 0;
       const iy = this.py[i] | 0;
       const oob =
@@ -403,7 +621,7 @@ export class PSys {
       const y = this.py[i] | 0;
       if (x < 0 || y < 0 || x >= SIM_W || y >= SIM_H) continue;
       const idx = y * SIM_W + x;
-      const fade = Math.min(1, this.life[i] / 40);
+      const fade = (this.kind[i] === PK_FIREFLY ? 1 : Math.min(1, this.life[i] / 40)) * this.glow(i);
       const v2 = this.vx[i] * this.vx[i] + this.vy[i] * this.vy[i];
       // fast particles run white-hot; dying ones fade into the background
       const hot = Math.min(0.55, v2 / 30);
@@ -414,7 +632,9 @@ export class PSys {
       r = BG_R + (r - BG_R) * fade;
       gr = BG_G + (gr - BG_G) * fade;
       b = BG_B + (b - BG_B) * fade;
-      const col = ((255 << 24) | ((b | 0) << 16) | ((gr | 0) << 8) | (r | 0)) >>> 0;
+      // clamp: a flickering spark brighter than full would carry into the
+      // next byte - and the top byte is the alpha tag the composite reads
+      const col = ((255 << 24) | (Math.min(255, b | 0) << 16) | (Math.min(255, gr | 0) << 8) | Math.min(255, r | 0)) >>> 0;
       pix[idx] = addSat(pix[idx], col);
       if (v2 > 4) {
         const mx = (x - this.vx[i] * 0.5) | 0;
@@ -434,7 +654,19 @@ export class PSys {
       const iy = y | 0;
       if (ix >= 0 && iy >= 0 && ix < SIM_W && iy < SIM_H) pix[iy * SIM_W + ix] = col;
     };
+    const mHole = u32('#ffb36b');
     for (const f of this.forces) {
+      if (f.kind === 'hole') {
+        // a black core inside a turning ring of hot matter
+        for (let dy = -3; dy <= 3; dy++)
+          for (let dx = -3; dx <= 3; dx++) if (dx * dx + dy * dy <= 9) dot(f.x + dx, f.y + dy, 0xff000000);
+        for (let k = 0; k < 28; k++) {
+          const a = frame * 0.12 + (k / 28) * Math.PI * 2;
+          const rr = 5 + (k & 1);
+          dot(f.x + Math.cos(a) * rr, f.y + Math.sin(a) * rr * 0.55, k % 4 === 0 ? 0xffe8f6ff : mHole);
+        }
+        continue;
+      }
       const col = f.kind === 'attract' ? mA : f.kind === 'repel' ? mR : mV;
       dot(f.x, f.y, col);
       if (f.kind === 'vortex') {

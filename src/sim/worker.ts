@@ -59,6 +59,14 @@ ctx.onmessage = (e: MessageEvent<Req>) => {
       if (msg.tool.kind === 'erase') pgWallsDirty = true;
       break;
 
+    case 'pgTime':
+      if (w.parts) w.parts.timeScale = msg.scale;
+      break;
+
+    case 'pgClear':
+      w.parts?.reset();
+      break;
+
     case 'pgGravity':
       if (w.parts) w.parts.gravityOn = msg.on;
       break;
@@ -105,6 +113,7 @@ ctx.onmessage = (e: MessageEvent<Req>) => {
         shake: w.shake,
         events: w.takeEvents(),
         parts: w.mode === 'playground' ? w.parts?.count : undefined,
+        pgStats: w.mode === 'playground' ? w.parts?.takeStats() : undefined,
         result: w.challenge && w.challenge.done ? w.challenge.result : null,
       };
       const transfer = [msg.buf];

@@ -1126,6 +1126,7 @@ kbd, .mode-key {
 /* --- brush tool row: BUCKET / WIND share one line --- */
 .toolbtns {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
 }
 .toolbtns .px {

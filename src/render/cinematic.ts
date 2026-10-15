@@ -25,6 +25,9 @@ uniform float uThreshold;
 uniform float uKnee;
 void main() {
   vec3 c = texture(uSrc, vUv).rgb;
+  // one bad pixel must not poison every mip below it
+  if (any(isnan(c)) || any(isinf(c))) c = vec3(0.0);
+  c = min(c, vec3(64.0));
   float br = max(c.r, max(c.g, c.b));
   // soft knee: no hard edge where bloom starts
   float soft = clamp(br - uThreshold + uKnee, 0.0, 2.0 * uKnee);
@@ -101,6 +104,7 @@ void main() {
   s.g = texture(uScene, vUv).g;
   s.b = texture(uScene, vUv - d * ca).b;
   vec3 hdr = s + texture(uBloom, vUv).rgb * uBloomGain;
+  if (any(isnan(hdr)) || any(isinf(hdr))) hdr = vec3(0.0);
   vec3 c = aces(hdr * uExposure);
   c = pow(c, vec3(1.0 / 2.2));
   // vignette: a soft darkening toward the corners

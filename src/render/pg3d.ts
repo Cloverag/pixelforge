@@ -48,6 +48,8 @@ export class PG3D {
   private nextLight = 0;
   private markers: THREE.Mesh[] = [];
   private markerGeo = new THREE.TorusGeometry(5, 0.7, 8, 32);
+  private coreGeo = new THREE.SphereGeometry(3.2, 20, 14);
+  private coreMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
   private markerMats: THREE.MeshBasicMaterial[];
   private raycaster = new THREE.Raycaster();
   private plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
@@ -133,6 +135,7 @@ export class PG3D {
       new THREE.MeshBasicMaterial({ color: new THREE.Color(0.4, 2.2, 2.0) }),
       new THREE.MeshBasicMaterial({ color: new THREE.Color(2.4, 0.5, 1.2) }),
       new THREE.MeshBasicMaterial({ color: new THREE.Color(1.6, 2.4, 0.5) }),
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(3.2, 1.4, 0.4) }), // black hole's hot ring
     ];
 
     this.composer = new EffectComposer(r);
@@ -288,6 +291,10 @@ export class PG3D {
     const nf = forces.length / 3;
     while (this.markers.length < nf) {
       const mesh = new THREE.Mesh(this.markerGeo, this.markerMats[0]);
+      // a black core, shown only for black holes
+      const core = new THREE.Mesh(this.coreGeo, this.coreMat);
+      core.visible = false;
+      mesh.add(core);
       this.scene.add(mesh);
       this.markers.push(mesh);
     }
@@ -299,7 +306,12 @@ export class PG3D {
       mesh.material = this.markerMats[kind];
       mesh.position.set(toX(forces[k * 3 + 1]), toY(forces[k * 3 + 2]), 0);
       const t = this.frame * 0.05;
-      if (kind === 2) {
+      mesh.children[0].visible = kind === 3;
+      if (kind === 3) {
+        // black hole: a fast-turning ring, tilted like an accretion disc
+        mesh.rotation.set(Math.PI / 2.6, 0, t * 4);
+        mesh.scale.setScalar(1.5);
+      } else if (kind === 2) {
         mesh.rotation.set(t * 0.7, t * 1.3, t * 2.2); // vortex tumbles
         mesh.scale.setScalar(1);
       } else {

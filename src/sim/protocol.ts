@@ -13,9 +13,13 @@ export const CHUNKS_Y = SIM_H / CHUNK;
 export type PgToolKind =
   | 'fountain'
   | 'firework'
+  | 'sparkler'
+  | 'hose'
+  | 'fireflies'
   | 'attractor'
   | 'repulsor'
   | 'vortex'
+  | 'blackhole'
   | 'erase';
 
 export interface PgToolMsg {
@@ -45,6 +49,8 @@ export type Req =
   | { t: 'paint'; pts: number[]; mat: number; size: number; kind?: PaintKind }
   | { t: 'pg'; tool: PgToolMsg }
   | { t: 'pgGravity'; on: boolean }
+  | { t: 'pgTime'; scale: number }
+  | { t: 'pgClear' }
   | { t: 'watch3d'; on: boolean }
   | { t: 'watchFluid'; on: boolean }
   | { t: 'step'; buf: ArrayBuffer }
@@ -99,6 +105,8 @@ export interface Res {
   pgForces?: number[];
   /** 3D playground: wall mask at half resolution, sent only when it changes */
   pgWalls?: ArrayBuffer;
+  /** playground activity this frame, for the sound design */
+  pgStats?: import('./particles').PgStats;
   result?: ChallengeResult | null;
   save?: SaveData | null;
   /** downsampled material map for the 3D view and the fluid (transferable) */

@@ -75,6 +75,8 @@ function buildContent(box: HTMLElement): void {
     ['SPACE', 'pause / resume'],
     ['N', 'single step while paused'],
     ['G', 'toggle gravity (playground)'],
+    ['Q', 'slow motion (playground)'],
+    ['X', 'clear all particles and forces (playground)'],
     ['M / C', 'mute sfx / CRT filter'],
     ['B', 'grid view - chunky blocks, cycles size'],
     ['3', 'toggle 3D voxel view'],

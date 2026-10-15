@@ -36,10 +36,15 @@ const CAT_ORDER: [number, string][] = [
 export type PgTool =
   | 'fountain'
   | 'firework'
+  | 'sparkler'
+  | 'hose'
+  | 'fireflies'
   | 'attract'
   | 'repel'
   | 'vortex'
+  | 'blackhole'
   | 'wall'
+  | 'bumper'
   | 'erase';
 
 interface TopbarCallbacks {
@@ -66,6 +71,9 @@ interface SandPaletteCallbacks {
 
 interface PgPaletteCallbacks {
   onTool(tool: PgTool): void;
+  onGravity?(): void;
+  onSlowmo?(): void;
+  onClear?(): void;
 }
 
 export class Hud {
@@ -90,6 +98,16 @@ export class Hud {
   };
   /** the playground counts particles, not cells */
   private particleMode = false;
+  private gravityBtn: HTMLButtonElement | null = null;
+  private slowBtn: HTMLButtonElement | null = null;
+
+  setGravityLamp(on: boolean): void {
+    this.gravityBtn?.classList.toggle('toggled', on);
+  }
+
+  setSlowmoLamp(on: boolean): void {
+    this.slowBtn?.classList.toggle('toggled', on);
+  }
 
   setParticles(n: number): void {
     if (!this.status) return;
@@ -367,10 +385,15 @@ export class Hud {
     const tools: [PgTool, string, string, string, string][] = [
       ['fountain', 'FOUNTAIN', 'linear-gradient(135deg,#7fd8ff 0 50%,#2b7fd4 50% 100%)', 'EMITTERS', 'Streams particles upward from the cursor'],
       ['firework', 'FIREWORK', 'linear-gradient(135deg,#ffe97f 0 50%,#ff9a2b 50% 100%)', 'EMITTERS', 'Launches a rocket that bursts where you click'],
+      ['sparkler', 'SPARKLER', 'linear-gradient(135deg,#fff3b0 0 50%,#ffb22b 50% 100%)', 'EMITTERS', 'Hold for a crackle of gold sparks'],
+      ['hose', 'HOSE', 'linear-gradient(135deg,#9fe8ff 0 50%,#3b8cff 50% 100%)', 'EMITTERS', 'Drag to spray the way you are moving'],
+      ['fireflies', 'FIREFLIES', 'linear-gradient(135deg,#f4ff9f 0 50%,#9fd43b 50% 100%)', 'EMITTERS', 'Release slow, blinking fireflies'],
       ['attract', 'ATTRACT', 'linear-gradient(135deg,#9ff7ea 0 50%,#2ea996 50% 100%)', 'FORCES', 'Pulls nearby particles in'],
       ['repel', 'REPULSE', 'linear-gradient(135deg,#ffa8c6 0 50%,#d43e77 50% 100%)', 'FORCES', 'Pushes nearby particles away'],
       ['vortex', 'VORTEX', 'linear-gradient(135deg,#e0f79f 0 50%,#8fc42b 50% 100%)', 'FORCES', 'Swirls particles around the cursor'],
+      ['blackhole', 'BLACK HOLE', 'radial-gradient(circle,#000 0 35%,#ffb36b 40% 55%,#3a2410 60%)', 'FORCES', 'Pulls everything in and swallows it'],
       ['wall', 'WALL', 'linear-gradient(135deg,#a0a0bc 0 50%,#5c5c72 50% 100%)', 'TOOLS', 'Draw a solid barrier'],
+      ['bumper', 'BUMPER', 'linear-gradient(135deg,#c8f4ff 0 50%,#5fb0d0 50% 100%)', 'TOOLS', 'A bouncy wall: particles keep all their speed'],
       ['erase', 'ERASE', 'linear-gradient(135deg,#ff8a8a 0 50%,#a82c2c 50% 100%)', 'TOOLS', 'Clear walls and particles'],
     ];
     for (const groupName of ['EMITTERS', 'FORCES', 'TOOLS']) {
@@ -392,6 +415,18 @@ export class Hud {
       group.appendChild(grid);
       pal.appendChild(group);
     }
+    // world-wide actions: things that are not a brush
+    const actions = h('div', 'matgroup');
+    actions.appendChild(h('span', 'glabel', 'ACTIONS'));
+    const row = h('div', 'toolbtns');
+    this.gravityBtn = this.mkBtn('GRAVITY', () => cbs.onGravity?.(), 'Particles fall (G)', true);
+    this.gravityBtn.classList.add('toggled');
+    this.slowBtn = this.mkBtn('SLOW-MO', () => cbs.onSlowmo?.(), 'Run the playground at a third of the speed (Q)', true);
+    const clearBtn = this.mkBtn('CLEAR', () => cbs.onClear?.(), 'Remove every particle and force (X)');
+    row.append(this.gravityBtn, this.slowBtn, clearBtn);
+    actions.appendChild(row);
+    pal.appendChild(actions);
+
     this.toolbar.appendChild(pal);
     this.buildBrushCol(brush, false);
     this.selectTool(initial, cbs);
