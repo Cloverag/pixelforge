@@ -65,3 +65,23 @@ describe('torch lights a fuse', () => {
   });
 
 });
+
+describe('FIRE WATCH', () => {
+  const splash = (at: number) => (w: World, f: number) => {
+    if (f === at) w.paint([540, 322], Mat.WATER, 24);
+  };
+
+  it('is lost if nobody fights the fire', () => {
+    expect(play('firefighter', idle)?.status).toBe('lose');
+  });
+
+  it('is won with three stars by flooding the hedge early', () => {
+    const r = play('firefighter', splash(0));
+    expect(r?.status).toBe('win');
+    expect(r?.stars).toBe(3);
+  });
+
+  it('is lost when the water comes too late', () => {
+    expect(play('firefighter', splash(330))?.status).toBe('lose');
+  });
+});

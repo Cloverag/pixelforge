@@ -1,5 +1,5 @@
 import type { World } from './world';
-import { Mat } from './materials';
+import { Flora, Mat } from './materials';
 import { SIM_H, SIM_W } from './protocol';
 
 export interface SourceDef {
@@ -100,6 +100,14 @@ function tree(w: World, x: number, baseY: number, h: number): void {
   fillRect(w, x - 4, baseY - h - 8, x + 4, baseY - h, Mat.PLANT);
 }
 
+/**
+ * FIRE WATCH: hedge and bush leaves (of 503) still standing for 3 and 2
+ * stars. Measured with one big splash on the hedge: at frame 0 it saves 168,
+ * at 120 145, at 240 75, at 285 23; at 300 the fire is already through.
+ */
+const LEAVES_3_STAR = 140;
+const LEAVES_2_STAR = 70;
+
 // ---------- challenges (laid out for 640x360) ----------
 
 export const CHALLENGES: ChallengeDef[] = [
@@ -143,7 +151,7 @@ export const CHALLENGES: ChallengeDef[] = [
     id: 'firefighter',
     name: 'FIRE WATCH',
     desc: 'Lightning hit the east grove. Save the village before it burns.',
-    hint: 'Drop water directly on embers. Wet wood does not burn.',
+    hint: 'The fire runs along the hedge. Flood the hedge ahead of it.',
     allowed: [Mat.WATER],
     timeLimit: 7200,
     loseReason: 'The village burned down',
@@ -154,24 +162,35 @@ export const CHALLENGES: ChallengeDef[] = [
       house(w, 440, 278, 75, 59);
       tree(w, 80, 336, 48);
       tree(w, 123, 336, 37);
-      tree(w, 587, 336, 50);
+      // the east grove, canopies touching, then a bush and a low hedge that
+      // run along the ground to the last house: left alone, the fire walks
+      // into the village; water on the hedge is a firebreak
+      for (const [x, h] of [[581, 46], [593, 50], [605, 42]] as const) tree(w, x, 336, h);
       tree(w, 624, 336, 39);
-      // ignition point
+      // bush and hedge are leaves (FLORA), not PLANT: plants drink water and
+      // grow into it, so watering a PLANT hedge grew more fuel; leaves just
+      // get wet, and a puddle on them is a firebreak
+      for (let y = 312; y <= 336; y++)
+        for (let x = 562; x <= 575; x++) w.grid.setXY(x, y, Mat.FLORA, (x + y) % 3 ? Flora.LEAF : Flora.LEAF_DARK);
+      for (let y = 334; y <= 336; y++)
+        for (let x = 515; x <= 561; x++) w.grid.setXY(x, y, Mat.FLORA, (x + y) % 3 ? Flora.LEAF : Flora.LEAF_DARK);
+      // lightning strikes the grove: the fire starts inside a canopy
       for (let i = 0; i < 6; i++)
-        w.grid.setXY(595 + (i % 3), 290 - ((i / 3) | 0) * 3, Mat.FIRE, 30 + i * 4);
+        w.grid.setXY(591 + (i % 3), 300 - ((i / 3) | 0) * 3, Mat.FIRE, 30 + i * 4);
     },
+    // The rules are about the fire, not the wood: wood here smoulders
+    // rather than burns, so a "keep N wood" rule could never be lost and
+    // the level was won by watching. A flame reaching a house loses; a
+    // fire that is out before it does wins; stars are the hedge saved.
     check(w, _frame, _used) {
-      const wood = w.grid.counts[Mat.WOOD];
-      const burning =
-        w.grid.counts[Mat.FIRE] + w.grid.counts[Mat.EMBER];
-      if (wood < 1550) return 'lose';
-      if (burning === 0 && wood >= 1550) return 'win';
+      if (countIn(w, 150, 250, 516, 336, Mat.FIRE) + countIn(w, 150, 250, 516, 336, Mat.EMBER) > 0) return 'lose';
+      if (w.grid.counts[Mat.FIRE] + w.grid.counts[Mat.EMBER] === 0) return 'win';
       return 'running';
     },
     stars(w) {
-      const wood = w.grid.counts[Mat.WOOD];
-      if (wood >= 2100) return 3;
-      if (wood >= 1800) return 2;
+      const leaves = countIn(w, 515, 312, 575, 336, Mat.FLORA);
+      if (leaves >= LEAVES_3_STAR) return 3;
+      if (leaves >= LEAVES_2_STAR) return 2;
       return 1;
     },
   },
