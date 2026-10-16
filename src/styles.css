@@ -1481,40 +1481,6 @@ kbd, .mode-key {
 .react-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 .emote { position: absolute; z-index: 6; pointer-events: none; }
-.emote.pop {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  translate: -50% -100%;
-  animation: emote-rise 2.4s cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
-}
-.emote-face {
-  display: grid;
-  place-items: center;
-  width: 56px;
-  height: 56px;
-  font-size: 34px;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--who) 28%, rgba(10, 10, 16, 0.8));
-  border: 3px solid var(--who);
-  box-shadow: 0 0 22px color-mix(in srgb, var(--who) 75%, transparent);
-}
-.emote-who {
-  margin-top: 4px;
-  padding: 2px 6px;
-  font-size: 9px;
-  letter-spacing: 1px;
-  color: #111;
-  background: var(--who);
-  border-radius: 3px;
-}
-@keyframes emote-rise {
-  0% { transform: translateY(10px) scale(0.3); opacity: 0; }
-  12% { transform: translateY(0) scale(1.2); opacity: 1; }
-  22% { transform: translateY(-4px) scale(1); }
-  80% { opacity: 1; }
-  100% { transform: translateY(-80px) scale(0.95); opacity: 0; }
-}
 .emote.ping { width: 0; height: 0; animation: ping-life 3.2s linear forwards; }
 .ping-ring {
   position: absolute;
@@ -1558,42 +1524,53 @@ kbd, .mode-key {
 }
 @keyframes ping-life { 0%, 85% { opacity: 1; } 100% { opacity: 0; } }
 
-.react-feed {
+/* a reaction on a player's cursor: a speech bubble above the arrow */
+.peer-bubble {
   position: absolute;
-  left: 14px;
-  bottom: 14px;
-  z-index: 6;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  pointer-events: none;
+  left: 4px;
+  bottom: 6px;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  font-size: 24px;
+  line-height: 1;
+  background: var(--panel);
+  border: 2px solid currentColor;
+  border-radius: 14px 14px 14px 3px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
+  transform-origin: 0% 100%;
+  animation: bubble-life 2.6s cubic-bezier(0.2, 0.8, 0.3, 1) forwards;
 }
-.feed-line {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 10px 5px 8px;
-  font-size: 10px;
-  letter-spacing: 1px;
-  color: var(--ink);
-  background: color-mix(in srgb, var(--panel) 90%, transparent);
-  border-left: 4px solid var(--who);
-  border-radius: 3px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
-  animation: feed-in 0.2s var(--ease-out);
-  transition: opacity 0.5s;
+@keyframes bubble-life {
+  0% { transform: scale(0.2); opacity: 0; }
+  10% { transform: scale(1.18); opacity: 1; }
+  18% { transform: scale(1); }
+  85% { transform: scale(1); opacity: 1; }
+  100% { transform: translateY(-10px) scale(0.9); opacity: 0; }
 }
-.feed-line.fading { opacity: 0; }
-.feed-icon { font-size: 15px; line-height: 1; }
-@keyframes feed-in { from { transform: translateX(-12px); opacity: 0; } }
+/* ...and on their avatar in the room badge */
+.room-avatar { transition: background 0.2s; }
+.room-avatar.reacting {
+  font-size: 13px;
+  background: var(--panel-3) !important;
+  box-shadow: 0 0 0 2px var(--who), 0 0 10px var(--who);
+  animation: avatar-pop 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.4);
+}
+.room-avatar.reacting.held { animation: none; }
+@keyframes avatar-pop {
+  0% { transform: scale(0.5); }
+  60% { transform: scale(1.35); }
+  100% { transform: scale(1); }
+}
 @media (prefers-reduced-motion: reduce) {
-  .emote.pop { animation: ping-life 2.4s linear forwards; }
+  .peer-bubble { animation: ping-life 2.6s linear forwards; }
+  .room-avatar.reacting { animation: none; }
   .ping-ring { animation: none; opacity: 1; }
 }
 @media (max-width: 720px), (max-height: 520px) and (orientation: landscape) {
   .react-bar { bottom: 8px; padding: 3px; }
   .react-btn { min-width: 32px; height: 32px; font-size: 17px; }
-  .react-feed { left: 8px; bottom: 52px; }
 }
 
 /* playground demo scenes: two columns of small buttons */

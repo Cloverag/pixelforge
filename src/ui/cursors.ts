@@ -21,8 +21,12 @@ const STALE_MS = 4000;
 
 const SVG = 'http://www.w3.org/2000/svg';
 
+/** how long a reaction bubble stays on a cursor or avatar */
+export const REACT_MS = 2600;
+
 interface Remote {
   el: HTMLElement;
+  bubble: HTMLElement | null;
   arrow: SVGPathElement;
   tool: HTMLElement;
   label: HTMLElement;
@@ -85,7 +89,7 @@ export class CursorLayer {
       label.className = 'peer-name';
       el.append(tool, svg, label);
       this.host().appendChild(el);
-      r = { el, arrow: path, tool, label, seen: 0, k: '' };
+      r = { el, arrow: path, tool, label, seen: 0, k: '', bubble: null };
       this.remotes.set(id, r);
       this.timer ??= setInterval(() => this.sweep(), 1000);
     }
@@ -95,6 +99,7 @@ export class CursorLayer {
     r.label.textContent = c.n;
     r.label.style.background = c.c;
     r.arrow.setAttribute('fill', c.c);
+    r.el.style.color = c.c; // the reaction bubble's border
 
     const canvas = document.getElementById('screen') as HTMLCanvasElement | null;
     if (!canvas || c.hidden) {
@@ -126,6 +131,28 @@ export class CursorLayer {
     const colour = k === 'b' && mat ? css(mat.ramp[0]) : k === 'e' ? '#ff8a8a' : c.c;
     t.style.color = colour;
     t.style.borderColor = colour;
+  }
+
+  /**
+   * A reaction, as a speech bubble on this player's cursor: it moves with
+   * them, so it reads as theirs. If their cursor is off the canvas the
+   * room badge's avatar carries it instead.
+   */
+  react(id: string, emoji: string): void {
+    const r = this.remotes.get(id);
+    if (!r) return;
+    r.bubble?.remove();
+    const b = document.createElement('div');
+    b.className = 'peer-bubble';
+    b.textContent = emoji;
+    b.addEventListener('animationend', () => {
+      b.remove();
+      if (r.bubble === b) r.bubble = null;
+    });
+    r.el.appendChild(b);
+    r.bubble = b;
+    // a reaction is a sign of life: keep the cursor visible while it shows
+    r.seen = performance.now();
   }
 
   private sweep(): void {

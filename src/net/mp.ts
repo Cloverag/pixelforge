@@ -37,8 +37,8 @@ export interface MpHooks {
   onCursor(id: string, c: CursorMsg | null): void;
   /** guest: the host dropped out and we are waiting for it to come back */
   onWaiting(waiting: boolean): void;
-  /** someone reacted (an emoji, or a ping); mine is true for my own */
-  onEmote(e: EmoteMsg, mine: boolean): void;
+  /** someone reacted (an emoji, or a ping); from is their peer id, null for mine */
+  onEmote(e: EmoteMsg, from: string | null): void;
 }
 
 /** a guest waits this long for a host that dropped (reloaded, lost signal) */
@@ -158,8 +158,8 @@ export class MpSession {
     const snap = room.makeAction<Uint8Array>('s');
     const emo = room.makeAction<EmoteMsg>('e');
     this.sendEmote = (e) => void emo.send(e);
-    emo.onMessage = (e) => {
-      if (!this.ended) this.hooks.onEmote(e, false);
+    emo.onMessage = (e, { peerId }) => {
+      if (!this.ended) this.hooks.onEmote(e, peerId);
     };
     const cur = room.makeAction<CursorMsg>('c');
     this.sendCursor = (c, to) => void cur.send(c, to ? { target: to } : undefined);
@@ -302,7 +302,7 @@ export class MpSession {
     if (this.ended || now - this.lastEmote < 300) return false;
     this.lastEmote = now;
     const msg: EmoteMsg = { e, x, y, n: this.me.name, c: this.me.color };
-    this.hooks.onEmote(msg, true);
+    this.hooks.onEmote(msg, null);
     this.sendEmote(msg);
     return true;
   }

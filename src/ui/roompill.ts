@@ -11,6 +11,10 @@ export class RoomPill {
   private codeEl!: HTMLElement;
   private roleEl!: HTMLElement;
   private dots!: HTMLElement;
+  /** reactions showing on avatars: player id ('me' for me) -> emoji, until */
+  private reacting = new Map<string, { emoji: string; until: number }>();
+  private lastMe: Identity | null = null;
+  private lastPeers: PeerInfo[] = [];
   onCopy: () => void = () => {};
   /** the player renamed themselves */
   onRename: (name: string) => void = () => {};
@@ -52,19 +56,51 @@ export class RoomPill {
   /** Me first, then everyone else, as coloured initials. */
   setRoster(me: Identity, peers: PeerInfo[]): void {
     this.el ??= this.build();
+    this.lastMe = me;
+    this.lastPeers = peers;
     this.dots.replaceChildren();
-    const dot = (p: Identity, title: string, self = false) => {
+    const now = performance.now();
+    const dot = (id: string, p: Identity, title: string, self = false) => {
       const d = document.createElement('span');
       d.className = 'room-avatar' + (self ? ' self' : '');
       d.style.background = p.color;
-      d.textContent = initials(p.name);
+      d.style.setProperty('--who', p.color);
       d.title = title;
+      d.dataset.id = id;
+      // the roster redraws every few seconds (ping): keep a reaction showing
+      const r = this.reacting.get(id);
+      if (r && r.until > now) {
+        d.classList.add('reacting', 'held');
+        d.textContent = r.emoji;
+      } else {
+        d.textContent = initials(p.name);
+      }
       this.dots.appendChild(d);
       return d;
     };
-    const self = dot(me, `${me.name} (you) - click to rename`, true);
+    const self = dot('me', me, `${me.name} (you) - click to rename`, true);
     self.onclick = () => this.rename(me.name);
-    for (const p of peers) dot(p, p.ping >= 0 ? `${p.name} - ${p.ping} ms` : p.name);
+    for (const p of peers) dot(p.id, p, p.ping >= 0 ? `${p.name} - ${p.ping} ms` : p.name);
+  }
+
+  /** A player (null: me) reacted: their avatar becomes the emoji for a moment. */
+  react(id: string | null, emoji: string, ms: number): void {
+    const key = id ?? 'me';
+    this.reacting.set(key, { emoji, until: performance.now() + ms });
+    const d = this.dots?.querySelector<HTMLElement>(`[data-id="${CSS.escape(key)}"]`);
+    if (d) {
+      d.textContent = emoji;
+      d.classList.remove('reacting', 'held');
+      void d.offsetWidth; // restart the pop if it was already reacting
+      d.classList.add('reacting');
+    }
+    setTimeout(() => {
+      const r = this.reacting.get(key);
+      if (r && r.until <= performance.now() + 30) {
+        this.reacting.delete(key);
+        if (this.lastMe) this.setRoster(this.lastMe, this.lastPeers);
+      }
+    }, ms);
   }
 
   /** An inline name field in place of the avatars; Enter saves, Esc cancels. */

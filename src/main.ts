@@ -16,10 +16,10 @@ import { planSurprise } from './sim/surprise';
 import { MpSession, newRoomCode, roomFromUrl, roomUrl, type MpHooks } from './net/mp';
 import type { NetInput, Snapshot } from './sim/protocol';
 import { RoomPill } from './ui/roompill';
-import { CursorLayer } from './ui/cursors';
+import { CursorLayer, REACT_MS } from './ui/cursors';
 import { confirmDialog, isDialogOpen, nameDialog } from './ui/dialog';
 import { EmoteLayer } from './ui/emotes';
-import { PING } from './net/presence';
+import { EMOTES, PING } from './net/presence';
 import { myIdentity, saveIdentity } from './net/presence';
 import { Mode, PaintKind, Req, Res, SIM_H, SIM_W, SimEvents, Stats } from './sim/protocol';
 import { CHALLENGES } from './sim/challenges';
@@ -462,9 +462,15 @@ const mpHooks: MpHooks = {
   },
   onCursor: (id, c) => cursors.update(id, c),
   onWaiting: (on) => roomPill.setWaiting(on),
-  onEmote: (e, mine) => {
-    emotes.show(e, mine);
-    if (!document.hidden) sfx.emote(e.e === PING);
+  onEmote: (e, from) => {
+    // on the person: their cursor bubble and their avatar; a ping also
+    // marks the spot it points at
+    const emoji = e.e === PING ? '📍' : (EMOTES[e.e] ?? '❔');
+    if (from) cursors.react(from, emoji);
+    roomPill.react(from, emoji, REACT_MS);
+    emotes.ping(e);
+    if (document.hidden) emotes.noteHidden();
+    else sfx.emote(e.e === PING);
   },
 };
 
