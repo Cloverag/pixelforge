@@ -15,7 +15,14 @@ export class RNG {
   }
 
   next(): number {
-    let t = (this.s += 0x6d2b79f5);
+    // Wrapped to 32 bits on every call. It used to grow unbounded as a plain
+    // number: past 2^53 (~5 million draws, a few minutes of a busy world)
+    // the addition started rounding and the sequence silently changed. A
+    // multiplayer guest restored with the 32-bit state kept the true
+    // sequence, so host and guest diverged around frame 2400. The output
+    // only ever used the low 32 bits, so every sequence is unchanged.
+    this.s = (this.s + 0x6d2b79f5) >>> 0;
+    let t = this.s;
     t = Math.imul(t ^ (t >>> 15), t | 1);
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
