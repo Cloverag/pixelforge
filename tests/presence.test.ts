@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { initials, myIdentity, PLAYER_COLORS } from '../src/net/presence';
+import { cleanName, initials, myIdentity, PLAYER_COLORS } from '../src/net/presence';
 
 const store = new Map<string, string>();
 beforeEach(() => {
@@ -29,5 +29,13 @@ describe('player identity', () => {
   it('shortens a name to initials', () => {
     expect(initials('SANDY FOX')).toBe('SF');
     expect(initials('X')).toBe('X');
+  });
+
+  it('cleans a typed name: capitals, digits, single spaces, 14 max', () => {
+    expect(cleanName('lava queen!!')).toBe('LAVA QUEEN');
+    expect(cleanName('  a   b  ')).toBe('A B');
+    expect(cleanName('<script>x</script>')).toBe('SCRIPTXSCRIPT');
+    expect(cleanName('abcdefghijklmnopqrstuvwxyz')).toHaveLength(14);
+    expect(cleanName('!!!')).toBe('');
   });
 });

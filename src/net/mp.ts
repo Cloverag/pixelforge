@@ -50,7 +50,7 @@ const PING_MS = 3000;
 /** host -> guests: my world's fingerprint at frame f */
 type HashMsg = { t: 'hash'; f: number; h: number; p?: number[] };
 const PART_NAMES = ['cells', 'meta', 'clock', 'wake', 'wind', 'rng', 'frame'];
-type HostMsg = Wire | { t: 'host' } | HashMsg;
+type HostMsg = Wire | { t: 'host' } | HashMsg | { t: 'closing' };
 
 /** result of comparing fingerprints with the host */
 export interface SyncStats {
@@ -171,6 +171,11 @@ export class MpSession {
         // the host listens to guests' inputs and repair requests only
         if (m.t === 'input') this.host.receive(m);
         else if (m.t === 'resync') void this.welcome(peerId, true);
+        return;
+      }
+      if (m.t === 'closing') {
+        // the host left on purpose: no point waiting for it
+        if (peerId === this.hostId) this.end('THE HOST CLOSED THE ROOM - THE WORLD IS YOURS NOW');
         return;
       }
       if (m.t === 'host') {
@@ -361,6 +366,13 @@ export class MpSession {
 
   leave(): void {
     if (this.ended) return;
+    // a host leaving on purpose says so, so guests do not wait for a reload
+    if (this.host) {
+      this.sendWire({ t: 'closing' });
+      const room = this.room;
+      this.room = null;
+      setTimeout(() => void room?.leave(), 250);
+    }
     this.ended = true;
     if (this.joinTimer) clearTimeout(this.joinTimer);
     if (this.pingTimer) clearInterval(this.pingTimer);

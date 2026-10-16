@@ -17,6 +17,7 @@ import { MpSession, newRoomCode, roomFromUrl, roomUrl, type MpHooks } from './ne
 import type { NetInput, Snapshot } from './sim/protocol';
 import { RoomPill } from './ui/roompill';
 import { CursorLayer } from './ui/cursors';
+import { confirmDialog, isDialogOpen, nameDialog } from './ui/dialog';
 import { myIdentity, saveIdentity } from './net/presence';
 import { Mode, PaintKind, Req, Res, SIM_H, SIM_W, SimEvents, Stats } from './sim/protocol';
 import { CHALLENGES } from './sim/challenges';
@@ -494,6 +495,13 @@ function hostingCode(): string | null {
  * input only reports drags), at most every 50 ms, hidden off the canvas.
  */
 let pointerDown = false;
+let pointerButton = 0;
+/** what the player is holding, as the cursor channel spells it */
+function toolCode(): 'b' | 'e' | 'w' | 'f' {
+  if (paintKind === 'wind') return 'w';
+  if (paintKind === 'flood') return 'f';
+  return selMat === -1 || selMat === Mat.EMPTY || (pointerDown && pointerButton === 2) ? 'e' : 'b';
+}
 let lastCursorAt = 0;
 let cursorPending: { x: number; y: number; hidden: boolean } | null = null;
 function shareCursor(x: number, y: number, hidden: boolean): void {
@@ -502,7 +510,7 @@ function shareCursor(x: number, y: number, hidden: boolean): void {
   const now = performance.now();
   if (now - lastCursorAt < 50) return;
   lastCursorAt = now;
-  mp.cursor({ ...cursorPending, s: brush, m: selMat < 0 ? 0 : selMat, d: pointerDown && !hidden });
+  mp.cursor({ ...cursorPending, s: brush, m: selMat < 0 ? 0 : selMat, d: pointerDown && !hidden, k: toolCode() });
   cursorPending = null;
 }
 addEventListener('pointermove', (e: PointerEvent) => {
@@ -517,12 +525,27 @@ addEventListener('pointermove', (e: PointerEvent) => {
     !inside,
   );
 });
-addEventListener('pointerdown', () => (pointerDown = true));
+addEventListener('pointerdown', (e: PointerEvent) => {
+  pointerDown = true;
+  pointerButton = e.button;
+});
 addEventListener('pointerup', () => (pointerDown = false));
 
 /** Open a room from the current sandbox, as host, and copy its link. */
+/** Ask who the player is before they appear to anyone. */
+async function askName(title: string, action: string): Promise<boolean> {
+  const who = await nameDialog({ title, action, me });
+  if (!who) return false;
+  me.name = who.name;
+  me.color = who.color;
+  saveIdentity(me);
+  return true;
+}
+
 async function hostRoom(reuse?: string): Promise<void> {
   if (mp) return;
+  // a host reopening after a refresh is already named
+  if (!reuse && !(await askName('OPEN A ROOM', 'OPEN ROOM'))) return;
   mpGate = true;
   const code = reuse ?? newRoomCode();
   try {
@@ -545,6 +568,11 @@ async function hostRoom(reuse?: string): Promise<void> {
 async function joinRoom(code: string): Promise<void> {
   if (mp) return;
   startSandbox();
+  if (!(await askName(`JOIN ROOM ${code}`, 'JOIN'))) {
+    history.replaceState(null, '', location.pathname);
+    toast('NOT JOINED - PLAYING SOLO');
+    return;
+  }
   toast(`JOINING ROOM ${code}...`);
   try {
     mp = await MpSession.join(code, mpHooks, me);
@@ -823,6 +851,23 @@ function startChallenge(id: string): void {
   toast(def.hint);
 }
 
+/** ESC / MENU: in a room, make sure first - leaving takes you out of it. */
+async function requestMenu(): Promise<void> {
+  if (mp) {
+    const host = mp.role === 'host';
+    const ok = await confirmDialog({
+      title: 'LEAVE THE ROOM?',
+      body: host
+        ? 'You are the host: the room closes for everyone when you leave.'
+        : 'You can come back any time with the same link.',
+      ok: 'LEAVE',
+      cancel: 'STAY',
+    });
+    if (!ok || !mp) return;
+  }
+  openMenu();
+}
+
 function openMenu(): void {
   leaveRoom('YOU LEFT THE ROOM');
   sfx.playground(null); // no frames in the menu, so nothing else would fade it
@@ -982,7 +1027,7 @@ function setBrush(n: number): void {
 hud.initTopbar({
   onPause: togglePause,
   onStep: stepOnce,
-  onMenu: () => openMenu(),
+  onMenu: () => void requestMenu(),
   onSave: () => requestSnapshot('store'),
   onShare: () => requestSnapshot('share'),
   onLoad: () => {
@@ -1019,6 +1064,7 @@ new Input(
   canvas,
   onPointer,
   (k) => {
+    if (isDialogOpen()) return; // typing a name must not paint, pause or leave
     if (screen === 'menu') {
       // a focused control already handles its own Enter/Space
       const a = document.activeElement as HTMLElement | null;
@@ -1072,7 +1118,7 @@ new Input(
         setBrush(brush + 2);
         break;
       case 'escape':
-        if (screen === 'game') openMenu();
+        if (screen === 'game') void requestMenu();
         break;
       case '3':
         if (screen === 'game') void toggle3d();

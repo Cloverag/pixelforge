@@ -21,6 +21,8 @@ export type CursorMsg = {
   m: number;
   /** button held: painting */
   d: boolean;
+  /** tool: brush, erase, wind or fill */
+  k?: 'b' | 'e' | 'w' | 'f';
   /** who: sent every time, so a joiner learns names without a handshake */
   n: string;
   c: string;
