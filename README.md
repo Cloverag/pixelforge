@@ -100,7 +100,8 @@ peers send **inputs, not pixels** (`src/net/lockstep.ts`):
   ahead and broadcasts one frame message per step. Guests step exactly the
   frames they hold, catching up many at once after a hidden tab.
 - A **joiner** gets a gzipped snapshot of the complete state - cells, meta,
-  per-frame clock, chunk wake bitmap, wind field, RNG position - plus every
+  per-frame clock, chunk wake bitmap, wind field, TNT debris in flight, RNG
+  position - plus every
   frame since (`src/net/pack.ts`; ~1 KB for an empty world).
 - Every 60 frames peers compare a **fingerprint** of the world, by component.
   A guest that disagrees asks for a fresh copy and carries on (**self-repair**),
@@ -144,6 +145,8 @@ rounding. It is wrapped to 32 bits now, with every sequence unchanged.
 - **SURPRISE ME** builds a scene from a seed in one of four styles - orbit,
   cascade, festival, storm - with a generated name like NEON WHIRLPOOL. 200
   seeds are checked headless so none comes out empty.
+
+![SURPRISE ME: three generated light shows, one after another](docs/surprise-me.gif)
 
 ## Controls
 
@@ -218,7 +221,7 @@ solids stay put.
 | SNOW / SALT | Snow melts near heat; salt melts ice and snow and dissolves in water. |
 | GUNPOWDER | Explodes on ignition. |
 | FUSE | Slow-burning line for timing charges. |
-| TNT | Fire or lava lights a short fuse (it blinks); a spark or a burning fuse detonates it at once. Stacks chain. |
+| TNT | Fire or lava lights a short fuse (it blinks); a spark or a burning fuse detonates it at once. Stacks chain. The blast throws its shell and the loose ground around it as debris that arcs and lands back as cells: a crater with a rim, and burning pieces fly as embers. |
 | WIRE | Carries spark pulses; glows while energised. |
 | TORCH | Sends spark pulses into touching wire. |
 | TURBINE | Spins in wind or under falling water, and sparks the wire it touches. |
@@ -240,7 +243,7 @@ src/
   sim/
     protocol.ts            message types, Snapshot / NetInput, constants
     grid.ts                typed-array cell store + chunk sleep/wake
-    world.ts               the cellular automaton; snapshot / restore / hash
+    world.ts               the cellular automaton, TNT debris; snapshot / restore / hash
     materials.ts           material table, colour ramps and textures
     wind.ts                coarse wind field over the grid
     particles.ts           playground: emitters, forces, portals, bumpers, rockets
@@ -275,8 +278,9 @@ src/
     emotes.ts              reaction bar and pings
     dialog.ts              in-game confirm and name dialogs
     theme.ts, help.ts, tooltips.ts, cursor.ts, share-panel.ts, widgets.ts
-tests/                     vitest: world rules, rendering, playground, scenes,
-                           surprise, lockstep, network simulation, RNG, presence
+tests/                     vitest: world rules, TNT debris, rendering, playground,
+                           scenes, surprise, lockstep, network simulation, RNG,
+                           presence
 ```
 
 ### How a frame flows
@@ -291,7 +295,7 @@ tests/                     vitest: world rules, rendering, playground, scenes,
 
 ### Testing
 
-124 tests. Beyond the material rules: two worlds fed the same inputs must
+136 tests. Beyond the material rules: two worlds fed the same inputs must
 match for 1200 frames; a world restored mid-game into a different seed must
 stay identical; host and two guests over a simulated network with random
 delays, reordering and a late joiner must agree at every frame; a corrupted
