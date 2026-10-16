@@ -1,4 +1,4 @@
-import { cleanName, EMOTES, initials, PING, type Identity, type PeerInfo } from '../net/presence';
+import { cleanName, initials, type Identity, type PeerInfo } from '../net/presence';
 
 /**
  * The room badge shown while playing together: room code, who is here (a
@@ -14,9 +14,7 @@ export class RoomPill {
   onCopy: () => void = () => {};
   /** the player renamed themselves */
   onRename: (name: string) => void = () => {};
-  /** the player picked a reaction (index into EMOTES, or PING) */
-  onEmote: (e: number) => void = () => {};
-  private tray!: HTMLElement;
+
   /** the count can arrive before the badge is built: keep it until then */
   private count = 1;
 
@@ -41,37 +39,12 @@ export class RoomPill {
     copy.type = 'button';
     copy.textContent = 'COPY LINK';
     copy.onclick = () => this.onCopy();
-    // reactions: a button that opens a tray of emoji and a ping
-    const react = document.createElement('button');
-    react.className = 'px room-react';
-    react.type = 'button';
-    react.textContent = '😀';
-    react.title = 'React (Z pings where your cursor is)';
-    react.setAttribute('aria-label', 'React');
-    this.tray = document.createElement('div');
-    this.tray.className = 'room-tray';
-    this.tray.hidden = true;
-    const pick = (e: number, label: string, title: string) => {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'tray-btn' + (e === PING ? ' ping' : '');
-      b.textContent = label;
-      b.title = title;
-      b.onclick = () => {
-        this.onEmote(e);
-        this.tray.hidden = true;
-      };
-      this.tray.appendChild(b);
-    };
-    EMOTES.forEach((emo, i) => pick(i, emo, 'React'));
-    pick(PING, 'PING', 'Point at where your cursor is (Z)');
-    react.onclick = () => (this.tray.hidden = !this.tray.hidden);
     const leave = document.createElement('button');
     leave.className = 'px';
     leave.type = 'button';
     leave.textContent = 'LEAVE';
     leave.onclick = () => this.onLeave();
-    el.append(dot, this.codeEl, this.roleEl, this.dots, this.people, react, copy, leave, this.tray);
+    el.append(dot, this.codeEl, this.roleEl, this.dots, this.people, copy, leave);
     (document.getElementById('stage') ?? document.body).appendChild(el);
     return el;
   }

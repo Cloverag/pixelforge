@@ -462,9 +462,9 @@ const mpHooks: MpHooks = {
   },
   onCursor: (id, c) => cursors.update(id, c),
   onWaiting: (on) => roomPill.setWaiting(on),
-  onEmote: (e) => {
-    emotes.show(e);
-    sfx.emote(e.e === PING);
+  onEmote: (e, mine) => {
+    emotes.show(e, mine);
+    if (!document.hidden) sfx.emote(e.e === PING);
   },
 };
 
@@ -474,7 +474,7 @@ function react(e: number): void {
   const at = myCursor ?? { x: SIM_W >> 1, y: SIM_H >> 1 };
   mp.emote(e, at.x, at.y);
 }
-roomPill.onEmote = react;
+emotes.onPick = react;
 
 roomPill.onRename = (name) => {
   me.name = name;
@@ -523,7 +523,9 @@ let lastCursorAt = 0;
 let cursorPending: { x: number; y: number; hidden: boolean } | null = null;
 function shareCursor(x: number, y: number, hidden: boolean): void {
   if (!mp || mode !== 'sand' || screen !== 'game') return;
-  myCursor = hidden ? null : { x, y };
+  // keep the last spot on the canvas: reacting means moving to the
+  // reaction bar, and the reaction belongs where you were working
+  if (!hidden) myCursor = { x, y };
   cursorPending = { x, y, hidden };
   const now = performance.now();
   if (now - lastCursorAt < 50) return;
@@ -579,6 +581,7 @@ async function hostRoom(reuse?: string): Promise<void> {
   rememberHosting(code);
   roomPill.show(code, 'host');
   roomPill.setRoster(me, []);
+  emotes.open();
   if (reuse) toast(`ROOM ${code} REOPENED`);
   else copyRoomLink(code, 'ROOM OPEN - LINK COPIED, SEND IT TO A FRIEND');
 }
@@ -601,6 +604,7 @@ async function joinRoom(code: string): Promise<void> {
   }
   roomPill.show(code, 'guest');
   roomPill.setRoster(me, []);
+  emotes.open();
 }
 
 function copyRoomLink(code: string, okText = 'LINK COPIED'): void {
@@ -619,7 +623,8 @@ function leaveRoom(reason?: string, bad = false): void {
   lastRoster = [];
   roomPill.hide();
   cursors.clear();
-  emotes.clear();
+  emotes.close();
+  myCursor = null;
   history.replaceState(null, '', location.pathname);
   if (reason) toast(reason, bad);
 }
