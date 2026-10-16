@@ -16,6 +16,10 @@ multiplayer are used.
 
 ![The sandbox: a sand dune, a pool with flowers, and a lava fire](docs/screenshot-sandbox.jpg)
 
+| TNT on fuses | Flowers growing |
+|:---:|:---:|
+| ![Three TNT charges on fuses of different lengths go off one after another: sand is thrown out of the craters, a wooden hut is gutted, and the last blast breaks a pond wall](docs/tnt.gif) | ![Plants grow up through two shallow ponds and bloom into flowers at the surface](docs/flowers.gif) |
+
 ![The main menu](docs/screenshot-menu.jpg)
 
 ---
@@ -124,6 +128,8 @@ rounding. It is wrapped to 32 bits now, with every sequence unchanged.
 
 ![The six demo scenes](docs/screenshot-playground-scenes.jpg)
 
+![The GALAXY scene: a four-armed spiral of light turning and shifting colour](docs/galaxy.gif)
+
 | Group | Tools |
 |-------|-------|
 | **Emitters** | FOUNTAIN, FIREWORK (a rocket that bursts where you click), SPARKLER, HOSE (sprays the way you drag), FIREFLIES |
@@ -145,8 +151,6 @@ rounding. It is wrapped to 32 bits now, with every sequence unchanged.
 - **SURPRISE ME** builds a scene from a seed in one of four styles - orbit,
   cascade, festival, storm - with a generated name like NEON WHIRLPOOL. 200
   seeds are checked headless so none comes out empty.
-
-![SURPRISE ME: three generated light shows, one after another](docs/surprise-me.gif)
 
 ## Controls
 
@@ -220,7 +224,7 @@ solids stay put.
 | GLASS | Transparent, blast-proof solid. |
 | SNOW / SALT | Snow melts near heat; salt melts ice and snow and dissolves in water. |
 | GUNPOWDER | Explodes on ignition. |
-| FUSE | Slow-burning line for timing charges. |
+| FUSE | Slow-burning line for timing charges: fire lights it, the flame creeps along about 9 cells a second and sets off gunpowder or TNT at the end. |
 | TNT | Fire or lava lights a short fuse (it blinks); a spark or a burning fuse detonates it at once. Stacks chain. The blast throws its shell and the loose ground around it as debris that arcs and lands back as cells: a crater with a rim, and burning pieces fly as embers. |
 | WIRE | Carries spark pulses; glows while energised. |
 | TORCH | Sends spark pulses into touching wire. |
@@ -295,7 +299,7 @@ tests/                     vitest: world rules, TNT debris, rendering, playgroun
 
 ### Testing
 
-136 tests. Beyond the material rules: two worlds fed the same inputs must
+138 tests. Beyond the material rules: two worlds fed the same inputs must
 match for 1200 frames; a world restored mid-game into a different seed must
 stay identical; host and two guests over a simulated network with random
 delays, reordering and a late joiner must agree at every frame; a corrupted
