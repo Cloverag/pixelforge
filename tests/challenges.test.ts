@@ -53,3 +53,15 @@ describe('SPARK THE BEACON', () => {
     expect(play('beacon', idle)).toBeNull();
   });
 });
+
+describe('torch lights a fuse', () => {
+  it('a fuse touching a torch catches and burns down', () => {
+    const w = new World(41);
+    for (let x = 90; x < 160; x++) w.grid.setXY(x, 201, Mat.WALL);
+    w.grid.setXY(99, 200, Mat.TORCH);
+    for (let x = 100; x < 130; x++) w.grid.setXY(x, 200, Mat.FUSE);
+    for (let f = 0; f < 400; f++) w.step();
+    expect(w.grid.counts[Mat.FUSE]).toBe(0);
+  });
+
+});

@@ -1758,8 +1758,15 @@ export class World {
     for (const [dx, dy] of dirs) {
       const nx = x + dx;
       const ny = y + dy;
-      if (g.get(nx, ny) === Mat.WIRE && g.meta[g.idx(nx, ny)] === 0) {
+      const t = g.get(nx, ny);
+      if (t === Mat.WIRE && g.meta[g.idx(nx, ny)] === 0) {
         g.meta[g.idx(nx, ny)] = SPARK_LIFE;
+        g.chunks.wakeCell(nx, ny);
+      }
+      // a torch is a flame: a fuse touching it catches, the way a player
+      // expects (it used to wait for a stray spark of fire to drift over)
+      if (t === Mat.FUSE && g.meta[g.idx(nx, ny)] === 0) {
+        g.meta[g.idx(nx, ny)] = 6;
         g.chunks.wakeCell(nx, ny);
       }
     }
