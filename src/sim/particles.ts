@@ -200,6 +200,87 @@ export class PSys {
     this.rockets.length = 0;
   }
 
+  /**
+   * Everything the playground steps from, as bytes - for multiplayer
+   * snapshots. Particles go as raw float arrays (exact), the rest as JSON
+   * (exact for doubles). The bumper flash and the activity counters are
+   * left out: they only drive drawing and sound.
+   */
+  pack(): Uint8Array {
+    const head = new TextEncoder().encode(
+      JSON.stringify({
+        rng: this.rng.state,
+        hueClock: this.hueClock,
+        timeScale: this.timeScale,
+        gravityOn: this.gravityOn,
+        liveFireflies: this.liveFireflies,
+        hose: [this.hoseX, this.hoseY, this.hoseDx, this.hoseDy],
+        forces: this.forces,
+        portals: this.portals,
+        emitters: this.emitters,
+        rockets: this.rockets,
+      }),
+    );
+    const n = this.n;
+    const floats = [this.px, this.py, this.pz, this.vx, this.vy, this.vz, this.life];
+    const out = new Uint8Array(8 + head.length + n * 4 * floats.length + n * 2);
+    const dv = new DataView(out.buffer);
+    dv.setUint32(0, head.length, true);
+    out.set(head, 4);
+    let o = 4 + head.length;
+    dv.setUint32(o, n, true);
+    o += 4;
+    for (const a of floats) {
+      out.set(new Uint8Array(a.buffer, 0, n * 4), o);
+      o += n * 4;
+    }
+    out.set(this.hue.subarray(0, n), o);
+    out.set(this.kind.subarray(0, n), o + n);
+    return out;
+  }
+
+  unpack(buf: Uint8Array): void {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    const hl = dv.getUint32(0, true);
+    const h = JSON.parse(new TextDecoder().decode(buf.subarray(4, 4 + hl)));
+    this.rng.state = h.rng;
+    this.hueClock = h.hueClock;
+    this.timeScale = h.timeScale;
+    this.gravityOn = h.gravityOn;
+    this.liveFireflies = h.liveFireflies;
+    [this.hoseX, this.hoseY, this.hoseDx, this.hoseDy] = h.hose;
+    this.forces = h.forces;
+    this.portals = h.portals;
+    this.emitters = h.emitters;
+    this.rockets = h.rockets;
+    let o = 4 + hl;
+    const n = dv.getUint32(o, true);
+    o += 4;
+    this.n = n;
+    for (const a of [this.px, this.py, this.pz, this.vx, this.vy, this.vz, this.life]) {
+      // copy out of the (possibly unaligned) byte buffer
+      a.set(new Float32Array(buf.slice(o, o + n * 4).buffer));
+      o += n * 4;
+    }
+    this.hue.set(buf.subarray(o, o + n));
+    this.kind.set(buf.subarray(o + n, o + 2 * n));
+    this.flash.fill(0);
+  }
+
+  /**
+   * A fingerprint of what the players built - forces, portals, emitters,
+   * gravity and speed - but not the particles. Particles run on float maths
+   * (sin, sqrt) that can differ in the last bit between browser engines and
+   * that a particle system amplifies within seconds; comparing them would
+   * make a Chrome-and-Safari room re-send its world every few seconds.
+   */
+  structureHash(): number {
+    const s = JSON.stringify([this.forces, this.portals, this.emitters.map((e) => ({ ...e, t: 0 })), this.gravityOn, this.timeScale]);
+    let h = 0x811c9dc5;
+    for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193);
+    return h >>> 0;
+  }
+
   /** Hand over activity counters since the last call, and reset them. */
   takeStats(): PgStats {
     const s = this.st;
@@ -514,7 +595,10 @@ export class PSys {
       const s = Math.sin(this.frame * 0.07 + (this.hue[i] * 1.7 + i * 0.37));
       g = 0.12 + 0.95 * Math.max(0, s) ** 3;
     } else if (k === PK_SPARK) {
-      g = 0.7 + this.rng.next() * 0.7;
+      // a hash of particle and frame, not the sim RNG: drawing (and pack3d)
+      // must not consume random numbers the simulation depends on
+      const h = Math.imul(i * 0x9e3779b1 + this.frame * 0x85ebca6b, 0xc2b2ae35) >>> 24;
+      g = 0.7 + (h / 255) * 0.7;
     }
     // Matter dims as it falls into a black hole. Without this everything
     // it gathered piled up additively into a white sun over a black core.
@@ -534,7 +618,9 @@ export class PSys {
         if (msg.phase !== 'up') this.sparkler(msg.x, msg.y);
         break;
       case 'hose':
-        if (msg.phase !== 'up') this.hose(msg.x, msg.y, msg.phase);
+        if (msg.phase === 'up') break;
+        if (msg.dx !== undefined && msg.dy !== undefined) this.jet(msg.x, msg.y, msg.dx, msg.dy);
+        else this.hose(msg.x, msg.y, msg.phase);
         break;
       case 'fireflies':
         if (msg.phase !== 'up') this.fireflies(msg.x, msg.y);
@@ -613,54 +699,24 @@ export class PSys {
   }
 
   /** decay trails -> integrate -> rasterize heads */
+  /** One simulation frame then a drawn frame: the single-player path. */
   fullRender(pix: Uint32Array, forceFull: boolean, frame: number): void {
-    if (forceFull) pix.fill(PG_BG);
+    this.step(frame);
+    this.draw(pix, forceFull, frame);
+  }
+
+  /**
+   * Advance the playground one frame: emitters, rockets, every particle.
+   * Kept apart from draw() because multiplayer steps several frames per
+   * drawn one when catching up - moving particles inside the draw made a
+   * peer's simulation depend on how often it drew.
+   */
+  step(frame: number): void {
     this.frame = frame;
     this.noteSeen.fill(0);
     this.holes = this.forces.filter((f) => f.kind === 'hole');
     const ts = this.timeScale;
     const drag = 1 - (1 - DRAG) * ts;
-
-    // Trail decay, toward the background. Scaling toward black instead left
-    // trails darker than the background - a black wedge under every fountain.
-    const nPx = SIM_W * SIM_H;
-    for (let i = 0; i < nPx; i++) {
-      const c = pix[i];
-      if (c === PG_BG) continue;
-      const r = BG_R + ((((c & 255) - BG_R) * 230) >> 8);
-      const g = BG_G + (((((c >>> 8) & 255) - BG_G) * 230) >> 8);
-      const b = BG_B + (((((c >>> 16) & 255) - BG_B) * 230) >> 8);
-      pix[i] =
-        Math.abs(r - BG_R) + Math.abs(g - BG_G) + Math.abs(b - BG_B) < 4
-          ? PG_BG
-          : ((255 << 24) | (b << 16) | (g << 8) | r) >>> 0;
-    }
-
-    // draw painted grid cells (WALL brush constructions) so they are visible
-    {
-      const cells = this.grid.cells;
-      for (let i = 0; i < nPx; i++) {
-        const c = cells[i];
-        if (c === Mat.EMPTY) continue;
-        const y = (i / SIM_W) | 0;
-        const base = colorAt(c, i % SIM_W, y, frame, 0);
-        const f = this.flash[i];
-        if (f > 0 && c === PG_BUMPER) {
-          // a struck bumper glows in its note's colour, and is drawn as
-          // light (alpha 255) so the cinematic pass blooms it
-          const k = f / 255;
-          const h = RAINBOW[noteHue(noteAt(y))];
-          const mix = (sh: number) =>
-            // the hue alone: brightened further, the bloom washed it to white
-            Math.min(255, (((base >>> sh) & 255) * (1 - k) + ((h >>> sh) & 255) * k) | 0);
-          pix[i] = ((255 << 24) | (mix(16) << 16) | (mix(8) << 8) | mix(0)) >>> 0;
-          this.flash[i] = f > 14 ? f - 14 : 0;
-          continue;
-        }
-        // alpha 253 tags a wall for the cinematic composite to light
-        pix[i] = ((base & 0x00ffffff) | (253 << 24)) >>> 0;
-      }
-    }
 
     this.runEmitters();
 
@@ -677,9 +733,6 @@ export class PSys {
         this.rockets.splice(k, 1);
         continue;
       }
-      const rx = r.x | 0;
-      const ry = r.y | 0;
-      if (rx >= 0 && ry >= 0 && rx < SIM_W && ry < SIM_H) pix[ry * SIM_W + rx] = 0xffd8f4ff;
     }
 
     // integrate
@@ -810,6 +863,59 @@ export class PSys {
     }
 
     this.liveFireflies = fireflies;
+
+  }
+
+  /** Draw the playground into pix (trails fade here). Reads state only. */
+  draw(pix: Uint32Array, forceFull: boolean, frame: number): void {
+    if (forceFull) pix.fill(PG_BG);
+    // Trail decay, toward the background. Scaling toward black instead left
+    // trails darker than the background - a black wedge under every fountain.
+    const nPx = SIM_W * SIM_H;
+    for (let i = 0; i < nPx; i++) {
+      const c = pix[i];
+      if (c === PG_BG) continue;
+      const r = BG_R + ((((c & 255) - BG_R) * 230) >> 8);
+      const g = BG_G + (((((c >>> 8) & 255) - BG_G) * 230) >> 8);
+      const b = BG_B + (((((c >>> 16) & 255) - BG_B) * 230) >> 8);
+      pix[i] =
+        Math.abs(r - BG_R) + Math.abs(g - BG_G) + Math.abs(b - BG_B) < 4
+          ? PG_BG
+          : ((255 << 24) | (b << 16) | (g << 8) | r) >>> 0;
+    }
+
+    // draw painted grid cells (WALL brush constructions) so they are visible
+    {
+      const cells = this.grid.cells;
+      for (let i = 0; i < nPx; i++) {
+        const c = cells[i];
+        if (c === Mat.EMPTY) continue;
+        const y = (i / SIM_W) | 0;
+        const base = colorAt(c, i % SIM_W, y, frame, 0);
+        const f = this.flash[i];
+        if (f > 0 && c === PG_BUMPER) {
+          // a struck bumper glows in its note's colour, and is drawn as
+          // light (alpha 255) so the cinematic pass blooms it
+          const k = f / 255;
+          const h = RAINBOW[noteHue(noteAt(y))];
+          const mix = (sh: number) =>
+            // the hue alone: brightened further, the bloom washed it to white
+            Math.min(255, (((base >>> sh) & 255) * (1 - k) + ((h >>> sh) & 255) * k) | 0);
+          pix[i] = ((255 << 24) | (mix(16) << 16) | (mix(8) << 8) | mix(0)) >>> 0;
+          this.flash[i] = f > 14 ? f - 14 : 0;
+          continue;
+        }
+        // alpha 253 tags a wall for the cinematic composite to light
+        pix[i] = ((base & 0x00ffffff) | (253 << 24)) >>> 0;
+      }
+    }
+
+    // rocket heads
+    for (const r of this.rockets) {
+      const rx = r.x | 0;
+      const ry = r.y | 0;
+      if (rx >= 0 && ry >= 0 && rx < SIM_W && ry < SIM_H) pix[ry * SIM_W + rx] = 0xffd8f4ff;
+    }
 
     // rasterize heads (+ motion stretch)
     for (let i = 0; i < this.n; i++) {

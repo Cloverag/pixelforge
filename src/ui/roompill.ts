@@ -18,6 +18,9 @@ export class RoomPill {
   onCopy: () => void = () => {};
   /** the player renamed themselves */
   onRename: (name: string) => void = () => {};
+  /** host: switch the room to the other mode */
+  onSwitchMode: () => void = () => {};
+  private modeBtn!: HTMLButtonElement;
 
   /** the count can arrive before the badge is built: keep it until then */
   private count = 1;
@@ -43,12 +46,17 @@ export class RoomPill {
     copy.type = 'button';
     copy.textContent = 'COPY LINK';
     copy.onclick = () => this.onCopy();
+    // host only: take everyone to the other mode
+    this.modeBtn = document.createElement('button');
+    this.modeBtn.className = 'px room-mode';
+    this.modeBtn.type = 'button';
+    this.modeBtn.onclick = () => this.onSwitchMode();
     const leave = document.createElement('button');
     leave.className = 'px';
     leave.type = 'button';
     leave.textContent = 'LEAVE';
     leave.onclick = () => this.onLeave();
-    el.append(dot, this.codeEl, this.roleEl, this.dots, this.people, copy, leave);
+    el.append(dot, this.codeEl, this.roleEl, this.dots, this.people, this.modeBtn, copy, leave);
     (document.getElementById('stage') ?? document.body).appendChild(el);
     return el;
   }
@@ -136,11 +144,20 @@ export class RoomPill {
 
   private role = 'GUEST';
 
+  /** The mode the room is in; the host's button offers the other one. */
+  setMode(m: 'sand' | 'playground'): void {
+    if (!this.modeBtn) return;
+    const next = m === 'sand' ? 'PLAYGROUND' : 'SANDBOX';
+    this.modeBtn.textContent = `→ ${next}`;
+    this.modeBtn.title = `Take everyone to the ${next.toLowerCase()}`;
+  }
+
   show(code: string, role: 'host' | 'guest'): void {
     this.el ??= this.build();
     this.codeEl.textContent = `ROOM ${code}`;
     this.role = role === 'host' ? 'HOST' : 'GUEST';
     this.roleEl.textContent = this.role;
+    this.modeBtn.hidden = role !== 'host';
     this.el.hidden = false;
     this.setPeople(this.count);
   }

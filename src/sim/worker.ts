@@ -135,7 +135,7 @@ function handle(e: MessageEvent<Req>): void {
       if (w.mode === 'playground' && w.parts && master) {
         // trails are authoritative on master; copy the finished frame out
         if (forceFull) master.fill(PG_BG);
-        w.parts.fullRender(master, false, w.f);
+        w.parts.draw(master, false, w.f);
         pix.set(master);
       } else if (master) {
         // Sand mode is authoritative on master for the same reason playground
@@ -155,6 +155,9 @@ function handle(e: MessageEvent<Req>): void {
       const res: Res = {
         hashes,
         f: w.f,
+        mode: w.mode,
+        pgGravity: w.mode === 'playground' ? w.parts?.gravityOn : undefined,
+        pgTime: w.mode === 'playground' ? w.parts?.timeScale : undefined,
         t: 'frame',
         buf: msg.buf,
         counts: st.counts,

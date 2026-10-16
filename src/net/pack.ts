@@ -20,12 +20,14 @@ export function packSnapshot(s: Snapshot): Uint8Array {
   // fresh one), so zero those.
   const shade = s.shade.slice();
   for (let i = 0; i < shade.length; i++) if (s.cells[i] === 0) shade[i] = 0;
-  const parts: Uint8Array[] = [...FIELDS.map((k) => (k === 'shade' ? shade : s[k])), wind];
+  // version 2 adds the mode and the playground's particle system
+  const mode = new Uint8Array([s.mode === 'playground' ? 1 : 0]);
+  const parts: Uint8Array[] = [...FIELDS.map((k) => (k === 'shade' ? shade : s[k])), wind, mode, s.pg ?? new Uint8Array(0)];
   const size = 5 * 4 + parts.reduce((a, p) => a + 4 + p.byteLength, 0);
   const out = new Uint8Array(size);
   const dv = new DataView(out.buffer);
   let o = 0;
-  for (const v of [MAGIC, 1, s.f, s.rng, s.shadeSeed]) {
+  for (const v of [MAGIC, 2, s.f, s.rng, s.shadeSeed]) {
     dv.setUint32(o, v >>> 0, true);
     o += 4;
   }
@@ -41,6 +43,7 @@ export function packSnapshot(s: Snapshot): Uint8Array {
 export function unpackSnapshot(buf: Uint8Array): Snapshot {
   const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
   if (dv.getUint32(0, true) !== MAGIC) throw new Error('not a PIXELFORGE snapshot');
+  const version = dv.getUint32(4, true);
   let o = 8;
   const f = dv.getUint32(o, true);
   const rng = dv.getUint32(o + 4, true);
@@ -55,7 +58,13 @@ export function unpackSnapshot(buf: Uint8Array): Snapshot {
   };
   const [cells, meta, clock, shade, wake] = FIELDS.map(take);
   const w = take();
-  return { f, rng, shadeSeed, cells, meta, clock, shade, wake, wind: new Float32Array(w.buffer, w.byteOffset, w.byteLength / 4) };
+  const snap: Snapshot = { f, rng, shadeSeed, cells, meta, clock, shade, wake, wind: new Float32Array(w.buffer, w.byteOffset, w.byteLength / 4) };
+  if (version >= 2) {
+    snap.mode = take()[0] === 1 ? 'playground' : 'sand';
+    const pg = take();
+    if (pg.length) snap.pg = pg;
+  }
+  return snap;
 }
 
 async function pipe(data: Uint8Array, stream: CompressionStream | DecompressionStream): Promise<Uint8Array> {

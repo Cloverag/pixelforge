@@ -188,6 +188,8 @@ export class World {
       shade: g.shade.slice(),
       wake: g.chunks.saveWake(),
       wind: this.wind.save(),
+      mode: this.mode,
+      pg: this.mode === 'playground' && this.parts ? this.parts.pack() : undefined,
     };
   }
 
@@ -205,9 +207,10 @@ export class World {
     g.counts.fill(0);
     for (let i = 0; i < g.cells.length; i++) g.counts[g.cells[i]]++;
     g.rebuildEternals();
-    this.mode = 'sand';
+    this.mode = s.mode ?? 'sand';
     this.challenge = null;
-    this.parts?.reset();
+    if (this.mode === 'playground' && s.pg && this.parts) this.parts.unpack(s.pg);
+    else this.parts?.reset();
     this.events = emptyEvents();
   }
 
@@ -233,6 +236,11 @@ export class World {
       return h >>> 0;
     };
     const g = this.grid;
+    if (this.mode === 'playground') {
+      // walls and bumpers, plus what was built - not the particles (see
+      // PSys.structureHash)
+      return [fnv(g.cells), fnv(g.meta), this.parts?.structureHash() ?? 0, 1, 0, 0, this.f];
+    }
     const w = this.wind.save();
     return [
       fnv(g.cells),
@@ -247,8 +255,47 @@ export class World {
 
   /** Apply one player's action; in multiplayer, at the frame the host chose. */
   applyInput(inp: NetInput): void {
-    if (inp.k === 'paint') this.paint(inp.pts, inp.mat, inp.size, inp.kind);
-    else this.clear();
+    switch (inp.k) {
+      case 'paint':
+        this.paint(inp.pts, inp.mat, inp.size, inp.kind);
+        break;
+      case 'clear':
+        this.clear();
+        break;
+      case 'pg':
+        if (this.mode === 'playground') this.parts?.tool(inp.tool);
+        break;
+      case 'pgPreset':
+        if (this.mode === 'playground') this.loadPreset(inp.id);
+        break;
+      case 'pgSurprise':
+        if (this.mode === 'playground') this.loadSurprise(inp.seed);
+        break;
+      case 'pgClear':
+        if (this.mode === 'playground') this.clearPlayground();
+        break;
+      case 'pgGravity':
+        if (this.parts) this.parts.gravityOn = inp.on;
+        break;
+      case 'pgTime':
+        if (this.parts) this.parts.timeScale = inp.scale;
+        break;
+      case 'mode':
+        this.setMode(inp.m);
+        break;
+    }
+  }
+
+  /** Switch between sandbox and playground; either way starts empty. */
+  setMode(m: Mode): void {
+    if (m === 'playground') {
+      this.mode = 'playground';
+      this.challenge = null;
+      this.clear();
+      this.parts?.reset();
+    } else {
+      this.toSandbox();
+    }
   }
 
   /** Hand over everything that happened since the last call, and reset. */
@@ -383,7 +430,9 @@ export class World {
   step(): void {
     this.f++;
     if (this.mode === 'playground') {
-      // integration + rasterization happen in parts.fullRender (worker-driven)
+      // the particles step with the world, once per frame; the worker only
+      // draws them (parts.draw), however many frames a message carries
+      this.parts?.step(this.f);
       return;
     }
 

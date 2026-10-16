@@ -23,12 +23,16 @@ export type PgToolKind =
   | 'portal'
   | 'erase';
 
-export interface PgToolMsg {
+export type PgToolMsg = {
   kind: PgToolKind;
   x: number;
   y: number;
   phase: 'down' | 'move' | 'up';
-}
+  /** hose: spray direction, worked out by the player's own game - the
+   *  simulation is shared, so it cannot keep one player's last position */
+  dx?: number;
+  dy?: number;
+};
 
 export interface Stats {
   counts: number[];
@@ -87,6 +91,9 @@ export interface Snapshot {
   shade: Uint8Array;
   wake: Uint8Array;
   wind: Float32Array;
+  /** which world this is; the playground also carries its particle system */
+  mode?: Mode;
+  pg?: Uint8Array;
 }
 
 /** multiplayer: peers compare world fingerprints every this many frames */
@@ -97,7 +104,16 @@ export const HASH_STRIDE = 9;
 /** A player action that changes the shared world, applied at an exact frame. */
 export type NetInput =
   | { k: 'paint'; pts: number[]; mat: number; size: number; kind: PaintKind }
-  | { k: 'clear' };
+  | { k: 'clear' }
+  // the playground, shared the same way: every action at an exact frame
+  | { k: 'pg'; tool: PgToolMsg }
+  | { k: 'pgPreset'; id: string }
+  | { k: 'pgSurprise'; seed: number }
+  | { k: 'pgClear' }
+  | { k: 'pgGravity'; on: boolean }
+  | { k: 'pgTime'; scale: number }
+  /** the host switches everyone between sandbox and playground */
+  | { k: 'mode'; m: Mode };
 
 export interface SaveData {
   w: number;
@@ -139,6 +155,11 @@ export interface Res {
   hashes?: number[];
   /** the world's frame after this step (multiplayer keeps clocks honest) */
   f?: number;
+  /** the world's mode: in a room the host can switch everyone */
+  mode?: Mode;
+  /** playground: gravity on and time scale, so every player's lamps agree */
+  pgGravity?: boolean;
+  pgTime?: number;
   buf?: ArrayBuffer;
   counts?: number[];
   used?: number[];

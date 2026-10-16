@@ -1308,6 +1308,8 @@ kbd, .mode-key {
 }
 .room-avatar.self { outline: 2px solid var(--ink); outline-offset: 1px; }
 .room-avatar.self { cursor: pointer; }
+.room-mode { color: var(--accent) !important; border-color: rgba(var(--accent-rgb), 0.5) !important; }
+.room-mode[hidden] { display: none; }
 .room-rename {
   width: 15ch;
   padding: 3px 6px;

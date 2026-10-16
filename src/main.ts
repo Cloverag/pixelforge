@@ -21,7 +21,7 @@ import { confirmDialog, isDialogOpen, nameDialog } from './ui/dialog';
 import { EmoteLayer } from './ui/emotes';
 import { EMOTES, PING } from './net/presence';
 import { myIdentity, saveIdentity } from './net/presence';
-import { Mode, PaintKind, Req, Res, SIM_H, SIM_W, SimEvents, Stats } from './sim/protocol';
+import { Mode, PaintKind, Req, Res, SIM_H, SIM_W, SimEvents, Stats, PgToolMsg } from './sim/protocol';
 import { CHALLENGES } from './sim/challenges';
 import { recordStars } from './game/progress';
 import { readSave, rleDecode, rleEncode, storeSave } from './game/rle';
@@ -315,6 +315,21 @@ worker.onmessage = (e: MessageEvent<Res>) => {
     if (r.events) playEvents(r.events);
     if (r.parts !== undefined) hud.setParticles(r.parts);
     if (r.hashes && mp) mp.hashes(r.hashes);
+    if (mp && r.mode && r.mode !== mode && challengeId === null) {
+      // the host switched the room: rebuild this screen, the world already has
+      if (r.mode === 'playground') playgroundUI();
+      else sandboxUI();
+      roomPill.setMode(r.mode);
+      toast(r.mode === 'playground' ? 'THE ROOM IS NOW IN THE PLAYGROUND' : 'THE ROOM IS NOW IN THE SANDBOX');
+    }
+    if (r.pgGravity !== undefined && r.pgGravity !== pgGravityOn) {
+      pgGravityOn = r.pgGravity;
+      hud.setGravityLamp(pgGravityOn);
+    }
+    if (r.pgTime !== undefined && r.pgTime < 1 !== pgSlowmo) {
+      pgSlowmo = r.pgTime < 1;
+      hud.setSlowmoLamp(pgSlowmo);
+    }
     // the host's frame clock must track its world exactly
     if (mp?.host && r.f !== undefined && r.f !== mp.host.f && !frameWarned) {
       frameWarned = true;
@@ -528,7 +543,7 @@ function toolCode(): 'b' | 'e' | 'w' | 'f' {
 let lastCursorAt = 0;
 let cursorPending: { x: number; y: number; hidden: boolean } | null = null;
 function shareCursor(x: number, y: number, hidden: boolean): void {
-  if (!mp || mode !== 'sand' || screen !== 'game') return;
+  if (!mp || screen !== 'game') return;
   // keep the last spot on the canvas: reacting means moving to the
   // reaction bar, and the reaction belongs where you were working
   if (!hidden) myCursor = { x, y };
@@ -536,7 +551,14 @@ function shareCursor(x: number, y: number, hidden: boolean): void {
   const now = performance.now();
   if (now - lastCursorAt < 50) return;
   lastCursorAt = now;
-  mp.cursor({ ...cursorPending, s: brush, m: selMat < 0 ? 0 : selMat, d: pointerDown && !hidden, k: toolCode() });
+  const pgMat = pgTool === 'wall' ? Mat.WALL : pgTool === 'bumper' ? PG_BUMPER : 0;
+  mp.cursor({
+    ...cursorPending,
+    s: brush,
+    m: mode === 'playground' ? pgMat : selMat < 0 ? 0 : selMat,
+    d: pointerDown && !hidden,
+    k: mode === 'playground' ? (pgTool === 'erase' ? 'e' : 'b') : toolCode(),
+  });
   cursorPending = null;
 }
 addEventListener('pointermove', (e: PointerEvent) => {
@@ -586,6 +608,7 @@ async function hostRoom(reuse?: string): Promise<void> {
   history.replaceState(null, '', roomUrl(code));
   rememberHosting(code);
   roomPill.show(code, 'host');
+  roomPill.setMode(mode);
   roomPill.setRoster(me, []);
   emotes.open();
   if (reuse) toast(`ROOM ${code} REOPENED`);
@@ -609,6 +632,7 @@ async function joinRoom(code: string): Promise<void> {
     return;
   }
   roomPill.show(code, 'guest');
+  roomPill.setMode(mode);
   roomPill.setRoster(me, []);
   emotes.open();
 }
@@ -635,6 +659,18 @@ function leaveRoom(reason?: string, bad = false): void {
   if (reason) toast(reason, bad);
 }
 roomPill.onCopy = () => mp && copyRoomLink(mp.code);
+/** The host takes the whole room to the other mode (the world starts empty). */
+roomPill.onSwitchMode = async () => {
+  if (!mp?.host) return;
+  const next = mode === 'sand' ? 'playground' : 'sand';
+  const ok = await confirmDialog({
+    title: next === 'playground' ? 'TO THE PLAYGROUND?' : 'BACK TO THE SANDBOX?',
+    body: `Everyone in the room goes with you, and the ${next === 'playground' ? 'playground' : 'sandbox'} starts empty.`,
+    ok: 'GO',
+    cancel: 'STAY',
+  });
+  if (ok && mp) mp.local([{ k: 'mode', m: next }]);
+};
 // dev only: paint straight into this peer's own world, bypassing the room,
 // to test that a desync is detected and repaired
 if (import.meta.env.DEV)
@@ -660,8 +696,14 @@ function loop(now: number): void {
       if (mode === 'playground' && pgHeld && HELD_TOOLS.has(pgTool)) {
         // fireflies trickle out; the jets fire every step
         const kind = pgTool as 'fountain' | 'sparkler' | 'hose' | 'fireflies';
-        if (kind !== 'fireflies' || frameNo % 8 === 0)
-          post({ t: 'pg', tool: { kind, x: lastPg.x, y: lastPg.y, phase: 'move' } });
+        if (kind !== 'fireflies' || frameNo % 8 === 0) {
+          const tool: PgToolMsg = { kind, x: lastPg.x, y: lastPg.y, phase: 'move' };
+          if (kind === 'hose') {
+            tool.dx = hoseDir.x;
+            tool.dy = hoseDir.y;
+          }
+          pgSend({ k: 'pg', tool }, { t: 'pg', tool });
+        }
       }
       frameNo++;
     }
@@ -721,11 +763,24 @@ function paintAt(e: PointerEvt, forcedMat?: number): void {
   }
   if (pts.length === 0) return;
   strokeLast = { x: e.x, y: e.y };
-  if (mp && mode === 'sand') mp.local([{ k: 'paint', pts, mat, size: brush, kind: paintKind }]);
+  if (mp) mp.local([{ k: 'paint', pts, mat, size: brush, kind: paintKind }]);
   else post({ t: 'paint', pts, mat, size: brush, kind: paintKind });
   sfx.place();
   if (paused && !inFlight) sendStep(); // visual feedback while paused
 }
+
+/**
+ * A playground action: in a room it is an input, applied at the same frame
+ * for everyone; alone it goes straight to the worker.
+ */
+function pgSend(inp: NetInput, solo: Req): void {
+  if (mp) mp.local([inp]);
+  else post(solo);
+}
+
+/** the hose's spray direction, worked out here: the simulation is shared */
+let hoseFrom = { x: 0, y: 0 };
+let hoseDir = { x: 0, y: -1 };
 
 /** Tools that keep emitting while the button is held, even standing still. */
 const HELD_TOOLS = new Set<PgTool>(['fountain', 'sparkler', 'hose', 'fireflies']);
@@ -734,7 +789,7 @@ let pgSlowmo = false;
 
 function setPgGravity(on: boolean, quiet = false): void {
   pgGravityOn = on;
-  post({ t: 'pgGravity', on });
+  pgSend({ k: 'pgGravity', on }, { t: 'pgGravity', on });
   hud.setGravityLamp(on);
   if (quiet) return;
   sfx.ui();
@@ -748,7 +803,7 @@ function setPgGravity(on: boolean, quiet = false): void {
 function surprise(): void {
   const seed = (Math.random() * 0x7fffffff) | 0;
   const plan = planSurprise(seed);
-  post({ t: 'pgSurprise', seed });
+  pgSend({ k: 'pgSurprise', seed }, { t: 'pgSurprise', seed });
   setPgGravity(plan.gravity, true);
   sfx.ui();
   toast(`SURPRISE: ${plan.name}`);
@@ -758,7 +813,7 @@ function surprise(): void {
 function loadPgPreset(id: string): void {
   const p = PRESET_INFO.find((q) => q.id === id);
   if (!p) return;
-  post({ t: 'pgPreset', id });
+  pgSend({ k: 'pgPreset', id }, { t: 'pgPreset', id });
   setPgGravity(p.gravity, true);
   sfx.ui();
   toast(`SCENE: ${p.label}`);
@@ -766,13 +821,13 @@ function loadPgPreset(id: string): void {
 
 function setPgSlowmo(on: boolean): void {
   pgSlowmo = on;
-  post({ t: 'pgTime', scale: on ? 0.33 : 1 });
+  pgSend({ k: 'pgTime', scale: on ? 0.33 : 1 }, { t: 'pgTime', scale: on ? 0.33 : 1 });
   hud.setSlowmoLamp(on);
   sfx.slowmo(on);
 }
 
 function clearPlayground(): void {
-  post({ t: 'pgClear' });
+  pgSend({ k: 'pgClear' }, { t: 'pgClear' });
   sfx.ui();
 }
 
@@ -790,10 +845,21 @@ function pgAt(e: PointerEvt, forced?: PgTool): void {
   const kind =
     tool === 'attract' ? 'attractor' : tool === 'repel' ? 'repulsor' : tool;
   pgHeld = HELD_TOOLS.has(tool);
-  post({
-    t: 'pg',
-    tool: { kind, x: e.x, y: e.y, phase: e.phase },
-  });
+  const msg: PgToolMsg = { kind, x: e.x, y: e.y, phase: e.phase };
+  if (kind === 'hose') {
+    // the spray follows the drag; held still, it keeps its last direction
+    if (e.phase === 'down') hoseFrom = { x: e.x, y: e.y };
+    const dx = e.x - hoseFrom.x;
+    const dy = e.y - hoseFrom.y;
+    const d = Math.hypot(dx, dy);
+    if (d > 2) {
+      hoseDir = { x: dx / d, y: dy / d };
+      hoseFrom = { x: e.x, y: e.y };
+    }
+    msg.dx = hoseDir.x;
+    msg.dy = hoseDir.y;
+  }
+  pgSend({ k: 'pg', tool: msg }, { t: 'pg', tool: msg });
   if (tool === 'firework' && e.phase === 'down') sfx.fireworkLaunch();
   if (paused && !inFlight) sendStep();
 }
@@ -821,12 +887,17 @@ function enterGame(label: string): void {
 }
 
 function startSandbox(): void {
+  post({ t: 'toSandbox' });
+  sandboxUI();
+}
+
+/** The sandbox's screen, without touching the world (a room switch). */
+function sandboxUI(): void {
   close3d();
   renderer.setCinematic?.(false);
   mode = 'sand';
   challengeId = null;
   renderer.reset();
-  post({ t: 'toSandbox' });
   hud.buildSandPalette(null, Mat.SAND, brush, {
     onSelect: (m) => {
       selMat = m;
@@ -838,12 +909,17 @@ function startSandbox(): void {
 
 function startPlayground(): void {
   leaveRoom('YOU LEFT THE ROOM');
+  post({ t: 'mode', mode: 'playground' });
+  playgroundUI();
+}
+
+/** The playground's screen, without touching the world (a room switch). */
+function playgroundUI(): void {
   close3d();
   renderer.setCinematic?.(true);
   mode = 'playground';
   challengeId = null;
   pgTool = 'fountain';
-  post({ t: 'mode', mode: 'playground' });
   hud.buildPgPalette('fountain', brush, {
     onTool: (t) => {
       pgTool = t;

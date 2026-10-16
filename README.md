@@ -45,7 +45,7 @@ get their own layout.
 | Mode | What it is |
 |------|------------|
 | **SANDBOX** | Paint any material with the brush, flood-fill (`F`) or blow wind (`W`); right-drag erases. Your world autosaves and comes back on reload; SAVE / LOAD / SHARE a link to it. |
-| **PLAY TOGETHER (beta)** | A sandbox room for friends: open one, send the link, and everyone paints in the same world. See [Playing together](#playing-together). |
+| **PLAY TOGETHER (beta)** | A room for friends: open one, send the link, and everyone builds in the same world - the sandbox or the playground. See [Playing together](#playing-together). |
 | **PARTICLE PLAYGROUND** | Light shows instead of materials: emitters, forces, bumpers that play notes, portals - with a film-look renderer, a full 3D view and sound design. See [The playground](#the-playground). |
 | **SURPRISE ME** | A brand-new generated playground scene every click (`R`). |
 | **CHALLENGES** | 7 goal-based puzzles with material budgets, time limits, win/lose checks and a 3-star rating. Levels unlock in order; stars persist in `localStorage`. |
@@ -80,6 +80,9 @@ your world. Pasted into WhatsApp or Discord, the link shows a preview card.
 - **Reactions.** A bar along the bottom of the canvas: 👍 🔥 😂 😮 ❤️ pop up as
   a bubble on your cursor and on your avatar; **PING** (or `Z`) marks a spot
   with pulsing rings, "NAME: LOOK HERE".
+- **Sandbox or playground.** The host's `→ PLAYGROUND` / `→ SANDBOX` button
+  takes the whole room across; fireworks, portals, black holes, bumpers and
+  scenes are shared like everything else.
 - **Leaving** asks first. A host who refreshes reopens the same room from the
   autosave and guests re-sync on their own; a host who leaves closes it.
 
@@ -104,6 +107,13 @@ peers send **inputs, not pixels** (`src/net/lockstep.ts`):
   which also covers browsers whose float maths differ.
 - Cursors and reactions travel peer to peer on their own channels and never
   touch the shared world.
+- In the **playground** every action is a frame-stamped input too, and joiners
+  get every particle, so on one browser engine the whole show is identical.
+  The fingerprint covers what was built (walls, bumpers, forces, portals,
+  emitters, gravity, speed) but not the particles: they run on float maths
+  that can differ in the last bit between engines, and a particle system
+  amplifies that within seconds. Particles step with the world, never inside
+  the draw, so a peer catching up stays in step.
 
 Finding the last desync took an offline replay: two snapshots identical in
 every field still split, and the cause was the RNG state growing past 2^53 and
