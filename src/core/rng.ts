@@ -5,6 +5,15 @@ export class RNG {
     this.s = seed >>> 0;
   }
 
+  /** the generator's position, for multiplayer snapshots */
+  get state(): number {
+    return this.s;
+  }
+
+  set state(v: number) {
+    this.s = v >>> 0;
+  }
+
   next(): number {
     let t = (this.s += 0x6d2b79f5);
     t = Math.imul(t ^ (t >>> 15), t | 1);

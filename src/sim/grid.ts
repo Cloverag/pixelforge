@@ -45,6 +45,15 @@ export class ChunkSys {
     this.nxt.fill(1);
   }
 
+  /** Chunks already woken for next frame - sim state, for snapshots. */
+  saveWake(): Uint8Array {
+    return this.nxt.slice();
+  }
+
+  restoreWake(a: Uint8Array): void {
+    this.nxt.set(a);
+  }
+
   beginFrame(): void {
     const tmp = this.act;
     this.act = this.nxt;
@@ -110,7 +119,8 @@ export class Grid {
   chunks: ChunkSys;
   /** indices of eternal cells - woken every frame by the world */
   eternals = new Set<number>();
-  private shadeSeed = 0x9e3779b9;
+  /** public for multiplayer snapshots, so every peer rolls the same colours */
+  shadeSeed = 0x9e3779b9;
 
   constructor(public W: number, public H: number) {
     const n = W * H;

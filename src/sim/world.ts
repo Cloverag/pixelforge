@@ -6,20 +6,7 @@ import {
   Cat, GRAINY, LIT, Lit, MATS, Mat, NMATS, OPEN, SHADED, Shade, WIND_SUSC,
   Flora, applyShade, colorAt, offRamp, petal, rampIndexAt, SPARK_LIFE,
 } from './materials';
-import {
-  CHUNK,
-  CHUNK_SHIFT,
-  CHUNKS_X,
-  CHUNKS_Y,
-  SIM_H,
-  SIM_W,
-  Stats,
-  ChallengeResult,
-  Mode,
-  PaintKind,
-  SimEvents,
-  emptyEvents,
-} from './protocol';
+import { CHUNK, CHUNK_SHIFT, CHUNKS_X, CHUNKS_Y, SIM_H, SIM_W, Stats, ChallengeResult, Mode, PaintKind, SimEvents, emptyEvents, NetInput, Snapshot } from './protocol';
 import { PSys } from './particles';
 import { Wind } from './wind';
 import { CHALLENGES, ChallengeDef, starsFor } from './challenges';
@@ -185,6 +172,71 @@ export class World {
     if (!this.parts) return false;
     this.clearPlayground();
     return buildPreset(id, this.grid, this.parts);
+  }
+
+  // ---------- multiplayer: snapshots, fingerprints, inputs ----------
+
+  snapshot(): Snapshot {
+    const g = this.grid;
+    return {
+      f: this.f,
+      rng: this.rng.state,
+      shadeSeed: g.shadeSeed,
+      cells: g.cells.slice(),
+      meta: g.meta.slice(),
+      clock: g.clock.slice(),
+      shade: g.shade.slice(),
+      wake: g.chunks.saveWake(),
+      wind: this.wind.save(),
+    };
+  }
+
+  restore(s: Snapshot): void {
+    const g = this.grid;
+    this.f = s.f;
+    this.rng.state = s.rng;
+    g.shadeSeed = s.shadeSeed;
+    g.cells.set(s.cells);
+    g.meta.set(s.meta);
+    g.clock.set(s.clock);
+    g.shade.set(s.shade);
+    g.chunks.restoreWake(s.wake);
+    this.wind.restore(s.wind);
+    g.counts.fill(0);
+    for (let i = 0; i < g.cells.length; i++) g.counts[g.cells[i]]++;
+    g.rebuildEternals();
+    this.mode = 'sand';
+    this.challenge = null;
+    this.parts?.reset();
+    this.events = emptyEvents();
+  }
+
+  /**
+   * A 32-bit fingerprint of the simulation state (FNV-1a). Peers compare it
+   * to notice a desync; colours (shade) are left out - they cannot change
+   * what happens next.
+   */
+  hash(): number {
+    let h = 0x811c9dc5;
+    const mix = (b: Uint8Array) => {
+      for (let i = 0; i < b.length; i++) h = Math.imul(h ^ b[i], 0x01000193);
+    };
+    const g = this.grid;
+    mix(g.cells);
+    mix(g.meta);
+    mix(g.clock);
+    mix(g.chunks.saveWake());
+    const w = this.wind.save();
+    mix(new Uint8Array(w.buffer, w.byteOffset, w.byteLength));
+    h = Math.imul(h ^ this.rng.state, 0x01000193);
+    h = Math.imul(h ^ this.f, 0x01000193);
+    return h >>> 0;
+  }
+
+  /** Apply one player's action; in multiplayer, at the frame the host chose. */
+  applyInput(inp: NetInput): void {
+    if (inp.k === 'paint') this.paint(inp.pts, inp.mat, inp.size, inp.kind);
+    else this.clear();
   }
 
   /** Hand over everything that happened since the last call, and reset. */

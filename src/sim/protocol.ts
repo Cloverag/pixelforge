@@ -63,6 +63,28 @@ export type Req =
   | { t: 'save' }
   | { t: 'load'; data: SaveData };
 
+/**
+ * Everything the sandbox simulation steps from, for multiplayer: a peer
+ * restored from this and fed the same inputs stays identical to the one
+ * that took it. (SaveData is only what a player's save needs.)
+ */
+export interface Snapshot {
+  f: number;
+  rng: number;
+  shadeSeed: number;
+  cells: Uint8Array;
+  meta: Uint8Array;
+  clock: Uint8Array;
+  shade: Uint8Array;
+  wake: Uint8Array;
+  wind: Float32Array;
+}
+
+/** A player action that changes the shared world, applied at an exact frame. */
+export type NetInput =
+  | { k: 'paint'; pts: number[]; mat: number; size: number; kind: PaintKind }
+  | { k: 'clear' };
+
 export interface SaveData {
   w: number;
   h: number;

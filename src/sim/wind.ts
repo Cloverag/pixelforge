@@ -40,6 +40,27 @@ export class Wind {
     this.active = 0;
   }
 
+  /** Every field the wind steps from, packed (vx, vy, tx, ty, active). */
+  save(): Float32Array {
+    const n = this.vx.length;
+    const out = new Float32Array(n * 4 + 1);
+    out.set(this.vx, 0);
+    out.set(this.vy, n);
+    out.set(this.tx, n * 2);
+    out.set(this.ty, n * 3);
+    out[n * 4] = this.active;
+    return out;
+  }
+
+  restore(a: Float32Array): void {
+    const n = this.vx.length;
+    this.vx.set(a.subarray(0, n));
+    this.vy.set(a.subarray(n, n * 2));
+    this.tx.set(a.subarray(n * 2, n * 3));
+    this.ty.set(a.subarray(n * 3, n * 4));
+    this.active = a[n * 4];
+  }
+
   /**
    * Adds a gust centred on a cell coordinate, falling off to nothing at
    * `radius`. `dx`/`dy` are in cells-per-frame at the centre.
