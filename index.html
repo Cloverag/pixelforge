@@ -4,8 +4,22 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta name="theme-color" content="#0c0a09" />
-  <meta name="description" content="PIXELFORGE - a pixel-art particle sandbox. Paint falling sand, play with physics toys, solve 7 challenges." />
+  <meta name="description" content="A pixel-art falling-sand forge in your browser: sand, fire, water, wire and light shows. Play together with friends - no install, free." />
   <title>PIXELFORGE</title>
+  <!-- link previews (WhatsApp, Discord, X...): crawlers read these, they do not run the game -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="PIXELFORGE" />
+  <meta property="og:title" content="PIXELFORGE - play together in your browser" />
+  <meta property="og:description" content="Falling sand, fire, water, wire and light shows. Open the link and build with friends - no install, free." />
+  <meta property="og:url" content="https://cloverag.github.io/pixelforge/" />
+  <meta property="og:image" content="https://cloverag.github.io/pixelforge/og.jpg" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="PIXELFORGE: a pixel-art pool with flowers beside a glowing particle galaxy" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="PIXELFORGE - play together in your browser" />
+  <meta name="twitter:description" content="Falling sand, fire, water, wire and light shows. Build with friends - no install, free." />
+  <meta name="twitter:image" content="https://cloverag.github.io/pixelforge/og.jpg" />
   <script>
     // theme before first paint (ui/theme.ts owns it after boot)
     try { var t = localStorage.getItem('pf-theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}
