@@ -1094,6 +1094,10 @@ kbd, .mode-key {
 @media (max-width: 720px) and (orientation: portrait) {
   /* the rail comes first in the DOM: reversed, the canvas sits on top */
   #workspace { flex-direction: column-reverse; justify-content: flex-end; }
+  #stagecol { order: 3; }
+  #workspace .react-bar { order: 2; flex-direction: row; justify-content: center; padding: 6px; border-left: 0; border-top: 1px solid var(--edge-dark); }
+  #workspace .react-btn.ping { margin: 0 0 0 6px; }
+  #toolbar { order: 1; }
   #stagecol { flex: 0 0 auto; }
   /* exactly tall enough for a full-width 16:9 canvas plus its frame */
   #stage { flex: 0 0 auto; height: calc((100vw - 16px) * 0.5625 + 40px); padding: 4px; }
@@ -1439,45 +1443,34 @@ kbd, .mode-key {
 .pf-swatch.on { border-color: var(--ink); box-shadow: 0 0 0 2px var(--panel); }
 .pf-swatch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-/* reactions (ui/emotes.ts): bar, effects, feed */
+/* reactions (ui/emotes.ts): a column right of the canvas while in a room */
 .react-bar {
-  position: absolute;
-  left: 50%;
-  bottom: 14px;
-  translate: -50% 0;
-  z-index: 6;
+  flex: 0 0 auto;
   display: flex;
-  gap: 4px;
-  padding: 5px;
-  background: color-mix(in srgb, var(--panel) 86%, transparent);
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5);
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 8px;
+  background: var(--panel);
+  border-left: 1px solid var(--edge-dark);
 }
 .react-btn {
   display: grid;
   place-items: center;
-  min-width: 38px;
-  height: 38px;
+  width: 44px;
+  height: 44px;
   padding: 0;
-  font-size: 20px;
+  font-size: 22px;
   line-height: 1;
-  background: transparent;
-  border: 0;
-  border-radius: 999px;
+  background: var(--row-bg);
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
   cursor: pointer;
-  transition: transform 0.1s var(--ease-out), background 0.1s;
+  transition: transform 0.1s var(--ease-out), border-color 0.1s, background 0.1s;
 }
-.react-btn:hover { background: var(--panel-3); transform: translateY(-2px) scale(1.12); }
+.react-btn:hover { border-color: var(--accent); transform: scale(1.1); }
 .react-btn:active { transform: scale(0.92); }
-.react-btn.ping {
-  padding: 0 12px;
-  font-family: var(--font);
-  font-size: 10px;
-  letter-spacing: 1px;
-  color: var(--accent);
-  border: 1px solid rgba(var(--accent-rgb), 0.45);
-}
+.react-btn.ping { margin-top: 6px; border-color: rgba(var(--accent-rgb), 0.5); }
 .react-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 .emote { position: absolute; z-index: 6; pointer-events: none; }
@@ -1569,8 +1562,7 @@ kbd, .mode-key {
   .ping-ring { animation: none; opacity: 1; }
 }
 @media (max-width: 720px), (max-height: 520px) and (orientation: landscape) {
-  .react-bar { bottom: 8px; padding: 3px; }
-  .react-btn { min-width: 32px; height: 32px; font-size: 17px; }
+  #workspace .react-btn { width: 36px; height: 36px; font-size: 18px; border-radius: 10px; }
 }
 
 /* playground demo scenes: two columns of small buttons */

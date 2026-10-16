@@ -31,10 +31,14 @@ export class EmoteLayer {
     });
   }
 
-  /** The reaction bar, while in a room. */
+  /**
+   * The reaction bar, while in a room: its own column beside the canvas
+   * (a row under it on a portrait phone), never on top of the world - laid
+   * over the bottom of the canvas it covered what people were building.
+   */
   open(): void {
-    const stage = document.getElementById('stage');
-    if (!stage || this.bar) return;
+    const host = document.getElementById('workspace');
+    if (!host || this.bar) return;
     const bar = document.createElement('div');
     bar.className = 'react-bar';
     bar.setAttribute('role', 'toolbar');
@@ -51,12 +55,15 @@ export class EmoteLayer {
     };
     const names = ['Thumbs up', 'Fire', 'Laugh', 'Wow', 'Love'];
     EMOTES.forEach((emo, i) => add(i, emo, names[i] ?? 'React'));
-    add(PING, '📍 PING', 'Ping: point everyone at where you were working (Z)');
-    stage.appendChild(bar);
+    add(PING, '📍', 'Ping: point everyone at where you were working (Z)');
+    host.appendChild(bar);
     this.bar = bar;
+    // the canvas refits to the space that is left
+    dispatchEvent(new Event('resize'));
   }
 
   close(): void {
+    if (this.bar) dispatchEvent(new Event('resize'));
     this.bar?.remove();
     this.bar = null;
     for (const el of [...this.live]) this.drop(el);
