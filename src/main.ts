@@ -13,6 +13,9 @@ import { Mat } from './sim/materials';
 import { PG_BUMPER } from './sim/particles';
 import { PRESET_INFO } from './sim/presets';
 import { planSurprise } from './sim/surprise';
+import { MpSession, newRoomCode, roomFromUrl, roomUrl, type MpHooks } from './net/mp';
+import type { NetInput, Snapshot } from './sim/protocol';
+import { RoomPill } from './ui/roompill';
 import { Mode, PaintKind, Req, Res, SIM_H, SIM_W, SimEvents, Stats } from './sim/protocol';
 import { CHALLENGES } from './sim/challenges';
 import { recordStars } from './game/progress';
@@ -306,6 +309,12 @@ worker.onmessage = (e: MessageEvent<Res>) => {
     if (r.pgWalls && pgView) pgView.setWalls(new Uint8Array(r.pgWalls));
     if (r.events) playEvents(r.events);
     if (r.parts !== undefined) hud.setParticles(r.parts);
+    if (r.hashes && mp) mp.hashes(r.hashes);
+    // the host's frame clock must track its world exactly
+    if (mp?.host && r.f !== undefined && r.f !== mp.host.f && !frameWarned) {
+      frameWarned = true;
+      console.error(`multiplayer: host clock ${mp.host.f} != world frame ${r.f}`);
+    }
     // the playground's sound follows the sim; leaving it fades the voices out
     sfx.playground(r.pgStats ?? null);
     if (r.counts) sfx.crackle(r.counts[Mat.FIRE] + r.counts[Mat.EMBER]);
@@ -318,6 +327,14 @@ worker.onmessage = (e: MessageEvent<Res>) => {
     }
     maybeShowResult(r.result ?? null);
     fpsFrames++;
+    return;
+  }
+  if (r.t === 'error') {
+    console.error('[pixelforge] sim worker threw:', r.error);
+    return;
+  }
+  if (r.t === 'netSnap' && r.snapshot) {
+    snapWaiters.shift()?.(r.snapshot);
     return;
   }
   if (r.t === 'state' && r.save) {
@@ -353,7 +370,8 @@ function requestSnapshot(why: 'store' | 'share' | 'auto'): void {
  * request is already in flight would just queue duplicate work.
  */
 function autosaveEligible(): boolean {
-  return screen === 'game' && mode === 'sand' && challengeId === null;
+  // a guest is playing in someone else's world: never save it over theirs
+  return screen === 'game' && mode === 'sand' && challengeId === null && !mp?.guest;
 }
 
 function autosaveNow(): void {
@@ -362,6 +380,11 @@ function autosaveNow(): void {
 
 /** Drops a decoded world into the sandbox and leaves the menu. */
 function adoptWorld(d: { a: Uint8Array; b: Uint8Array }): void {
+  // replacing the world outside the shared timeline would desync the room
+  if (mp) {
+    toast('NOT WHILE PLAYING TOGETHER', true);
+    return;
+  }
   post({
     t: 'load',
     data: { w: SIM_W, h: SIM_H, cells: d.a, meta: d.b, frame: 0 },
@@ -376,9 +399,109 @@ let fpsClock = 0;
 
 function sendStep(): void {
   if (!stepBuf || inFlight) return;
+  // Checked before `mp`: while a room is opening `mp` is still null, and
+  // gating only inside `if (mp)` let the world step through the setup, so
+  // the host's frame clock started behind its world and every input landed
+  // a few frames later on the host than on the guests (a real desync).
+  if (mpGate) return;
+  let inputs: NetInput[][] | undefined;
+  if (mp) {
+    if (mp.host) {
+      inputs = [mp.host.advance()];
+    } else {
+      // a guest steps only frames the host has sent; one at a time normally,
+      // many at once when it fell behind (a hidden tab, a slow moment)
+      const g = mp.guest!;
+      const ready = g.backlog();
+      if (ready === 0) return;
+      const n = ready > 6 ? Math.min(ready - 2, 90) : 1;
+      inputs = [];
+      for (let k = 0; k < n; k++) inputs.push(g.take());
+    }
+  }
   inFlight = true;
-  post({ t: 'step', buf: stepBuf }, [stepBuf]);
+  post({ t: 'step', buf: stepBuf, inputs }, [stepBuf]);
 }
+
+// ---- playing together (net/mp.ts) ----
+
+let mp: MpSession | null = null;
+/** no stepping while a room is being opened: the host's frame clock must
+ *  start from the snapshot it is about to take */
+let mpGate = false;
+let frameWarned = false;
+const roomPill = new RoomPill(() => leaveRoom('YOU LEFT THE ROOM'));
+const snapWaiters: ((s: Snapshot) => void)[] = [];
+
+function workerSnapshot(): Promise<Snapshot> {
+  return new Promise((resolve) => {
+    snapWaiters.push(resolve);
+    post({ t: 'netSnap' });
+  });
+}
+
+const mpHooks: MpHooks = {
+  snapshot: workerSnapshot,
+  restore: (s) => post({ t: 'netRestore', snap: s }),
+  onPeople: (n) => roomPill.setPeople(n),
+  onNotice: (text, bad) => toast(text, bad),
+  onEnd: (reason) => leaveRoom(reason, true),
+};
+
+/** Open a room from the current sandbox, as host, and copy its link. */
+async function hostRoom(): Promise<void> {
+  if (mp) return;
+  mpGate = true;
+  const code = newRoomCode();
+  try {
+    mp = await MpSession.host(code, mpHooks);
+  } catch (err) {
+    console.error(err);
+    toast('COULD NOT OPEN A ROOM', true);
+    return;
+  } finally {
+    mpGate = false;
+  }
+  history.replaceState(null, '', roomUrl(code));
+  roomPill.show(code, 'host');
+  copyRoomLink(code, 'ROOM OPEN - LINK COPIED, SEND IT TO A FRIEND');
+}
+
+async function joinRoom(code: string): Promise<void> {
+  if (mp) return;
+  startSandbox();
+  toast(`JOINING ROOM ${code}...`);
+  try {
+    mp = await MpSession.join(code, mpHooks);
+  } catch (err) {
+    console.error(err);
+    toast('COULD NOT JOIN THE ROOM', true);
+    return;
+  }
+  roomPill.show(code, 'guest');
+}
+
+function copyRoomLink(code: string, okText = 'LINK COPIED'): void {
+  const url = roomUrl(code);
+  navigator.clipboard?.writeText(url).then(
+    () => toast(okText),
+    () => toast(`ROOM ${code} - SHARE: ${url}`),
+  );
+}
+
+function leaveRoom(reason?: string, bad = false): void {
+  if (!mp) return;
+  mp.leave();
+  mp = null;
+  roomPill.hide();
+  history.replaceState(null, '', location.pathname);
+  if (reason) toast(reason, bad);
+}
+roomPill.onCopy = () => mp && copyRoomLink(mp.code);
+// dev only: lets automated two-browser tests read the session state
+if (import.meta.env.DEV)
+  (window as unknown as { __mp: () => unknown }).__mp = () =>
+    mp && { role: mp.role, code: mp.code, f: mp.host ? mp.host.f : mp.guest!.f, backlog: mp.guest?.backlog() ?? 0, sync: mp.sync, snaps: mp.snapCount };
 
 function loop(now: number): void {
   const dt = Math.min(120, now - lastT);
@@ -456,7 +579,8 @@ function paintAt(e: PointerEvt, forcedMat?: number): void {
   }
   if (pts.length === 0) return;
   strokeLast = { x: e.x, y: e.y };
-  post({ t: 'paint', pts, mat, size: brush, kind: paintKind });
+  if (mp && mode === 'sand') mp.local([{ k: 'paint', pts, mat, size: brush, kind: paintKind }]);
+  else post({ t: 'paint', pts, mat, size: brush, kind: paintKind });
   sfx.place();
   if (paused && !inFlight) sendStep(); // visual feedback while paused
 }
@@ -571,6 +695,7 @@ function startSandbox(): void {
 }
 
 function startPlayground(): void {
+  leaveRoom('YOU LEFT THE ROOM');
   close3d();
   renderer.setCinematic?.(true);
   mode = 'playground';
@@ -595,6 +720,7 @@ function startPlayground(): void {
 }
 
 function startChallenge(id: string): void {
+  leaveRoom('YOU LEFT THE ROOM');
   close3d();
   renderer.setCinematic?.(false);
   renderer.reset();
@@ -614,6 +740,7 @@ function startChallenge(id: string): void {
 }
 
 function openMenu(): void {
+  leaveRoom('YOU LEFT THE ROOM');
   sfx.playground(null); // no frames in the menu, so nothing else would fade it
   screen = 'menu';
   strokeLast = null;
@@ -634,6 +761,12 @@ function openMenu(): void {
       sfx.ensure();
       startPlayground();
       surprise();
+    },
+    onPlayTogether: () => {
+      sfx.ensure();
+      sfx.ui();
+      startSandbox();
+      void hostRoom();
     },
     onChallenge: (id) => {
       sfx.ensure();
@@ -824,6 +957,13 @@ new Input(
         surprise();
         return;
       }
+      if (k === 'o') {
+        sfx.ensure();
+        sfx.ui();
+        startSandbox();
+        void hostRoom();
+        return;
+      }
     }
     switch (k) {
       case ' ':
@@ -919,7 +1059,10 @@ post({ t: 'init', w: SIM_W, h: SIM_H, buf: masterBuf }, [masterBuf]);
  * message order to the worker is preserved either way.
  */
 const urlCode = takeUrlCode();
-if (urlCode) {
+const urlRoom = roomFromUrl();
+if (urlRoom) {
+  void joinRoom(urlRoom);
+} else if (urlCode) {
   startSandbox();
   void decodeShare(urlCode, SIM_W * SIM_H).then((d) => {
     if (!d) {

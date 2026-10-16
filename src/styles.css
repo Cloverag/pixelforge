@@ -1152,6 +1152,39 @@ kbd, .mode-key {
 @media (prefers-reduced-motion: reduce) {
   .px.surprise { animation: none; }
 }
+/* playing together: the room badge over the top of the stage */
+.room-pill {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  translate: -50% 0;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 6px 12px;
+  font-size: 10.5px;
+  letter-spacing: 1.2px;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+}
+.room-pill[hidden] { display: none; }
+.room-pill .px { padding: 4px 8px; font-size: 9.5px; }
+.room-code { color: var(--accent); font-weight: 700; }
+.room-role { color: var(--ink-faint); }
+.room-people { color: var(--ink-dim); min-width: 8ch; }
+.room-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ok);
+  box-shadow: 0 0 8px var(--ok);
+}
+.room-pill.alone .room-dot { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+
 /* playground demo scenes: two columns of small buttons */
 .scenebtns {
   display: grid;

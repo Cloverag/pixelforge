@@ -218,19 +218,31 @@ export class World {
    */
   hash(): number {
     let h = 0x811c9dc5;
-    const mix = (b: Uint8Array) => {
+    for (const p of this.hashParts()) h = Math.imul(h ^ p, 0x01000193);
+    return h >>> 0;
+  }
+
+  /**
+   * The fingerprint by component - cells, meta, clock, wake, wind, rng,
+   * frame - so a desync report can say which part of the state went first.
+   */
+  hashParts(): number[] {
+    const fnv = (b: Uint8Array) => {
+      let h = 0x811c9dc5;
       for (let i = 0; i < b.length; i++) h = Math.imul(h ^ b[i], 0x01000193);
+      return h >>> 0;
     };
     const g = this.grid;
-    mix(g.cells);
-    mix(g.meta);
-    mix(g.clock);
-    mix(g.chunks.saveWake());
     const w = this.wind.save();
-    mix(new Uint8Array(w.buffer, w.byteOffset, w.byteLength));
-    h = Math.imul(h ^ this.rng.state, 0x01000193);
-    h = Math.imul(h ^ this.f, 0x01000193);
-    return h >>> 0;
+    return [
+      fnv(g.cells),
+      fnv(g.meta),
+      fnv(g.clock),
+      fnv(g.chunks.saveWake()),
+      fnv(new Uint8Array(w.buffer, w.byteOffset, w.byteLength)),
+      this.rng.state >>> 0,
+      this.f,
+    ];
   }
 
   /** Apply one player's action; in multiplayer, at the frame the host chose. */

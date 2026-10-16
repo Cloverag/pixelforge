@@ -1,5 +1,5 @@
 /// <reference lib="webworker" />
-import { CHUNKS_X, CHUNKS_Y, SIM_H, SIM_W, Req, Res, SaveData } from './protocol';
+import { CHUNKS_X, CHUNKS_Y, HASH_EVERY, SIM_H, SIM_W, Req, Res, SaveData } from './protocol';
 import { World } from './world';
 import { PG_BG } from './particles';
 
@@ -20,7 +20,22 @@ function respond(res: Res, transfer?: ArrayBuffer[]): void {
   ctx.postMessage(res, transfer ?? []);
 }
 
+/**
+ * An uncaught error in a worker reaches the page as an ErrorEvent with no
+ * message, file or line ("sim worker error undefined undefined undefined").
+ * Catch it here and send the real message and stack instead.
+ */
 ctx.onmessage = (e: MessageEvent<Req>) => {
+  try {
+    handle(e);
+  } catch (err) {
+    const x = err as Error;
+    respond({ t: 'error', error: `${x?.message ?? x} | while handling '${e.data?.t}'\n${x?.stack ?? ''}` });
+    throw err;
+  }
+};
+
+function handle(e: MessageEvent<Req>): void {
   const msg = e.data;
   if (!world) {
     if (msg.t !== 'init') return;
@@ -63,6 +78,15 @@ ctx.onmessage = (e: MessageEvent<Req>) => {
       if (w.parts) w.parts.timeScale = msg.scale;
       break;
 
+    case 'netSnap':
+      respond({ t: 'netSnap', snapshot: w.snapshot() });
+      break;
+
+    case 'netRestore':
+      w.restore(msg.snap);
+      forceFull = true;
+      break;
+
     case 'pgPreset':
       if (w.loadPreset(msg.id)) {
         forceFull = true;
@@ -98,7 +122,16 @@ ctx.onmessage = (e: MessageEvent<Req>) => {
 
     case 'step': {
       const pix = new Uint32Array(msg.buf);
-      w.step();
+      let hashes: number[] | undefined;
+      if (msg.inputs) {
+        for (const batch of msg.inputs) {
+          for (const inp of batch) w.applyInput(inp);
+          w.step();
+          if (w.f % HASH_EVERY === 0) (hashes ??= []).push(w.f, w.hash(), ...w.hashParts());
+        }
+      } else {
+        w.step();
+      }
       if (w.mode === 'playground' && w.parts && master) {
         // trails are authoritative on master; copy the finished frame out
         if (forceFull) master.fill(PG_BG);
@@ -120,6 +153,8 @@ ctx.onmessage = (e: MessageEvent<Req>) => {
       forceFull = false;
       const st = w.stats();
       const res: Res = {
+        hashes,
+        f: w.f,
         t: 'frame',
         buf: msg.buf,
         counts: st.counts,
@@ -241,7 +276,7 @@ ctx.onmessage = (e: MessageEvent<Req>) => {
     default:
       break;
   }
-};
+}
 
 function recount(w: World): void {
   const counts = w.grid.counts;

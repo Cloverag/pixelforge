@@ -10,6 +10,7 @@ export interface MenuCallbacks {
   onSandbox(): void;
   onPlayground(): void;
   onSurprise(): void;
+  onPlayTogether(): void;
   onChallenge(id: string): void;
   onToggleMute(): void;
   onToggleCrt(): void;
@@ -125,6 +126,9 @@ export function showMenu(cbs: MenuCallbacks): void {
   const sur = modeButton('SURPRISE ME', 'A brand-new light show, made up on the spot.', 'R', false, cbs.onSurprise);
   sur.classList.add('surprise');
   modes.appendChild(sur);
+  modes.appendChild(
+    modeButton('PLAY TOGETHER (BETA)', 'Open a sandbox room and send friends the link.', 'O', false, cbs.onPlayTogether),
+  );
   const tip = h('aside', 'menu-tip');
   tip.appendChild(h('span', 'tip-label', 'TIP'));
   tip.appendChild(h('p', 'tip-text', TIPS[Math.floor(Math.random() * TIPS.length)]));

@@ -56,7 +56,16 @@ export type Req =
   | { t: 'pgSurprise'; seed: number }
   | { t: 'watch3d'; on: boolean }
   | { t: 'watchFluid'; on: boolean }
-  | { t: 'step'; buf: ArrayBuffer }
+  /**
+   * Step the world. In multiplayer `inputs` holds one batch per frame: each
+   * is applied before its step, so a guest that fell behind catches up
+   * several frames in one message (one render at the end).
+   */
+  | { t: 'step'; buf: ArrayBuffer; inputs?: NetInput[][] }
+  /** multiplayer: send back a full snapshot (for a joiner) */
+  | { t: 'netSnap' }
+  /** multiplayer: become this snapshot */
+  | { t: 'netRestore'; snap: Snapshot }
   | { t: 'clear' }
   | { t: 'loadChallenge'; id: string }
   | { t: 'toSandbox' }
@@ -79,6 +88,11 @@ export interface Snapshot {
   wake: Uint8Array;
   wind: Float32Array;
 }
+
+/** multiplayer: peers compare world fingerprints every this many frames */
+export const HASH_EVERY = 60;
+/** numbers per fingerprint report: frame, hash, 7 parts */
+export const HASH_STRIDE = 9;
 
 /** A player action that changes the shared world, applied at an exact frame. */
 export type NetInput =
@@ -114,7 +128,17 @@ export function emptyEvents(): SimEvents {
 }
 
 export interface Res {
-  t: 'ready' | 'frame' | 'state';
+  t: 'ready' | 'frame' | 'state' | 'netSnap' | 'error';
+  /** t 'error': what the worker threw, with its stack */
+  error?: string;
+  /** multiplayer: a full snapshot, for t 'netSnap' */
+  snapshot?: Snapshot;
+  /** multiplayer: groups of HASH_STRIDE numbers - frame, fingerprint, then
+   *  its 7 parts (World.hashParts) - for frames that are multiples of
+   *  HASH_EVERY, so peers can compare worlds and say what differs */
+  hashes?: number[];
+  /** the world's frame after this step (multiplayer keeps clocks honest) */
+  f?: number;
   buf?: ArrayBuffer;
   counts?: number[];
   used?: number[];
