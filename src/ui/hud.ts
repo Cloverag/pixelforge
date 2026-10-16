@@ -167,6 +167,10 @@ export class Hud {
       ['View', [this.softBtn, crtBtn, this.gridBtn, this.view3dBtn, bgBtn, this.themeBtn]],
       ['Sound', [this.muteBtn, this.musicBtn]],
     ];
+    // On a phone these fold into a drop-down behind the MORE button (CSS);
+    // on a desktop the wrapper is display: contents and changes nothing.
+    const fold = h('div', 'topbar-groups');
+    fold.id = 'topbar-groups';
     for (const [name, btns] of groups) {
       const g = h('div', 'btn-group');
       g.setAttribute('role', 'group');
@@ -175,9 +179,25 @@ export class Hud {
       const row = h('div', 'grp-row');
       for (const b of btns) row.appendChild(b);
       g.appendChild(row);
-      this.topbar.appendChild(g);
+      fold.appendChild(g);
     }
+    this.topbar.appendChild(fold);
     const end = h('div', 'btn-group end');
+    const more = this.mkBtn('MORE', () => {
+      const open = this.topbar.classList.toggle('more-open');
+      more.setAttribute('aria-expanded', String(open));
+    }, 'Pause, save, view and sound settings');
+    more.classList.add('more-btn');
+    more.setAttribute('aria-controls', 'topbar-groups');
+    more.setAttribute('aria-expanded', 'false');
+    // picking anything in the drop-down closes it
+    fold.addEventListener('click', (e) => {
+      if ((e.target as HTMLElement).closest('button')) {
+        this.topbar.classList.remove('more-open');
+        more.setAttribute('aria-expanded', 'false');
+      }
+    });
+    end.appendChild(more);
     end.appendChild(helpBtn);
     end.appendChild(menuBtn);
     this.topbar.appendChild(end);

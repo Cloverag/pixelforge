@@ -1044,6 +1044,110 @@ kbd, .mode-key {
   .challenge-list { grid-template-columns: 1fr; }
 }
 
+/* ==== PHONES ====
+   The top bar folds to one row (brand, MORE, ?, MENU) with everything else
+   in a drop-down; portrait puts the canvas full-width under it and gives
+   the rest of the screen to big, thumb-sized material buttons; landscape
+   puts a narrow material column beside the canvas. Desktop: the fold
+   wrapper is display: contents and MORE is hidden, so nothing changes. */
+.topbar-groups { display: contents; }
+.more-btn { display: none !important; }
+
+@media (max-width: 720px), (max-height: 520px) and (orientation: landscape) {
+  :root { --topbar-h: 44px; }
+  #topbar {
+    position: relative;
+    flex-wrap: nowrap;
+    align-items: center;
+    min-height: 44px;
+    padding: 5px 10px;
+    gap: 8px;
+  }
+  #topbar .mode-label { display: none; }
+  #topbar .title { font-size: 13px; }
+  .more-btn { display: inline-flex !important; }
+  .topbar-groups {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 30;
+    flex-wrap: wrap;
+    gap: 12px 16px;
+    padding: 12px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--line);
+    box-shadow: 0 14px 28px rgba(0, 0, 0, 0.5);
+  }
+  #topbar.more-open .topbar-groups { display: flex; }
+  #topbar.more-open .more-btn { border-color: var(--accent); color: var(--accent); }
+  .topbar-groups .grp-label { display: block; }
+  .topbar-groups button.px { min-height: 40px; }
+  /* the room badge: just the essentials */
+  .room-pill { top: 6px; gap: 6px; padding: 4px 6px 4px 8px; }
+  .room-pill .room-role,
+  .room-pill .room-people { display: none; }
+  .room-pill .px { padding: 4px 6px; font-size: 9px; }
+}
+
+@media (max-width: 720px) and (orientation: portrait) {
+  /* the rail comes first in the DOM: reversed, the canvas sits on top */
+  #workspace { flex-direction: column-reverse; justify-content: flex-end; }
+  #stagecol { flex: 0 0 auto; }
+  /* exactly tall enough for a full-width 16:9 canvas plus its frame */
+  #stage { flex: 0 0 auto; height: calc((100vw - 16px) * 0.5625 + 40px); padding: 4px; }
+  #toolbar {
+    flex: 1 1 auto;
+    flex-direction: column;
+    overflow-x: hidden;
+    overflow-y: auto !important;
+    padding: 10px 12px 18px;
+    border-top: 1px solid var(--edge-dark);
+  }
+  #palette { flex-direction: column; }
+  .gswatches { grid-template-columns: repeat(3, 1fr); grid-template-rows: none; grid-auto-flow: row; }
+  .swatch { width: auto; min-height: 44px; }
+  .toolcol { order: -1; min-width: 0; margin: 0 0 12px; }
+  .scenebtns .px,
+  .toolbtns .px { min-height: 40px; }
+}
+
+@media (max-height: 520px) and (orientation: landscape) {
+  #workspace { flex-direction: row; }
+  #toolbar {
+    flex: 0 0 176px;
+    width: 176px;
+    flex-direction: column;
+    overflow-x: hidden;
+    overflow-y: auto !important;
+    padding: 8px;
+    border-top: 0;
+    border-right: 1px solid var(--edge-dark);
+  }
+  #palette { flex-direction: column; }
+  .gswatches { grid-template-columns: 1fr 1fr; grid-template-rows: none; grid-auto-flow: row; }
+  .swatch { width: auto; min-height: 38px; }
+  .toolcol { order: -1; min-width: 0; margin: 0 0 10px; }
+  #statusbar { display: none; }
+  #stage { padding: 4px; }
+  /* a narrow column: label over a full-width slider, nothing wider than it */
+  .toolcol .brushrow:not(.hint) { flex-wrap: wrap; }
+  .toolcol .brushrow input[type='range'] { flex: 1 1 100%; order: 3; min-width: 0; }
+  #palette, .matgroup, .gswatches, .swatch { min-width: 0; }
+  /* two columns in 176px: tighter labels so POWDER and TURBINE still fit */
+  .swatch { gap: 5px; padding-inline: 5px; }
+  .swatch .chip { width: 12px; height: 12px; flex: none; }
+  .swatch .nm { font-size: 8.5px; letter-spacing: 0.3px; overflow: hidden; text-overflow: ellipsis; }
+}
+
+/* touch screens have no wheel, no keyboard: drop hints that name them */
+@media (pointer: coarse), (max-width: 720px), (max-height: 520px) and (orientation: landscape) {
+  .brushrow.hint,
+  .mode-btn .mode-key,
+  .menu-keys { display: none; }
+}
+
 /* Motion is decoration here; none of it carries information on its own. */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
