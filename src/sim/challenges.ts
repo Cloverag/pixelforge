@@ -341,11 +341,14 @@ CHALLENGES.push(
       fillRect(w, 150, 270, 210, 271, Mat.WIRE); // segment 2 (higher)
       fillRect(w, 270, 270, 330, 271, Mat.WIRE); // segment 3
       fillRect(w, 390, 300, 452, 301, Mat.WIRE); // segment 4 (lower)
-      fillRect(w, 452, 300, 556, 301, Mat.WIRE); // into the beacon
       // beacon tower: glass shell, live wire core
       fillRect(w, 540, 200, 600, 320, Mat.GLASS);
       fillRect(w, 556, 216, 584, 304, Mat.EMPTY);
       fillRect(w, 560, 240, 580, 300, Mat.WIRE);
+      // into the beacon, through the shell to the core. Drawn last: drawn
+      // before the shell, the glass overwrote it and the interior clear cut
+      // it, so no spark could ever reach the core and the level was lost.
+      fillRect(w, 452, 300, 559, 301, Mat.WIRE);
     },
     check(w, _frame, _used) {
       if (countSparked(w, 556, 216, 584, 304) > 0) return 'win';
