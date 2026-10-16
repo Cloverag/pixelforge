@@ -1439,6 +1439,98 @@ kbd, .mode-key {
 .pf-swatch.on { border-color: var(--ink); box-shadow: 0 0 0 2px var(--panel); }
 .pf-swatch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
+/* reactions (ui/emotes.ts and the room badge tray) */
+.room-react { font-size: 13px !important; padding: 2px 6px !important; line-height: 1; }
+.room-tray {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  display: flex;
+  gap: 4px;
+  padding: 6px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+}
+.room-tray[hidden] { display: none; }
+.tray-btn {
+  min-width: 34px;
+  height: 34px;
+  font-size: 18px;
+  line-height: 1;
+  background: var(--panel-3);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+.tray-btn:hover { border-color: var(--accent); }
+.tray-btn.ping { font-family: var(--font); font-size: 9.5px; letter-spacing: 1px; color: var(--accent); padding: 0 8px; }
+.emote {
+  position: absolute;
+  z-index: 6;
+  pointer-events: none;
+}
+.emote.pop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  translate: -50% -100%;
+  animation: emote-rise 1.7s cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+}
+.emote-face {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  font-size: 24px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--who) 30%, rgba(10, 10, 16, 0.75));
+  border: 2px solid var(--who);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--who) 70%, transparent);
+}
+.emote-who { margin-top: 3px; font-size: 8px; letter-spacing: 1px; color: var(--who); text-shadow: 0 1px 2px #000; }
+@keyframes emote-rise {
+  0% { transform: translateY(8px) scale(0.4); opacity: 0; }
+  15% { transform: translateY(0) scale(1.15); opacity: 1; }
+  25% { transform: translateY(-4px) scale(1); }
+  80% { opacity: 1; }
+  100% { transform: translateY(-56px) scale(0.95); opacity: 0; }
+}
+.emote.ping { width: 0; height: 0; animation: ping-life 2.2s linear forwards; }
+.ping-ring {
+  position: absolute;
+  left: -24px;
+  top: -24px;
+  width: 48px;
+  height: 48px;
+  border: 3px solid var(--who);
+  border-radius: 50%;
+  opacity: 0;
+  animation: ping-pulse 1.1s ease-out 2 both;
+}
+.ping-label {
+  position: absolute;
+  left: 18px;
+  top: -34px;
+  padding: 3px 6px;
+  font-size: 9px;
+  letter-spacing: 1px;
+  white-space: nowrap;
+  color: #111;
+  background: var(--who);
+  border-radius: 3px;
+}
+@keyframes ping-pulse {
+  0% { transform: scale(0.2); opacity: 1; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+@keyframes ping-life { 0%, 85% { opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .emote.pop { animation: ping-life 1.7s linear forwards; }
+  .ping-ring { animation: none; opacity: 1; }
+}
+
 /* playground demo scenes: two columns of small buttons */
 .scenebtns {
   display: grid;

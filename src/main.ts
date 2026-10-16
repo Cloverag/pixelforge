@@ -18,6 +18,8 @@ import type { NetInput, Snapshot } from './sim/protocol';
 import { RoomPill } from './ui/roompill';
 import { CursorLayer } from './ui/cursors';
 import { confirmDialog, isDialogOpen, nameDialog } from './ui/dialog';
+import { EmoteLayer } from './ui/emotes';
+import { PING } from './net/presence';
 import { myIdentity, saveIdentity } from './net/presence';
 import { Mode, PaintKind, Req, Res, SIM_H, SIM_W, SimEvents, Stats } from './sim/protocol';
 import { CHALLENGES } from './sim/challenges';
@@ -435,6 +437,9 @@ let mpGate = false;
 let frameWarned = false;
 const roomPill = new RoomPill(() => leaveRoom('YOU LEFT THE ROOM'));
 const cursors = new CursorLayer();
+const emotes = new EmoteLayer();
+/** where my cursor last was on the canvas, for placing reactions */
+let myCursor: { x: number; y: number } | null = null;
 const me = myIdentity();
 const snapWaiters: ((s: Snapshot) => void)[] = [];
 
@@ -457,7 +462,19 @@ const mpHooks: MpHooks = {
   },
   onCursor: (id, c) => cursors.update(id, c),
   onWaiting: (on) => roomPill.setWaiting(on),
+  onEmote: (e) => {
+    emotes.show(e);
+    sfx.emote(e.e === PING);
+  },
 };
+
+/** React at my cursor, or the middle of the canvas if it is not over it. */
+function react(e: number): void {
+  if (!mp) return;
+  const at = myCursor ?? { x: SIM_W >> 1, y: SIM_H >> 1 };
+  mp.emote(e, at.x, at.y);
+}
+roomPill.onEmote = react;
 
 roomPill.onRename = (name) => {
   me.name = name;
@@ -506,6 +523,7 @@ let lastCursorAt = 0;
 let cursorPending: { x: number; y: number; hidden: boolean } | null = null;
 function shareCursor(x: number, y: number, hidden: boolean): void {
   if (!mp || mode !== 'sand' || screen !== 'game') return;
+  myCursor = hidden ? null : { x, y };
   cursorPending = { x, y, hidden };
   const now = performance.now();
   if (now - lastCursorAt < 50) return;
@@ -601,6 +619,7 @@ function leaveRoom(reason?: string, bad = false): void {
   lastRoster = [];
   roomPill.hide();
   cursors.clear();
+  emotes.clear();
   history.replaceState(null, '', location.pathname);
   if (reason) toast(reason, bad);
 }
@@ -1119,6 +1138,9 @@ new Input(
         break;
       case 'escape':
         if (screen === 'game') void requestMenu();
+        break;
+      case 'z':
+        if (mp && screen === 'game') react(PING);
         break;
       case '3':
         if (screen === 'game') void toggle3d();

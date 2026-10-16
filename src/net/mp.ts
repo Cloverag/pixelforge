@@ -2,7 +2,7 @@ import type { NetInput, Snapshot } from '../sim/protocol';
 import { GuestCore, HostCore, type Wire } from './lockstep';
 import { HASH_STRIDE } from '../sim/protocol';
 import { gunzip, gzip, packSnapshot, unpackSnapshot } from './pack';
-import type { CursorMsg, Identity, PeerInfo } from './presence';
+import type { CursorMsg, EmoteMsg, Identity, PeerInfo } from './presence';
 
 /**
  * Co-op sandbox rooms over WebRTC, peer to peer.
@@ -37,6 +37,8 @@ export interface MpHooks {
   onCursor(id: string, c: CursorMsg | null): void;
   /** guest: the host dropped out and we are waiting for it to come back */
   onWaiting(waiting: boolean): void;
+  /** someone reacted (an emoji, or a ping) */
+  onEmote(e: EmoteMsg): void;
 }
 
 /** a guest waits this long for a host that dropped (reloaded, lost signal) */
@@ -93,6 +95,8 @@ export class MpSession {
   private sendSnap!: (data: Uint8Array, to: string, f: number) => void;
   private ended = false;
   private sendCursor!: (c: CursorMsg, to?: string) => void;
+  private sendEmote!: (e: EmoteMsg) => void;
+  private lastEmote = 0;
   private roster = new Map<string, PeerInfo>();
   private lastCursor: CursorMsg | null = null;
   private pingTimer: ReturnType<typeof setInterval> | null = null;
@@ -152,6 +156,11 @@ export class MpSession {
     this.room = room;
     const wire = room.makeAction<HostMsg>('w');
     const snap = room.makeAction<Uint8Array>('s');
+    const emo = room.makeAction<EmoteMsg>('e');
+    this.sendEmote = (e) => void emo.send(e);
+    emo.onMessage = (e) => {
+      if (!this.ended) this.hooks.onEmote(e);
+    };
     const cur = room.makeAction<CursorMsg>('c');
     this.sendCursor = (c, to) => void cur.send(c, to ? { target: to } : undefined);
     cur.onMessage = (c, { peerId }) => {
@@ -282,6 +291,20 @@ export class MpSession {
 
   private emitRoster(): void {
     this.hooks.onRoster([...this.roster.values()]);
+  }
+
+  /**
+   * React: an emoji or a ping at (x, y). Shown here at once and sent to
+   * everyone; at most one every 300 ms so nobody can flood a room.
+   */
+  emote(e: number, x: number, y: number): boolean {
+    const now = performance.now();
+    if (this.ended || now - this.lastEmote < 300) return false;
+    this.lastEmote = now;
+    const msg: EmoteMsg = { e, x, y, n: this.me.name, c: this.me.color };
+    this.hooks.onEmote(msg);
+    this.sendEmote(msg);
+    return true;
   }
 
   /** Tell everyone who I am now (after a rename), without waiting. */

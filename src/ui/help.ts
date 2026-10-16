@@ -78,6 +78,7 @@ function buildContent(box: HTMLElement): void {
     ['Q', 'slow motion (playground)'],
     ['X', 'clear everything (playground)'],
     ['R', 'SURPRISE ME: a new generated scene'],
+    ['Z', 'in a room: ping where your cursor is (look here!)'],
     ['M / C', 'mute sfx / CRT filter'],
     ['B', 'grid view - chunky blocks, cycles size'],
     ['3', 'toggle 3D voxel view'],

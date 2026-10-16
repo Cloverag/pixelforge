@@ -86,3 +86,16 @@ export function saveIdentity(id: Identity): void {
   }
 }
 
+/** quick reactions; PING is a "look here" marker rather than an emoji */
+export const EMOTES = ['👍', '🔥', '😂', '😮', '❤️'];
+export const PING = -1;
+
+/** a reaction on the wire: which one, where (sim cells), and who */
+export type EmoteMsg = {
+  e: number;
+  x: number;
+  y: number;
+  n: string;
+  c: string;
+};
+

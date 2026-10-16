@@ -283,6 +283,16 @@ export class Sfx {
     }
   }
 
+  /** a reaction arriving: a soft pop, or for a ping a bright two-note call */
+  emote(ping: boolean): void {
+    if (ping) {
+      this.blip(880, 0.18, 'sine', 0.05);
+      this.blip(1318.5, 0.3, 'sine', 0.05, undefined, 120);
+    } else {
+      this.blip(520, 0.09, 'triangle', 0.05, 980);
+    }
+  }
+
   /** a portal opening: a rising whoom with a shimmer on top */
   private portalOpen(): void {
     this.blip(90, 0.55, 'sine', 0.08, 420);
