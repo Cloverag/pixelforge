@@ -1528,8 +1528,10 @@ export class World {
         else g.setXY(nx, ny, Mat.FIRE, this.rng.range(12, 42));
         this.events.ignites++;
       }
-      if (t === Mat.FUSE) {
-        g.meta[g.idx(nx, ny)] = Math.max(g.meta[g.idx(nx, ny)], 6);
+      // light a fuse, never relight one: resetting a burning cell every tick
+      // held it at 6 for as long as the flame beside it lived
+      if (t === Mat.FUSE && g.meta[g.idx(nx, ny)] === 0) {
+        g.meta[g.idx(nx, ny)] = 6;
         g.chunks.wakeCell(nx, ny);
       }
       if (t === Mat.TNT) this.lightTnt(nx, ny, TNT_FUSE);
@@ -1574,6 +1576,11 @@ export class World {
     }
     g.chunks.wakeCell(x, y); // burning fuse keeps ticking
     if (burning === 1) {
+      // The flame passes on only as each cell burns out - the fire it leaves
+      // lights the next cell - so it travels one cell per ~6 ticks. Burning
+      // cells used to relight every neighbour below 6 on every tick, so
+      // neighbours kept resetting each other between 5 and 6: a lit fuse
+      // glowed forever and never reached its charge.
       g.setXY(x, y, Mat.FIRE, this.rng.range(10, 24));
       // fuse-lit TNT (fire alone cannot ignite it - spark or fuse only)
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
@@ -1585,19 +1592,6 @@ export class World {
       return;
     }
     g.meta[i] = burning - 1;
-    const spread = (sx: number, sy: number) => {
-      if (g.get(sx, sy) === Mat.FUSE) {
-        const si = g.idx(sx, sy);
-        if (g.meta[si] < 6) {
-          g.meta[si] = 6;
-          g.chunks.wakeCell(sx, sy);
-        }
-      }
-    };
-    spread(x - 1, y);
-    spread(x + 1, y);
-    spread(x, y - 1);
-    spread(x, y + 1);
   }
 
   private ember(x: number, y: number, i: number): void {

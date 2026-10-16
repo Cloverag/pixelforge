@@ -536,3 +536,35 @@ describe('mud, turbines and creatures', () => {
   });
 });
 
+
+describe('fuse', () => {
+  /** a 60-cell fuse on a wall, lit at the left end, `end` at the right */
+  function rig(seed: number, end: number): World {
+    const w = new World(seed);
+    for (let x = 90; x < 230; x++) w.grid.setXY(x, 201, Mat.WALL);
+    for (let x = 100; x < 160; x++) w.grid.setXY(x, 200, Mat.FUSE);
+    for (let y = 196; y < 201; y++) for (let x = 160; x < 165; x++) w.grid.setXY(x, y, end);
+    w.grid.setXY(99, 200, Mat.FIRE, 30);
+    return w;
+  }
+
+  it('burns along its length, a few ticks per cell', () => {
+    const w = rig(31, Mat.WALL);
+    stepN(w, 120);
+    // ~6 ticks a cell: well under half gone, but clearly burning down
+    expect(w.grid.counts[Mat.FUSE]).toBeGreaterThan(30);
+    expect(w.grid.counts[Mat.FUSE]).toBeLessThan(55);
+    stepN(w, 400);
+    expect(w.grid.counts[Mat.FUSE]).toBe(0);
+  });
+
+  it('sets off the gunpowder at its far end', () => {
+    const w = rig(32, Mat.GUNPOWDER);
+    let booms = 0;
+    for (let f = 0; f < 520; f++) {
+      w.step();
+      booms += w.takeEvents().booms.length / 3;
+    }
+    expect(booms).toBeGreaterThan(0);
+  });
+});
