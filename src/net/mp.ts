@@ -51,7 +51,7 @@ const PING_MS = 3000;
 
 /** host -> guests: my world's fingerprint at frame f */
 type HashMsg = { t: 'hash'; f: number; h: number; p?: number[] };
-const PART_NAMES = ['cells', 'meta', 'clock', 'wake', 'wind', 'rng', 'frame'];
+const PART_NAMES = ['cells', 'meta', 'clock', 'wake', 'wind', 'rng', 'frame', 'debris'];
 type HostMsg = Wire | { t: 'host' } | HashMsg | { t: 'closing' };
 
 /** result of comparing fingerprints with the host */

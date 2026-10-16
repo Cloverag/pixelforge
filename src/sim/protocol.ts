@@ -91,6 +91,8 @@ export interface Snapshot {
   shade: Uint8Array;
   wake: Uint8Array;
   wind: Float32Array;
+  /** TNT debris in flight (World.debris); absent in older snapshots */
+  debris?: Float64Array;
   /** which world this is; the playground also carries its particle system */
   mode?: Mode;
   pg?: Uint8Array;
@@ -99,7 +101,7 @@ export interface Snapshot {
 /** multiplayer: peers compare world fingerprints every this many frames */
 export const HASH_EVERY = 60;
 /** numbers per fingerprint report: frame, hash, 7 parts */
-export const HASH_STRIDE = 9;
+export const HASH_STRIDE = 10;
 
 /** A player action that changes the shared world, applied at an exact frame. */
 export type NetInput =
@@ -150,7 +152,7 @@ export interface Res {
   /** multiplayer: a full snapshot, for t 'netSnap' */
   snapshot?: Snapshot;
   /** multiplayer: groups of HASH_STRIDE numbers - frame, fingerprint, then
-   *  its 7 parts (World.hashParts) - for frames that are multiples of
+   *  its 8 parts (World.hashParts) - for frames that are multiples of
    *  HASH_EVERY, so peers can compare worlds and say what differs */
   hashes?: number[];
   /** the world's frame after this step (multiplayer keeps clocks honest) */

@@ -20,14 +20,16 @@ export function packSnapshot(s: Snapshot): Uint8Array {
   // fresh one), so zero those.
   const shade = s.shade.slice();
   for (let i = 0; i < shade.length; i++) if (s.cells[i] === 0) shade[i] = 0;
-  // version 2 adds the mode and the playground's particle system
+  // version 2 adds the mode and the playground's particle system,
+  // version 3 the TNT debris in flight
   const mode = new Uint8Array([s.mode === 'playground' ? 1 : 0]);
-  const parts: Uint8Array[] = [...FIELDS.map((k) => (k === 'shade' ? shade : s[k])), wind, mode, s.pg ?? new Uint8Array(0)];
+  const debris = s.debris ? new Uint8Array(s.debris.buffer, s.debris.byteOffset, s.debris.byteLength) : new Uint8Array(0);
+  const parts: Uint8Array[] = [...FIELDS.map((k) => (k === 'shade' ? shade : s[k])), wind, mode, s.pg ?? new Uint8Array(0), debris];
   const size = 5 * 4 + parts.reduce((a, p) => a + 4 + p.byteLength, 0);
   const out = new Uint8Array(size);
   const dv = new DataView(out.buffer);
   let o = 0;
-  for (const v of [MAGIC, 2, s.f, s.rng, s.shadeSeed]) {
+  for (const v of [MAGIC, 3, s.f, s.rng, s.shadeSeed]) {
     dv.setUint32(o, v >>> 0, true);
     o += 4;
   }
@@ -63,6 +65,11 @@ export function unpackSnapshot(buf: Uint8Array): Snapshot {
     snap.mode = take()[0] === 1 ? 'playground' : 'sand';
     const pg = take();
     if (pg.length) snap.pg = pg;
+  }
+  if (version >= 3) {
+    // take() slices into a fresh buffer, so the doubles are aligned
+    const d = take();
+    if (d.length) snap.debris = new Float64Array(d.buffer, d.byteOffset, d.byteLength / 8);
   }
   return snap;
 }

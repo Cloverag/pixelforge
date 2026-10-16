@@ -33,6 +33,16 @@ const LQ_RUNNY = 4;
 const LQ_SCAN = 128;
 /** drifting dust mote in a windy empty cell; ABGR for a dim slate blue */
 const WIND_DUST = 0xff3a2c22;
+/** flying debris: x, y, vx, vy, material, meta per piece */
+const DEB = 6;
+/** pieces in the air at once; a blast past this falls back to smoke */
+const MAX_DEBRIS = 2400;
+/** cells/frame^2: a fast piece rises ~60 cells, a slow one hops */
+const DEB_G = 0.14;
+const DEB_DRAG = 0.995;
+const DEB_VMAX = 8;
+/** how far past the blast radius loose ground is kicked up, in radii */
+const EJECTA = 2.2;
 
 interface Source {
   mat: number;
@@ -66,6 +76,7 @@ class ActiveChallenge {
     g.counts[Mat.EMPTY] = g.cells.length;
     g.eternals.clear();
     g.chunks.wakeAll();
+    this.w.debris.length = 0;
     this.frame = 0;
     this.done = false;
     this.result = null;
@@ -126,6 +137,12 @@ export class World {
   events: SimEvents = emptyEvents();
   /** total sim frames elapsed (drives animation + row hashes) */
   f = 0;
+  /**
+   * What a TNT blast threw, in flight (DEB numbers per piece). Part of the
+   * simulation: stepped in step(), carried in snapshots and the fingerprint,
+   * and moved with + - * / only so every engine lands it on the same cell.
+   */
+  debris: number[] = [];
 
   constructor(seed = 1234567) {
     this.grid = new Grid(SIM_W, SIM_H);
@@ -146,6 +163,7 @@ export class World {
     g.eternals.clear();
     g.chunks.wakeAll();
     this.wind.clear();
+    this.debris.length = 0;
     this.shake = 0;
     this.events = emptyEvents();
   }
@@ -188,6 +206,7 @@ export class World {
       shade: g.shade.slice(),
       wake: g.chunks.saveWake(),
       wind: this.wind.save(),
+      debris: new Float64Array(this.debris),
       mode: this.mode,
       pg: this.mode === 'playground' && this.parts ? this.parts.pack() : undefined,
     };
@@ -204,6 +223,7 @@ export class World {
     g.shade.set(s.shade);
     g.chunks.restoreWake(s.wake);
     this.wind.restore(s.wind);
+    this.debris = s.debris ? Array.from(s.debris) : [];
     g.counts.fill(0);
     for (let i = 0; i < g.cells.length; i++) g.counts[g.cells[i]]++;
     g.rebuildEternals();
@@ -227,7 +247,7 @@ export class World {
 
   /**
    * The fingerprint by component - cells, meta, clock, wake, wind, rng,
-   * frame - so a desync report can say which part of the state went first.
+   * frame, debris - so a desync report can say which part of the state went first.
    */
   hashParts(): number[] {
     const fnv = (b: Uint8Array) => {
@@ -239,9 +259,10 @@ export class World {
     if (this.mode === 'playground') {
       // walls and bumpers, plus what was built - not the particles (see
       // PSys.structureHash)
-      return [fnv(g.cells), fnv(g.meta), this.parts?.structureHash() ?? 0, 1, 0, 0, this.f];
+      return [fnv(g.cells), fnv(g.meta), this.parts?.structureHash() ?? 0, 1, 0, 0, this.f, 0];
     }
     const w = this.wind.save();
+    const d = new Float64Array(this.debris);
     return [
       fnv(g.cells),
       fnv(g.meta),
@@ -250,6 +271,7 @@ export class World {
       fnv(new Uint8Array(w.buffer, w.byteOffset, w.byteLength)),
       this.rng.state >>> 0,
       this.f,
+      fnv(new Uint8Array(d.buffer)),
     ];
   }
 
@@ -473,6 +495,7 @@ export class World {
       }
     }
 
+    if (this.debris.length) this.stepDebris();
     if (ch) ch.check();
     g.chunks.spreadHalo();
     if (this.shake > 0) this.shake--;
@@ -1555,7 +1578,7 @@ export class World {
       // fuse-lit TNT (fire alone cannot ignite it - spark or fuse only)
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
         if (g.get(x + dx, y + dy) === Mat.TNT) {
-          this.explode(x + dx, y + dy, 9);
+          this.explode(x + dx, y + dy, 9, true);
           return;
         }
       }
@@ -1717,7 +1740,7 @@ export class World {
           this.explode(nx, ny, 5);
           return;
         case Mat.TNT:
-          this.explode(nx, ny, 9);
+          this.explode(nx, ny, 9, true);
           return;
         case Mat.WOOD:
           if (this.rng.chance(0.5)) g.setXY(nx, ny, Mat.EMBER, this.rng.range(70, 150));
@@ -1832,7 +1855,7 @@ export class World {
     const left = g.meta[i];
     if (left === 0) return;
     if (left <= 1) {
-      this.explode(x, y, 9);
+      this.explode(x, y, 9, true);
       return;
     }
     g.meta[i] = left - 1;
@@ -1853,17 +1876,39 @@ export class World {
     g.touch(x, y);
   }
 
-  explode(cx: number, cy: number, r: number): void {
+  /**
+   * A blast of radius r: the core turns to fire, the shell is erased (or,
+   * with `fling`, thrown), and a shock front goes out through the wind.
+   *
+   * `fling` is TNT's: material in the shell is torn loose and thrown out
+   * along the blast line with an upward kick, and loose sand and liquid out
+   * to EJECTA radii is kicked up too - less of it, and gentler, the farther
+   * out - so a blast digs a crater about twice its fireball and throws a
+   * curtain of earth, instead of leaving a clean round hole. Gunpowder keeps the old pop -
+   * it explodes cell by cell and DEMOLITION's budget is tuned for that.
+   */
+  explode(cx: number, cy: number, r: number, fling = false): void {
     const g = this.grid;
     const r2 = r * r;
-    for (let dy = -r; dy <= r; dy++) {
-      for (let dx = -r; dx <= r; dx++) {
+    const reach = fling ? Math.ceil(r * EJECTA) : r;
+    const reach2 = fling ? r2 * EJECTA * EJECTA : r2;
+    for (let dy = -reach; dy <= reach; dy++) {
+      for (let dx = -reach; dx <= reach; dx++) {
         const d2 = dx * dx + dy * dy;
-        if (d2 > r2) continue;
+        if (d2 > reach2) continue;
         const x = cx + dx;
         const y = cy + dy;
         const t = g.get(x, y);
         if (t === 1 || t === Mat.GLASS) continue;
+        if (d2 > r2) {
+          // the ejecta ring: only what is loose lifts, less of it farther out
+          const cat = MATS[t].cat;
+          if (cat !== Cat.POWDER && cat !== Cat.LIQUID) continue;
+          const k = Math.sqrt(d2) / r;
+          if (this.rng.chance((0.9 * (EJECTA - k)) / (EJECTA - 1)))
+            this.fling(x, y, t, dx, dy, d2, r, 0.6);
+          continue;
+        }
         // TNT caught in the outer ring is lit on a hair trigger instead of
         // erased, so a stack goes off as a rolling chain, not one pop
         if (t === Mat.TNT && d2 > r2 * 0.45) {
@@ -1872,6 +1917,8 @@ export class World {
         }
         if (d2 <= r2 * 0.45) {
           g.setXY(x, y, Mat.FIRE, this.rng.range(14, 40));
+        } else if (fling && this.flies(t) && this.rng.chance(0.85) && this.fling(x, y, t, dx, dy, d2, r, 1)) {
+          // thrown
         } else if (this.rng.chance(0.75)) {
           g.setXY(x, y, this.rng.chance(0.35) ? Mat.SMOKE : Mat.EMPTY);
         }
@@ -1882,7 +1929,175 @@ export class World {
     // the shock front is what makes a blast read as a blast: smoke and fire
     // get thrown outward instead of politely rising from the crater
     this.wind.addBlast(cx, cy, r * 5, r * 0.22);
-    g.chunks.wakeRect(cx - r - 2, cy - r - 2, cx + r + 2, cy + r + 2);
+    g.chunks.wakeRect(cx - reach - 2, cy - reach - 2, cx + reach + 2, cy + reach + 2);
+  }
+
+  /** Can a blast throw this? Walls, glass and the eternal blocks stay put. */
+  private flies(t: number): boolean {
+    if (t === Mat.EMPTY || t === Mat.TNT || t === Mat.TORCH || t === Mat.VOID || t === Mat.CLONE) return false;
+    return MATS[t].cat !== Cat.GAS;
+  }
+
+  /**
+   * Lift the cell at (x, y) into the air, thrown away from a blast centre
+   * (dx, dy) away. Closer in flies faster; `power` scales it (the ejecta ring
+   * gets a gentler kick). Half of what burns goes up as a glowing ember.
+   * Returns false when the air is full, so the caller can erase it instead.
+   */
+  private fling(x: number, y: number, t: number, dx: number, dy: number, d2: number, r: number, power: number): boolean {
+    const deb = this.debris;
+    if (deb.length >= MAX_DEBRIS * DEB) return false;
+    const rng = this.rng;
+    const d = Math.sqrt(d2);
+    const k = d / r;
+    // solids are chunks, heavier than a spray of grains
+    const heft = MATS[t].cat === Cat.SOLID ? 0.75 : 1;
+    const speed = (1.2 + rng.next() * 2) * (2.6 - k) * power * heft;
+    let mat = t;
+    let meta = 0;
+    if (MATS[t].flam > 0 && rng.chance(0.5)) {
+      mat = Mat.EMBER;
+      meta = rng.range(70, 150);
+    }
+    // Below the centre the outward line points into the ground. Buried
+    // material cannot go that way: the ground reflects the blast, which is
+    // why a real one throws a cone of earth up and out. Only a piece with
+    // something under it bounces; one hanging in the air is blown down.
+    let uy = dy / d;
+    if (uy > 0 && !this.airy(x, y + 1)) uy = -uy * 0.8;
+    deb.push(
+      x + 0.5, y + 0.5,
+      (dx / d) * speed + (rng.next() - 0.5) * 0.6,
+      uy * speed - (1 + rng.next() * 1.4) * power,
+      mat, meta,
+    );
+    this.grid.setXY(x, y, Mat.EMPTY);
+    return true;
+  }
+
+  /** Can a flying piece pass through this cell? Air and gas only. */
+  private airy(x: number, y: number): boolean {
+    const g = this.grid;
+    // above the top edge is open sky; the sides and floor are the frame
+    if (y < 0) return x >= 0 && x < g.W;
+    const t = g.get(x, y);
+    return t === Mat.EMPTY || MATS[t].cat === Cat.GAS;
+  }
+
+  /**
+   * Move every piece in flight one frame along its arc. A piece walks its
+   * path in sub-steps of at most one cell, so nothing tunnels through a
+   * one-cell wall, and lands in the last open cell before whatever it hits.
+   */
+  private stepDebris(): void {
+    const deb = this.debris;
+    const g = this.grid;
+    let n = deb.length;
+    for (let o = 0; o < n; ) {
+      let x = deb[o];
+      let y = deb[o + 1];
+      let vx = deb[o + 2] * DEB_DRAG;
+      let vy = deb[o + 3] * DEB_DRAG + DEB_G;
+      if (vx > DEB_VMAX) vx = DEB_VMAX;
+      else if (vx < -DEB_VMAX) vx = -DEB_VMAX;
+      if (vy > DEB_VMAX) vy = DEB_VMAX;
+      else if (vy < -DEB_VMAX) vy = -DEB_VMAX;
+      const steps = Math.ceil(Math.max(Math.abs(vx), Math.abs(vy)));
+      const sx = vx / steps;
+      const sy = vy / steps;
+      let landed = false;
+      for (let s = 0; s < steps; s++) {
+        const nx = x + sx;
+        const ny = y + sy;
+        const cx = Math.floor(nx);
+        const cy = Math.floor(ny);
+        if (cx === Math.floor(x) && cy === Math.floor(y)) {
+          x = nx;
+          y = ny;
+          continue;
+        }
+        if (this.airy(cx, cy)) {
+          x = nx;
+          y = ny;
+          continue;
+        }
+        // glancing off a side wall keeps it flying; anything else stops it
+        if (cx < 0 || cx >= g.W) {
+          vx = -vx * 0.4;
+          break;
+        }
+        landed = true;
+        break;
+      }
+      if (landed) {
+        this.landDebris(Math.floor(x), Math.floor(y), deb[o + 4], deb[o + 5], vy);
+        // swap-remove: the order changes, but the same way on every peer
+        n -= DEB;
+        for (let j = 0; j < DEB; j++) deb[o + j] = deb[n + j];
+        deb.length = n;
+        continue;
+      }
+      deb[o] = x;
+      deb[o + 1] = y;
+      deb[o + 2] = vx;
+      deb[o + 3] = vy;
+      o += DEB;
+    }
+  }
+
+  /**
+   * Put a piece back into the grid where it came down. If the world has
+   * filled that cell since (sand slid in), it goes on top of the column
+   * instead; only a column full to the sky loses it.
+   */
+  private landDebris(x: number, y: number, mat: number, meta: number, vy: number): void {
+    const g = this.grid;
+    if (y >= g.H) y = g.H - 1;
+    for (; y >= 0; y--) {
+      const t = g.get(x, y);
+      if (t !== Mat.EMPTY && MATS[t].cat !== Cat.GAS) continue;
+      // a liquid that came down hard lands with its fall speed, so it splashes
+      if (MATS[mat].cat === Cat.LIQUID) {
+        const v = Math.min(LQ_V_MAX, Math.floor(vy > 0 ? vy * 2 : 0));
+        meta = v << LQ_V_SHIFT;
+      }
+      g.setXY(x, y, mat, meta);
+      return;
+    }
+  }
+
+  /**
+   * Draw the pieces in flight over the finished frame, each with a dimmer
+   * one-cell streak behind it. They are not in the grid, so the chunks they
+   * cover are marked dirty: the next renderInto paints over them, and they
+   * are drawn again where they have moved to.
+   */
+  drawDebris(pix: Uint32Array): void {
+    const deb = this.debris;
+    const g = this.grid;
+    const W = g.W;
+    const H = g.H;
+    for (let o = 0; o < deb.length; o += DEB) {
+      const x = deb[o];
+      const y = deb[o + 1];
+      const mat = deb[o + 4];
+      const meta = deb[o + 5];
+      const px = x | 0;
+      const py = Math.floor(y);
+      // flying embers flicker through their hot ramp; the rest show their own
+      const col = colorAt(mat, px, py, this.f, meta);
+      const tx = (x - deb[o + 2] * 0.6) | 0;
+      const ty = Math.floor(y - deb[o + 3] * 0.6);
+      if (tx >= 0 && tx < W && ty >= 0 && ty < H && (tx !== px || ty !== py)) {
+        const i = ty * W + tx;
+        if (g.cells[i] === Mat.EMPTY) pix[i] = applyShade(col, Shade.UNDER);
+        g.touch(tx, ty);
+      }
+      if (px >= 0 && px < W && py >= 0 && py < H) {
+        pix[py * W + px] = col;
+        g.touch(px, py);
+      }
+    }
   }
 
   // ---------- rasterization ----------

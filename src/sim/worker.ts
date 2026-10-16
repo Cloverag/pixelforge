@@ -146,9 +146,11 @@ function handle(e: MessageEvent<Req>): void {
         // material therefore strobed at 30 Hz between its last two states -
         // a one-pixel shimmer over every pile that had stopped moving.
         w.renderInto(master, forceFull);
+        w.drawDebris(master);
         pix.set(master);
       } else {
         w.renderInto(pix, forceFull);
+        w.drawDebris(pix);
       }
       forceFull = false;
       const st = w.stats();
@@ -269,6 +271,7 @@ function handle(e: MessageEvent<Req>): void {
         recount(w);
         w.grid.rebuildEternals();
         w.grid.chunks.wakeAll();
+        w.debris.length = 0;
         w.challenge = null;
         w.mode = 'sand';
         forceFull = true;
