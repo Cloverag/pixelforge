@@ -17,7 +17,7 @@ import { MpSession, newRoomCode, roomFromUrl, roomUrl, type MpHooks } from './ne
 import type { NetInput, Snapshot } from './sim/protocol';
 import { RoomPill } from './ui/roompill';
 import { CursorLayer } from './ui/cursors';
-import { myIdentity } from './net/presence';
+import { myIdentity, saveIdentity } from './net/presence';
 import { Mode, PaintKind, Req, Res, SIM_H, SIM_W, SimEvents, Stats } from './sim/protocol';
 import { CHALLENGES } from './sim/challenges';
 import { recordStars } from './game/progress';
@@ -450,9 +450,44 @@ const mpHooks: MpHooks = {
   onPeople: (n) => roomPill.setPeople(n),
   onNotice: (text, bad) => toast(text, bad),
   onEnd: (reason) => leaveRoom(reason, true),
-  onRoster: (peers) => roomPill.setRoster(me, peers),
+  onRoster: (peers) => {
+    lastRoster = peers;
+    roomPill.setRoster(me, peers);
+  },
   onCursor: (id, c) => cursors.update(id, c),
+  onWaiting: (on) => roomPill.setWaiting(on),
 };
+
+roomPill.onRename = (name) => {
+  me.name = name;
+  saveIdentity(me);
+  mp?.announce();
+  roomPill.setRoster(me, lastRoster);
+  toast(`YOU ARE NOW ${name}`);
+};
+let lastRoster: import('./net/presence').PeerInfo[] = [];
+
+/**
+ * A host's tab remembers the room it hosts (sessionStorage: survives a
+ * reload, not a closed tab), so a refresh reopens the same room from the
+ * autosaved world instead of ending it. Guests wait for it meanwhile.
+ */
+const HOSTING_KEY = 'pf-hosting';
+function rememberHosting(code: string | null): void {
+  try {
+    if (code) sessionStorage.setItem(HOSTING_KEY, code);
+    else sessionStorage.removeItem(HOSTING_KEY);
+  } catch {
+    /* no resume after reload, nothing else breaks */
+  }
+}
+function hostingCode(): string | null {
+  try {
+    return sessionStorage.getItem(HOSTING_KEY);
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Share my cursor while in a room: hover as well as drags (the game's own
@@ -486,10 +521,10 @@ addEventListener('pointerdown', () => (pointerDown = true));
 addEventListener('pointerup', () => (pointerDown = false));
 
 /** Open a room from the current sandbox, as host, and copy its link. */
-async function hostRoom(): Promise<void> {
+async function hostRoom(reuse?: string): Promise<void> {
   if (mp) return;
   mpGate = true;
-  const code = newRoomCode();
+  const code = reuse ?? newRoomCode();
   try {
     mp = await MpSession.host(code, mpHooks, me);
   } catch (err) {
@@ -500,9 +535,11 @@ async function hostRoom(): Promise<void> {
     mpGate = false;
   }
   history.replaceState(null, '', roomUrl(code));
+  rememberHosting(code);
   roomPill.show(code, 'host');
   roomPill.setRoster(me, []);
-  copyRoomLink(code, 'ROOM OPEN - LINK COPIED, SEND IT TO A FRIEND');
+  if (reuse) toast(`ROOM ${code} REOPENED`);
+  else copyRoomLink(code, 'ROOM OPEN - LINK COPIED, SEND IT TO A FRIEND');
 }
 
 async function joinRoom(code: string): Promise<void> {
@@ -532,16 +569,23 @@ function leaveRoom(reason?: string, bad = false): void {
   if (!mp) return;
   mp.leave();
   mp = null;
+  rememberHosting(null);
+  lastRoster = [];
   roomPill.hide();
   cursors.clear();
   history.replaceState(null, '', location.pathname);
   if (reason) toast(reason, bad);
 }
 roomPill.onCopy = () => mp && copyRoomLink(mp.code);
+// dev only: paint straight into this peer's own world, bypassing the room,
+// to test that a desync is detected and repaired
+if (import.meta.env.DEV)
+  (window as unknown as { __mpCorrupt: () => void }).__mpCorrupt = () =>
+    post({ t: 'paint', pts: [300, 150, 340, 150], mat: Mat.WATER, size: 10, kind: 'brush' });
 // dev only: lets automated two-browser tests read the session state
 if (import.meta.env.DEV)
   (window as unknown as { __mp: () => unknown }).__mp = () =>
-    mp && { role: mp.role, code: mp.code, f: mp.host ? mp.host.f : mp.guest!.f, backlog: mp.guest?.backlog() ?? 0, sync: mp.sync, snaps: mp.snapCount };
+    mp && { role: mp.role, code: mp.code, f: mp.host ? mp.host.f : mp.guest!.f, backlog: mp.guest?.backlog() ?? 0, sync: mp.sync, snaps: mp.snapCount, name: me.name };
 
 function loop(now: number): void {
   const dt = Math.min(120, now - lastT);
@@ -1100,7 +1144,14 @@ post({ t: 'init', w: SIM_W, h: SIM_H, buf: masterBuf }, [masterBuf]);
  */
 const urlCode = takeUrlCode();
 const urlRoom = roomFromUrl();
-if (urlRoom) {
+if (urlRoom && hostingCode() === urlRoom) {
+  // the host reloaded: same room, from the autosaved world
+  startSandbox();
+  const boot = readSave();
+  const bootWorld = boot ? rleDecode(boot, SIM_W * SIM_H) : null;
+  if (bootWorld) adoptWorld(bootWorld);
+  void hostRoom(urlRoom);
+} else if (urlRoom) {
   void joinRoom(urlRoom);
 } else if (urlCode) {
   startSandbox();

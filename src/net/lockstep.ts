@@ -26,12 +26,16 @@ export type Wire =
   /** guest -> host: my inputs, please schedule them */
   | { t: 'input'; i: NetInput[] }
   /** guest -> host: I am here and have no world yet */
-  | { t: 'hello' };
+  | { t: 'hello' }
+  /** guest -> host: my world no longer matches yours, send it again */
+  | { t: 'resync' };
 
 export type Send = (msg: Wire, to?: string) => void;
 
 /** frames of history the host keeps for joiners (5 s at 60 fps) */
 const HISTORY = 300;
+/** frames a guest keeps behind its position, so a repair can rewind */
+const KEEP_BEHIND = 600;
 
 export class HostCore {
   /** next frame the host will step */
@@ -104,8 +108,21 @@ export class GuestCore {
 
   receive(msg: Wire): void {
     if (msg.t !== 'frame') return;
-    if (this.f >= 0 && msg.f < this.f) return; // already stepped
+    // Frames a little behind are kept, not dropped: a repair rewinds to the
+    // snapshot's frame, and the host re-sends the frames from there - often
+    // before the (larger) snapshot itself arrives.
+    if (this.f >= 0 && msg.f < this.f - KEEP_BEHIND) return;
     this.frames.set(msg.f, msg.i ?? []);
+  }
+
+  /**
+   * Forget every frame: they belong to a host that is gone. A host that
+   * reloads comes back with a new timeline, and its frame numbers may
+   * overlap the old one's.
+   */
+  reset(): void {
+    this.f = -1;
+    this.frames.clear();
   }
 
   /** The world was just restored to frame f. */
@@ -129,7 +146,7 @@ export class GuestCore {
   /** Inputs for the next frame; only after ready(). */
   take(): NetInput[] {
     const i = this.frames.get(this.f) ?? [];
-    this.frames.delete(this.f);
+    this.frames.delete(this.f - KEEP_BEHIND);
     this.f++;
     return i;
   }

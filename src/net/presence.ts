@@ -65,3 +65,22 @@ export function initials(name: string): string {
     .join('')
     .slice(0, 2);
 }
+
+/** Names: capitals, digits and spaces, up to 14 characters. */
+export function cleanName(raw: string): string {
+  return raw
+    .toUpperCase()
+    .replace(/[^A-Z0-9 ]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 14);
+}
+
+export function saveIdentity(id: Identity): void {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(id));
+  } catch {
+    /* not kept, still used this session */
+  }
+}
+

@@ -35,7 +35,14 @@ export interface MpHooks {
   onRoster(peers: PeerInfo[]): void;
   /** another player's cursor moved; null when they left */
   onCursor(id: string, c: CursorMsg | null): void;
+  /** guest: the host dropped out and we are waiting for it to come back */
+  onWaiting(waiting: boolean): void;
 }
+
+/** a guest waits this long for a host that dropped (reloaded, lost signal) */
+const HOST_GRACE_MS = 60_000;
+/** at most one repair request in this long, so a persistent fault cannot flood */
+const RESYNC_GAP_MS = 5000;
 
 /** how often each peer's round trip is re-measured */
 const PING_MS = 3000;
@@ -53,6 +60,8 @@ export interface SyncStats {
   firstBad: number;
   /** which parts of the state differed at firstBad */
   badParts: string[];
+  /** times a fresh copy of the host's world was fetched to repair a desync */
+  repairs: number;
 }
 
 /** six characters, no 0/O/1/I/L to misread off a screen */
@@ -93,7 +102,12 @@ export class MpSession {
   /** guest: fingerprints seen so far, mine and the host's, by frame */
   private mine = new Map<number, number[]>();
   private theirs = new Map<number, number[]>();
-  sync: SyncStats = { checked: 0, mismatches: 0, firstBad: -1, badParts: [] };
+  sync: SyncStats = { checked: 0, mismatches: 0, firstBad: -1, badParts: [], repairs: 0 };
+  /** guest: the host whose frame timeline we are following */
+  private timeline: string | null = null;
+  private graceTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastResync = 0;
+  private resyncing = false;
   /** snapshots sent (host) or received (guest) - more than one is a re-join */
   snapCount = 0;
   private joinTimer: ReturnType<typeof setTimeout> | null = null;
@@ -154,12 +168,33 @@ export class MpSession {
 
     wire.onMessage = (m, { peerId }) => {
       if (this.host) {
-        // the host listens to guests' inputs only
+        // the host listens to guests' inputs and repair requests only
         if (m.t === 'input') this.host.receive(m);
+        else if (m.t === 'resync') void this.welcome(peerId, true);
         return;
       }
       if (m.t === 'host') {
-        if (!this.hostId) this.hostId = peerId;
+        // A host announcing itself. A different peer than before means the
+        // host came back with a new connection (a reload): follow it, and
+        // drop the old timeline now - this message arrives on the same
+        // ordered channel as the new host's frames, ahead of all of them.
+        // (Resetting when the snapshot arrived threw away frames that had
+        // overtaken it, and the guest froze.)
+        if (peerId !== this.timeline) {
+          this.guest!.reset();
+          this.timeline = peerId;
+          this.mine.clear();
+          this.theirs.clear();
+        }
+        if (peerId !== this.hostId) {
+          this.hostId = peerId;
+          if (this.graceTimer) {
+            clearTimeout(this.graceTimer);
+            this.graceTimer = null;
+            this.hooks.onWaiting(false);
+            this.hooks.onNotice('THE HOST IS BACK');
+          }
+        }
         return;
       }
       // a guest takes frames from its host and nobody else
@@ -170,16 +205,22 @@ export class MpSession {
 
     snap.onMessage = async (data, { peerId, metadata }) => {
       if (!this.guest || this.ended) return;
-      if (this.hostId && peerId !== this.hostId) return;
-      this.hostId = peerId;
+      // only the host we follow (it announced itself first, on the frames' channel)
+      if (peerId !== this.timeline) return;
       try {
         const s = unpackSnapshot(await gunzip(new Uint8Array(data as unknown as ArrayBuffer)));
         const f = (metadata as { f: number } | undefined)?.f ?? s.f;
         this.hooks.restore(s);
         this.guest.synced(f);
+        // fingerprints from before this copy compare against the wrong world
+        this.mine.clear();
+        this.theirs.clear();
+        const first = this.snapCount === 0;
         this.snapCount++;
         if (this.joinTimer) clearTimeout(this.joinTimer);
-        this.hooks.onNotice(`JOINED ROOM ${this.code}`);
+        if (first) this.hooks.onNotice(`JOINED ROOM ${this.code}`);
+        else if (this.resyncing) this.hooks.onNotice('RE-SYNCED WITH THE HOST');
+        this.resyncing = false;
       } catch {
         this.end('COULD NOT READ THE HOST\'S WORLD');
       }
@@ -198,7 +239,7 @@ export class MpSession {
       this.emitRoster();
       this.hooks.onCursor(id, null);
       this.hooks.onPeople(this.peers.size + 1);
-      if (this.guest && id === this.hostId) this.end('THE HOST LEFT - THE WORLD IS YOURS NOW');
+      if (this.guest && id === this.hostId) this.hostDropped();
       else if (this.host) this.hooks.onNotice('A PLAYER LEFT');
     };
     this.hooks.onPeople(1);
@@ -216,12 +257,33 @@ export class MpSession {
     this.heartbeat = setInterval(() => this.sendCursor(this.lastCursor ?? this.idle()), 2000);
   }
 
+  /**
+   * The host went away - usually a reload. Freeze (no frames, no stepping)
+   * and wait a while for it to come back, instead of ending the room.
+   */
+  private hostDropped(): void {
+    this.hostId = null;
+    this.guest!.reset();
+    this.timeline = null;
+    this.hooks.onWaiting(true);
+    this.hooks.onNotice('THE HOST DISCONNECTED - WAITING FOR THEM...', true);
+    if (this.graceTimer) clearTimeout(this.graceTimer);
+    this.graceTimer = setTimeout(() => this.end('THE HOST DID NOT COME BACK - THE WORLD IS YOURS NOW'), HOST_GRACE_MS);
+  }
+
   private idle(): CursorMsg {
     return { x: 0, y: 0, hidden: true, s: 0, m: 0, d: false, n: this.me.name, c: this.me.color };
   }
 
   private emitRoster(): void {
     this.hooks.onRoster([...this.roster.values()]);
+  }
+
+  /** Tell everyone who I am now (after a rename), without waiting. */
+  announce(): void {
+    if (this.ended) return;
+    if (this.lastCursor) this.lastCursor = { ...this.lastCursor, n: this.me.name, c: this.me.color };
+    this.sendCursor(this.lastCursor ?? this.idle());
   }
 
   /** My cursor, for everyone else to see. The game throttles the calls. */
@@ -232,7 +294,7 @@ export class MpSession {
   }
 
   /** host: send a joiner who's boss, then the world, then every frame since. */
-  private async welcome(id: string): Promise<void> {
+  private async welcome(id: string, repair = false): Promise<void> {
     const host = this.host!;
     this.sendWire({ t: 'host' }, id);
     const s = await this.hooks.snapshot();
@@ -243,7 +305,7 @@ export class MpSession {
     this.sendSnap(await gzip(packSnapshot(s)), id, s.f);
     this.snapCount++;
     for (const m of host.framesFrom(s.f)) this.sendWire(m, id);
-    this.hooks.onNotice('A PLAYER JOINED');
+    if (!repair) this.hooks.onNotice('A PLAYER JOINED');
   }
 
   /**
@@ -275,9 +337,20 @@ export class MpSession {
         this.sync.firstBad = f;
         this.sync.badParts = PART_NAMES.filter((_, i) => a[i + 1] !== b[i + 1]);
       }
+      this.requestRepair();
     }
     // drop anything old that never found its pair (sent before we joined)
     for (const m of [this.mine, this.theirs]) for (const k of m.keys()) if (k < f - 600) m.delete(k);
+  }
+
+  /** Ask the host for a fresh copy of its world (rate-limited). */
+  private requestRepair(): void {
+    const now = performance.now();
+    if (!this.hostId || this.resyncing || now - this.lastResync < RESYNC_GAP_MS) return;
+    this.lastResync = now;
+    this.resyncing = true;
+    this.sync.repairs++;
+    this.sendWire({ t: 'resync' }, this.hostId);
   }
 
   /** My own world-changing actions. */
@@ -291,6 +364,7 @@ export class MpSession {
     this.ended = true;
     if (this.joinTimer) clearTimeout(this.joinTimer);
     if (this.pingTimer) clearInterval(this.pingTimer);
+    if (this.graceTimer) clearTimeout(this.graceTimer);
     if (this.heartbeat) clearInterval(this.heartbeat);
     void this.room?.leave();
   }

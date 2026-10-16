@@ -1199,6 +1199,22 @@ kbd, .mode-key {
   cursor: default;
 }
 .room-avatar.self { outline: 2px solid var(--ink); outline-offset: 1px; }
+.room-avatar.self { cursor: pointer; }
+.room-rename {
+  width: 15ch;
+  padding: 3px 6px;
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: var(--ink);
+  background: var(--panel-3);
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  outline: none;
+}
+.room-pill.waiting .room-dot { background: var(--danger); box-shadow: 0 0 8px var(--danger); animation: blink 1s steps(2) infinite; }
+.room-pill.waiting .room-role { color: var(--danger); }
+@keyframes blink { 50% { opacity: 0.3; } }
 
 /* other players' cursors (ui/cursors.ts) */
 .peer-cursor {

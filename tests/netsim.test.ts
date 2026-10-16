@@ -123,6 +123,61 @@ describe('lockstep over a simulated network', { timeout: 180_000 }, () => {
     expect(lava).toBeGreaterThan(0);
   });
 
+  /**
+   * A repair rewinds: the guest may be up to `delay` frames ahead of the
+   * host's snapshot (it steps frames announced but not yet stepped by the
+   * host), and the re-sent frames usually overtake the bigger snapshot.
+   * Frames behind the guest used to be dropped as stale, so it froze.
+   */
+  it('a corrupted guest is repaired from a snapshot behind it, frames arriving first', () => {
+    const toGuest: Wire[] = [];
+    const host = new HostCore((m) => toGuest.push(m), 3);
+    const hw = new World(8);
+    host.start(hw.f);
+    const g = new GuestCore(() => {});
+    const gw = new World(8);
+    gw.restore(hw.snapshot());
+    g.synced(hw.f);
+    for (const m of host.framesFrom(hw.f)) g.receive(m);
+    const stepHost = () => {
+      for (const inp of host.advance()) hw.applyInput(inp);
+      hw.step();
+    };
+    const stepGuest = () => {
+      while (g.ready()) {
+        for (const inp of g.take()) gw.applyInput(inp);
+        gw.step();
+      }
+    };
+    host.local([{ k: 'paint', pts: [100, 100, 140, 100], mat: Mat.SAND, size: 8, kind: 'brush' }]);
+    for (let n = 0; n < 120; n++) {
+      stepHost();
+      for (const m of toGuest.splice(0)) g.receive(m);
+      stepGuest();
+    }
+    expect(g.f).toBe(host.f + host.delay); // ahead of the host's stepped frame
+    // corrupt the guest
+    for (let x = 300; x < 340; x++) gw.grid.setXY(x, 200, Mat.WATER);
+    expect(gw.hash()).not.toBe(hw.hash());
+    // repair: the host's frames from S arrive first, then the snapshot at S
+    const snap = hw.snapshot();
+    for (const m of host.framesFrom(snap.f)) g.receive(m);
+    gw.restore(snap);
+    g.synced(snap.f);
+    expect(g.ready()).toBe(true);
+    // and from here the two agree, frame for frame
+    for (let n = 0; n < 120; n++) {
+      stepHost();
+      for (const m of toGuest.splice(0)) g.receive(m);
+      while (g.ready() && gw.f < hw.f) {
+        for (const inp of g.take()) gw.applyInput(inp);
+        gw.step();
+      }
+      expect(gw.f).toBe(hw.f);
+      expect(gw.hash()).toBe(hw.hash());
+    }
+  });
+
   it('a packed, gzipped snapshot restores exactly, and is small', async () => {
     const w = new World(3);
     for (let y = 200; y < 330; y++) for (let x = 100; x < 300; x++) w.grid.setXY(x, y, Mat.SAND);

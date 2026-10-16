@@ -1,4 +1,4 @@
-import { initials, type Identity, type PeerInfo } from '../net/presence';
+import { cleanName, initials, type Identity, type PeerInfo } from '../net/presence';
 
 /**
  * The room badge shown while playing together: room code, who is here (a
@@ -12,6 +12,8 @@ export class RoomPill {
   private roleEl!: HTMLElement;
   private dots!: HTMLElement;
   onCopy: () => void = () => {};
+  /** the player renamed themselves */
+  onRename: (name: string) => void = () => {};
   /** the count can arrive before the badge is built: keep it until then */
   private count = 1;
 
@@ -57,15 +59,51 @@ export class RoomPill {
       d.textContent = initials(p.name);
       d.title = title;
       this.dots.appendChild(d);
+      return d;
     };
-    dot(me, `${me.name} (you)`, true);
+    const self = dot(me, `${me.name} (you) - click to rename`, true);
+    self.onclick = () => this.rename(me.name);
     for (const p of peers) dot(p, p.ping >= 0 ? `${p.name} - ${p.ping} ms` : p.name);
   }
+
+  /** An inline name field in place of the avatars; Enter saves, Esc cancels. */
+  private rename(current: string): void {
+    const input = document.createElement('input');
+    input.className = 'room-rename';
+    input.value = current;
+    input.maxLength = 14;
+    input.setAttribute('aria-label', 'Your name');
+    const done = (save: boolean) => {
+      const name = cleanName(input.value);
+      input.remove();
+      this.dots.hidden = false;
+      if (save && name && name !== current) this.onRename(name);
+    };
+    input.onkeydown = (e) => {
+      e.stopPropagation(); // typing must not trigger game shortcuts
+      if (e.key === 'Enter') done(true);
+      else if (e.key === 'Escape') done(false);
+    };
+    input.onblur = () => done(true);
+    this.dots.hidden = true;
+    this.dots.after(input);
+    input.focus();
+    input.select();
+  }
+
+  /** guest: the host dropped and we are waiting for it */
+  setWaiting(on: boolean): void {
+    this.el?.classList.toggle('waiting', on);
+    if (this.roleEl) this.roleEl.textContent = on ? 'WAITING FOR HOST' : this.role;
+  }
+
+  private role = 'GUEST';
 
   show(code: string, role: 'host' | 'guest'): void {
     this.el ??= this.build();
     this.codeEl.textContent = `ROOM ${code}`;
-    this.roleEl.textContent = role === 'host' ? 'HOST' : 'GUEST';
+    this.role = role === 'host' ? 'HOST' : 'GUEST';
+    this.roleEl.textContent = this.role;
     this.el.hidden = false;
     this.setPeople(this.count);
   }
