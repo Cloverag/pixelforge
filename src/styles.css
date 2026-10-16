@@ -1185,6 +1185,52 @@ kbd, .mode-key {
 }
 .room-pill.alone .room-dot { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
 
+.room-dots { display: flex; gap: 3px; }
+.room-avatar {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0;
+  color: #111;
+  cursor: default;
+}
+.room-avatar.self { outline: 2px solid var(--ink); outline-offset: 1px; }
+
+/* other players' cursors (ui/cursors.ts) */
+.peer-cursor {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 5;
+  pointer-events: none;
+  transition: transform 70ms linear, opacity 0.3s;
+}
+.peer-cursor.gone { opacity: 0; }
+.peer-ring {
+  position: absolute;
+  translate: -50% -50%;
+  border: 2px solid;
+  border-radius: 50%;
+  transition: width 0.12s, height 0.12s, border-color 0.12s;
+}
+.peer-ring.painting { border-width: 2px; background: rgba(255, 255, 255, 0.06); }
+.peer-name {
+  position: absolute;
+  left: 9px;
+  top: 9px;
+  padding: 2px 5px;
+  border-radius: 3px;
+  font-size: 9px;
+  letter-spacing: 1px;
+  white-space: nowrap;
+  color: #111;
+  font-weight: 700;
+}
+
 /* playground demo scenes: two columns of small buttons */
 .scenebtns {
   display: grid;

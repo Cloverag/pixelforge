@@ -1,12 +1,16 @@
+import { initials, type Identity, type PeerInfo } from '../net/presence';
+
 /**
- * The room badge shown while playing together: room code, how many are
- * here, copy-link and leave. Lives over the top of the stage.
+ * The room badge shown while playing together: room code, who is here (a
+ * dot per player, name and ping on hover), copy-link and leave. Lives over
+ * the top of the stage.
  */
 export class RoomPill {
   private el: HTMLElement | null = null;
   private people!: HTMLElement;
   private codeEl!: HTMLElement;
   private roleEl!: HTMLElement;
+  private dots!: HTMLElement;
   onCopy: () => void = () => {};
   /** the count can arrive before the badge is built: keep it until then */
   private count = 1;
@@ -25,6 +29,8 @@ export class RoomPill {
     this.roleEl.className = 'room-role';
     this.people = document.createElement('span');
     this.people.className = 'room-people';
+    this.dots = document.createElement('span');
+    this.dots.className = 'room-dots';
     const copy = document.createElement('button');
     copy.className = 'px';
     copy.type = 'button';
@@ -35,9 +41,25 @@ export class RoomPill {
     leave.type = 'button';
     leave.textContent = 'LEAVE';
     leave.onclick = () => this.onLeave();
-    el.append(dot, this.codeEl, this.roleEl, this.people, copy, leave);
+    el.append(dot, this.codeEl, this.roleEl, this.dots, this.people, copy, leave);
     (document.getElementById('stage') ?? document.body).appendChild(el);
     return el;
+  }
+
+  /** Me first, then everyone else, as coloured initials. */
+  setRoster(me: Identity, peers: PeerInfo[]): void {
+    this.el ??= this.build();
+    this.dots.replaceChildren();
+    const dot = (p: Identity, title: string, self = false) => {
+      const d = document.createElement('span');
+      d.className = 'room-avatar' + (self ? ' self' : '');
+      d.style.background = p.color;
+      d.textContent = initials(p.name);
+      d.title = title;
+      this.dots.appendChild(d);
+    };
+    dot(me, `${me.name} (you)`, true);
+    for (const p of peers) dot(p, p.ping >= 0 ? `${p.name} - ${p.ping} ms` : p.name);
   }
 
   show(code: string, role: 'host' | 'guest'): void {

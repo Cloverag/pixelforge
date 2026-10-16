@@ -2,6 +2,7 @@ import type { NetInput, Snapshot } from '../sim/protocol';
 import { GuestCore, HostCore, type Wire } from './lockstep';
 import { HASH_STRIDE } from '../sim/protocol';
 import { gunzip, gzip, packSnapshot, unpackSnapshot } from './pack';
+import type { CursorMsg, Identity, PeerInfo } from './presence';
 
 /**
  * Co-op sandbox rooms over WebRTC, peer to peer.
@@ -30,7 +31,14 @@ export interface MpHooks {
   onNotice(text: string, bad?: boolean): void;
   /** the session is over (host left, room not found); single-player resumes */
   onEnd(reason: string): void;
+  /** the other players, with names, colours and ping, changed */
+  onRoster(peers: PeerInfo[]): void;
+  /** another player's cursor moved; null when they left */
+  onCursor(id: string, c: CursorMsg | null): void;
 }
+
+/** how often each peer's round trip is re-measured */
+const PING_MS = 3000;
 
 /** host -> guests: my world's fingerprint at frame f */
 type HashMsg = { t: 'hash'; f: number; h: number; p?: number[] };
@@ -75,6 +83,13 @@ export class MpSession {
   private sendWire!: (m: HostMsg, to?: string) => void;
   private sendSnap!: (data: Uint8Array, to: string, f: number) => void;
   private ended = false;
+  private sendCursor!: (c: CursorMsg, to?: string) => void;
+  private roster = new Map<string, PeerInfo>();
+  private lastCursor: CursorMsg | null = null;
+  private pingTimer: ReturnType<typeof setInterval> | null = null;
+  private heartbeat: ReturnType<typeof setInterval> | null = null;
+  /** set by the game: this device's name and colour */
+  me: Identity = { name: 'PLAYER', color: '#ffffff' };
   /** guest: fingerprints seen so far, mine and the host's, by frame */
   private mine = new Map<number, number[]>();
   private theirs = new Map<number, number[]>();
@@ -93,8 +108,9 @@ export class MpSession {
   }
 
   /** Create a room from the current world, as its host. */
-  static async host(code: string, hooks: MpHooks): Promise<MpSession> {
+  static async host(code: string, hooks: MpHooks, me: Identity): Promise<MpSession> {
     const s = new MpSession(code, hooks);
+    s.me = me;
     const first = await hooks.snapshot();
     s.host = new HostCore((m, to) => s.sendWire(m, to));
     s.host.start(first.f);
@@ -103,8 +119,9 @@ export class MpSession {
   }
 
   /** Join someone else's room. Steps nothing until the host's world arrives. */
-  static async join(code: string, hooks: MpHooks): Promise<MpSession> {
+  static async join(code: string, hooks: MpHooks, me: Identity): Promise<MpSession> {
     const s = new MpSession(code, hooks);
+    s.me = me;
     s.guest = new GuestCore((m) => {
       if (s.hostId) s.sendWire(m, s.hostId);
     });
@@ -121,6 +138,17 @@ export class MpSession {
     this.room = room;
     const wire = room.makeAction<HostMsg>('w');
     const snap = room.makeAction<Uint8Array>('s');
+    const cur = room.makeAction<CursorMsg>('c');
+    this.sendCursor = (c, to) => void cur.send(c, to ? { target: to } : undefined);
+    cur.onMessage = (c, { peerId }) => {
+      if (this.ended) return;
+      const known = this.roster.get(peerId);
+      if (!known || known.name !== c.n || known.color !== c.c) {
+        this.roster.set(peerId, { id: peerId, name: c.n, color: c.c, ping: known?.ping ?? -1 });
+        this.emitRoster();
+      }
+      this.hooks.onCursor(peerId, c);
+    };
     this.sendWire = (m, to) => void wire.send(m, to ? { target: to } : undefined);
     this.sendSnap = (data, to, f) => void snap.send(data, { target: to, metadata: { f } });
 
@@ -161,14 +189,46 @@ export class MpSession {
       this.peers.add(id);
       this.hooks.onPeople(this.peers.size + 1);
       if (this.host) void this.welcome(id);
+      // tell the newcomer who I am straight away, even if I am not moving
+      this.sendCursor(this.lastCursor ?? this.idle(), id);
     };
     room.onPeerLeave = (id) => {
       this.peers.delete(id);
+      this.roster.delete(id);
+      this.emitRoster();
+      this.hooks.onCursor(id, null);
       this.hooks.onPeople(this.peers.size + 1);
       if (this.guest && id === this.hostId) this.end('THE HOST LEFT - THE WORLD IS YOURS NOW');
       else if (this.host) this.hooks.onNotice('A PLAYER LEFT');
     };
     this.hooks.onPeople(1);
+    // round trips, and a slow heartbeat so names stay known while idle
+    const r = room as unknown as { ping(id: string): Promise<number> };
+    this.pingTimer = setInterval(() => {
+      for (const id of this.peers)
+        void r.ping(id).then((ms) => {
+          const p = this.roster.get(id);
+          if (!p || this.ended) return;
+          p.ping = Math.round(ms);
+          this.emitRoster();
+        }, () => {});
+    }, PING_MS);
+    this.heartbeat = setInterval(() => this.sendCursor(this.lastCursor ?? this.idle()), 2000);
+  }
+
+  private idle(): CursorMsg {
+    return { x: 0, y: 0, hidden: true, s: 0, m: 0, d: false, n: this.me.name, c: this.me.color };
+  }
+
+  private emitRoster(): void {
+    this.hooks.onRoster([...this.roster.values()]);
+  }
+
+  /** My cursor, for everyone else to see. The game throttles the calls. */
+  cursor(c: Omit<CursorMsg, 'n' | 'c'>): void {
+    if (this.ended) return;
+    this.lastCursor = { ...c, n: this.me.name, c: this.me.color };
+    this.sendCursor(this.lastCursor);
   }
 
   /** host: send a joiner who's boss, then the world, then every frame since. */
@@ -230,6 +290,8 @@ export class MpSession {
     if (this.ended) return;
     this.ended = true;
     if (this.joinTimer) clearTimeout(this.joinTimer);
+    if (this.pingTimer) clearInterval(this.pingTimer);
+    if (this.heartbeat) clearInterval(this.heartbeat);
     void this.room?.leave();
   }
 

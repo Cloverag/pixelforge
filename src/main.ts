@@ -16,6 +16,8 @@ import { planSurprise } from './sim/surprise';
 import { MpSession, newRoomCode, roomFromUrl, roomUrl, type MpHooks } from './net/mp';
 import type { NetInput, Snapshot } from './sim/protocol';
 import { RoomPill } from './ui/roompill';
+import { CursorLayer } from './ui/cursors';
+import { myIdentity } from './net/presence';
 import { Mode, PaintKind, Req, Res, SIM_H, SIM_W, SimEvents, Stats } from './sim/protocol';
 import { CHALLENGES } from './sim/challenges';
 import { recordStars } from './game/progress';
@@ -431,6 +433,8 @@ let mp: MpSession | null = null;
 let mpGate = false;
 let frameWarned = false;
 const roomPill = new RoomPill(() => leaveRoom('YOU LEFT THE ROOM'));
+const cursors = new CursorLayer();
+const me = myIdentity();
 const snapWaiters: ((s: Snapshot) => void)[] = [];
 
 function workerSnapshot(): Promise<Snapshot> {
@@ -446,7 +450,40 @@ const mpHooks: MpHooks = {
   onPeople: (n) => roomPill.setPeople(n),
   onNotice: (text, bad) => toast(text, bad),
   onEnd: (reason) => leaveRoom(reason, true),
+  onRoster: (peers) => roomPill.setRoster(me, peers),
+  onCursor: (id, c) => cursors.update(id, c),
 };
+
+/**
+ * Share my cursor while in a room: hover as well as drags (the game's own
+ * input only reports drags), at most every 50 ms, hidden off the canvas.
+ */
+let pointerDown = false;
+let lastCursorAt = 0;
+let cursorPending: { x: number; y: number; hidden: boolean } | null = null;
+function shareCursor(x: number, y: number, hidden: boolean): void {
+  if (!mp || mode !== 'sand' || screen !== 'game') return;
+  cursorPending = { x, y, hidden };
+  const now = performance.now();
+  if (now - lastCursorAt < 50) return;
+  lastCursorAt = now;
+  mp.cursor({ ...cursorPending, s: brush, m: selMat < 0 ? 0 : selMat, d: pointerDown && !hidden });
+  cursorPending = null;
+}
+addEventListener('pointermove', (e: PointerEvent) => {
+  if (!mp) return;
+  const c = document.getElementById('screen') as HTMLCanvasElement | null;
+  if (!c) return;
+  const r = c.getBoundingClientRect();
+  const inside = e.clientX >= r.left && e.clientX < r.right && e.clientY >= r.top && e.clientY < r.bottom;
+  shareCursor(
+    Math.floor(((e.clientX - r.left) / r.width) * SIM_W),
+    Math.floor(((e.clientY - r.top) / r.height) * SIM_H),
+    !inside,
+  );
+});
+addEventListener('pointerdown', () => (pointerDown = true));
+addEventListener('pointerup', () => (pointerDown = false));
 
 /** Open a room from the current sandbox, as host, and copy its link. */
 async function hostRoom(): Promise<void> {
@@ -454,7 +491,7 @@ async function hostRoom(): Promise<void> {
   mpGate = true;
   const code = newRoomCode();
   try {
-    mp = await MpSession.host(code, mpHooks);
+    mp = await MpSession.host(code, mpHooks, me);
   } catch (err) {
     console.error(err);
     toast('COULD NOT OPEN A ROOM', true);
@@ -464,6 +501,7 @@ async function hostRoom(): Promise<void> {
   }
   history.replaceState(null, '', roomUrl(code));
   roomPill.show(code, 'host');
+  roomPill.setRoster(me, []);
   copyRoomLink(code, 'ROOM OPEN - LINK COPIED, SEND IT TO A FRIEND');
 }
 
@@ -472,13 +510,14 @@ async function joinRoom(code: string): Promise<void> {
   startSandbox();
   toast(`JOINING ROOM ${code}...`);
   try {
-    mp = await MpSession.join(code, mpHooks);
+    mp = await MpSession.join(code, mpHooks, me);
   } catch (err) {
     console.error(err);
     toast('COULD NOT JOIN THE ROOM', true);
     return;
   }
   roomPill.show(code, 'guest');
+  roomPill.setRoster(me, []);
 }
 
 function copyRoomLink(code: string, okText = 'LINK COPIED'): void {
@@ -494,6 +533,7 @@ function leaveRoom(reason?: string, bad = false): void {
   mp.leave();
   mp = null;
   roomPill.hide();
+  cursors.clear();
   history.replaceState(null, '', location.pathname);
   if (reason) toast(reason, bad);
 }
