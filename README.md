@@ -132,8 +132,8 @@ rounding. It is wrapped to 32 bits now, with every sequence unchanged.
 
 | Group | Tools |
 |-------|-------|
-| **Emitters** | FOUNTAIN, FIREWORK (a rocket that bursts where you click), SPARKLER, HOSE (sprays the way you drag), FIREFLIES |
-| **Forces** | ATTRACT, REPULSE, VORTEX, BLACK HOLE (spirals matter in and swallows it) |
+| **Emitters** | FOUNTAIN, FIREWORK (a rocket that bursts where you click, as a peony, ring, gold willow, crossette or palm), SPARKLER, HOSE (sprays the way you drag), FIREFLIES |
+| **Forces** | ATTRACT, REPULSE, VORTEX, BLACK HOLE (spirals matter in and swallows it; swallow a firework whole and it flares - a shockwave and twin jets) |
 | **Tools** | WALL, BUMPER (a bouncy wall that plays a note set by its height), PORTAL (click twice for a linked pair), ERASE |
 | **Scenes** | GALAXY, FOUNTAINS, PINBALL, MUSIC STAIRS, MEADOW, PORTAL LOOP - self-running demos - and SURPRISE ME |
 | **Actions** | GRAVITY (`G`), SLOW-MO (`Q`), CLEAR (`X`) |

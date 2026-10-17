@@ -151,6 +151,8 @@ export class World {
     this.parts = new PSys(this.grid);
     // a firework burst is a small blast as far as sound and screen go
     this.parts.onBurst = (x, y) => this.events.booms.push(x | 0, y | 0, 4);
+    // a black hole's flare is a TNT-sized moment
+    this.parts.onFlare = (x, y) => this.events.booms.push(x | 0, y | 0, 9);
   }
 
   clear(): void {

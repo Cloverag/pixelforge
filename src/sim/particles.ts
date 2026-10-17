@@ -16,6 +16,9 @@ interface Force {
   str: number;
 }
 
+/** what a flare jet answers to: nothing */
+const NO_FORCES: readonly Force[] = [];
+
 function u32(hex: string): number {
   const n = parseInt(hex.slice(1), 16);
   const r = (n >> 16) & 255;
@@ -48,6 +51,37 @@ export const PG_BG = u32('#0b0b14');
 const PK_PLAIN = 0;
 const PK_SPARK = 1;
 const PK_FIREFLY = 2;
+/** firework shapes that behave differently after the burst */
+const PK_WILLOW = 3; // gold, floats and droops into long trails
+const PK_CROSS = 4; // a heavy star that splits into a cross of four
+const PK_PALM = 5; // a comet that sheds sparks like a palm frond
+const PK_JET = 6; // a black hole's flare: ignores every force
+const PK_SHELL = 7; // a firework star: moves as plain, but a black hole's meal
+
+/** a crossette star's life at the burst, and the life at which it splits */
+const CROSS_LIFE = 85;
+const CROSS_SPLIT = 60;
+/** colour-wheel entries for willow gold and flare blue */
+const HUE_GOLD = 8;
+const HUE_JET = 34;
+/**
+ * When a black hole flares: when it swallows a firework. Only firework
+ * material counts toward its meal - a crossette star or palm comet as 8, the
+ * cluster it would have become - kept as a running average of each frame's
+ * intake. Counting everything could not tell a burst from a scene that feeds
+ * its hole all the time: a flat threshold flared GALAXY seven times a second,
+ * and measured against the hole's own baseline, a burst into GALAXY's
+ * well-fed hole (excess 4.4) sat too close to its everyday noise (3.1).
+ */
+const FEED_FAST = 0.1;
+/** Measured over 24 rockets bursting round a hole, the running average
+ *  peaks at 0.7-9.0 (the low ones mostly escaped); with nothing but
+ *  fireworks counted, idle GALAXY and surprise scenes stay at 0. */
+const FLARE_RATE = 2.5;
+/** frames after a flare before the same hole can flare again */
+const FLARE_COOL = 120;
+/** a flare's shockwave ring, in frames */
+const FLARE_RING = 22;
 
 /** the playground's bouncy wall is painted as GLASS: it reads as a bumper */
 export const PG_BUMPER = Mat.GLASS;
@@ -189,6 +223,17 @@ export class PSys {
   private hueClock = 0;
   /** called with each firework burst position (for sound and screen flash) */
   onBurst: ((x: number, y: number) => void) | null = null;
+  /** called when a black hole flares (a bigger boom and flash) */
+  onFlare: ((x: number, y: number) => void) | null = null;
+  /** what each black hole has swallowed lately; past FLARE_AT it flares.
+   *  Kept out of structureHash: it follows the particles, whose float maths
+   *  may differ between engines. Packed, so a joiner on the same engine
+   *  flares when the host does. */
+  private feed = new Map<Force, [fast: number, cool: number]>();
+  /** what each black hole swallowed this frame */
+  private eatenNow = new Map<Force, number>();
+  /** flares still showing their shockwave: drawing only, not packed */
+  private flares: { x: number; y: number; f0: number }[] = [];
 
   constructor(private grid: import('./grid').Grid) {}
 
@@ -199,6 +244,9 @@ export class PSys {
     this.n = 0;
     this.forces.length = 0;
     this.rockets.length = 0;
+    this.feed.clear();
+    this.eatenNow.clear();
+    this.flares.length = 0;
   }
 
   /**
@@ -220,6 +268,7 @@ export class PSys {
         portals: this.portals,
         emitters: this.emitters,
         rockets: this.rockets,
+        feed: this.forces.map((f) => this.feed.get(f) ?? [0, 0]),
       }),
     );
     const n = this.n;
@@ -254,6 +303,11 @@ export class PSys {
     this.portals = h.portals;
     this.emitters = h.emitters;
     this.rockets = h.rockets;
+    this.feed = new Map();
+    (h.feed ?? []).forEach((v: [number, number], k: number) => {
+      if (this.forces[k]) this.feed.set(this.forces[k], v);
+    });
+    this.flares.length = 0;
     let o = 4 + hl;
     const n = dv.getUint32(o, true);
     o += 4;
@@ -448,30 +502,126 @@ export class PSys {
     });
   }
 
+  /**
+   * A shell bursts at (x, y) in one of five shapes: peony (a filled sphere),
+   * ring, willow, crossette or palm. Every choice comes from the playground's
+   * own RNG, so peers see the same show.
+   */
   firework(x: number, y: number, baseHue = this.rng.int(RAINBOW_N)): void {
+    const style = this.rng.next();
+    if (style < 0.3) this.peony(x, y, baseHue);
+    else if (style < 0.45) this.ringShell(x, y, baseHue);
+    else if (style < 0.65) this.willow(x, y);
+    else if (style < 0.82) this.crossette(x, y, baseHue);
+    else this.palm(x, y, baseHue);
+    this.onBurst?.(x, y);
+  }
+
+  /** A particle slot: a new one, or a random old one when the pool is full. */
+  private slot(): number {
+    return this.n < CAP ? this.n++ : this.rng.int(CAP);
+  }
+
+  private star(i: number, x: number, y: number, vx: number, vy: number, vz: number, life: number, hue: number, kind: number): void {
+    this.px[i] = x;
+    this.py[i] = y;
+    this.pz[i] = 0;
+    this.vx[i] = vx;
+    this.vy[i] = vy;
+    this.vz[i] = vz;
+    this.life[i] = life;
+    this.hue[i] = hue;
+    this.kind[i] = kind;
+  }
+
+  /** the classic: a filled sphere, mostly one colour */
+  private peony(x: number, y: number, baseHue: number): void {
     const count = 110 + this.rng.int(50);
     for (let k = 0; k < count; k++) {
       const a = this.rng.next() * Math.PI * 2;
       const sp = 0.6 + this.rng.next() * 3.4;
-      let i: number;
-      if (this.n < CAP) i = this.n++;
-      else i = this.rng.int(CAP);
-      // a shell: a random direction on the sphere. Projected flat it is the
-      // same filled disk the 2D view always showed.
+      // a random direction on the sphere; projected flat, a filled disk
       const cz = this.rng.next() * 2 - 1;
       const rxy = Math.sqrt(1 - cz * cz);
-      this.px[i] = x;
-      this.py[i] = y;
-      this.pz[i] = 0;
-      this.vx[i] = Math.cos(a) * rxy * sp;
-      this.vy[i] = Math.sin(a) * rxy * sp;
-      this.vz[i] = cz * sp;
-      this.life[i] = 50 + this.rng.range(20, 70);
-      this.kind[i] = PK_PLAIN;
-      // mostly one colour, a few sparks from the far side of the wheel
-      this.hue[i] = this.rng.chance(0.75) ? (baseHue + this.rng.int(3)) % RAINBOW_N : (baseHue + RAINBOW_N / 2) % RAINBOW_N;
+      const hue = this.rng.chance(0.75) ? (baseHue + this.rng.int(3)) % RAINBOW_N : (baseHue + RAINBOW_N / 2) % RAINBOW_N;
+      this.star(this.slot(), x, y, Math.cos(a) * rxy * sp, Math.sin(a) * rxy * sp, cz * sp, 50 + this.rng.range(20, 70), hue, PK_SHELL);
     }
-    this.onBurst?.(x, y);
+  }
+
+  /** a crisp ring, seen at a random tilt and turn */
+  private ringShell(x: number, y: number, hue: number): void {
+    const count = 72;
+    const sp = 2.4 + this.rng.next() * 0.6;
+    const tilt = 0.45 + this.rng.next() * 0.55;
+    const spin = this.rng.next() * Math.PI;
+    const cs = Math.cos(spin);
+    const sn = Math.sin(spin);
+    const depth = Math.sqrt(1 - tilt * tilt);
+    for (let k = 0; k < count; k++) {
+      const a = (k / count) * Math.PI * 2;
+      const ux = Math.cos(a);
+      const uy = Math.sin(a) * tilt;
+      const vx = (ux * cs - uy * sn) * sp;
+      const vy = (ux * sn + uy * cs) * sp;
+      this.star(this.slot(), x, y, vx, vy, Math.sin(a) * depth * sp, 60 + this.rng.int(20), (hue + this.rng.int(2)) % RAINBOW_N, PK_SHELL);
+    }
+  }
+
+  /** gold that floats, slows and droops into long trails */
+  private willow(x: number, y: number): void {
+    const count = 90;
+    for (let k = 0; k < count; k++) {
+      const a = this.rng.next() * Math.PI * 2;
+      const sp = 0.8 + this.rng.next() * 2;
+      const cz = this.rng.next() * 2 - 1;
+      const rxy = Math.sqrt(1 - cz * cz);
+      this.star(this.slot(), x, y, Math.cos(a) * rxy * sp, Math.sin(a) * rxy * sp, cz * sp, 150 + this.rng.int(60), HUE_GOLD + this.rng.int(3), PK_WILLOW);
+    }
+  }
+
+  /** a dozen heavy stars; each splits into a cross of four (in step) */
+  private crossette(x: number, y: number, hue: number): void {
+    const count = 14;
+    for (let k = 0; k < count; k++) {
+      const a = (k / count) * Math.PI * 2 + this.rng.next() * 0.3;
+      const sp = 2.2 + this.rng.next() * 0.8;
+      this.star(this.slot(), x, y, Math.cos(a) * sp, Math.sin(a) * sp, 0, CROSS_LIFE, hue, PK_CROSS);
+    }
+  }
+
+  /** a few thick comets that shed sparks as they arc (in step) */
+  private palm(x: number, y: number, hue: number): void {
+    const count = 8;
+    for (let k = 0; k < count; k++) {
+      const a = (k / count) * Math.PI * 2 + this.rng.next() * 0.25;
+      const sp = 2.6 + this.rng.next() * 0.7;
+      this.star(this.slot(), x, y, Math.cos(a) * sp, Math.sin(a) * sp, 0, 70 + this.rng.int(20), hue, PK_PALM);
+    }
+  }
+
+  /**
+   * A black hole that swallows a burst whole flares: a shockwave ring, a big
+   * boom and flash, and twin jets of light out of its poles. The jets ignore
+   * every force, or the hole would swallow its own flare and flare again.
+   */
+  private flare(h: Force): void {
+    this.flares.push({ x: h.x, y: h.y, f0: this.frame });
+    this.onFlare?.(h.x, h.y);
+    for (const side of [-1, 1]) {
+      for (let k = 0; k < 36; k++) {
+        this.push(
+          h.x + (this.rng.next() - 0.5) * 3,
+          h.y + side * 9,
+          (this.rng.next() - 0.5) * 0.5,
+          side * (4 + this.rng.next() * 1.5),
+          34 + this.rng.int(20),
+          (HUE_JET + this.rng.int(4)) % RAINBOW_N,
+          0,
+          0,
+          PK_JET,
+        );
+      }
+    }
   }
 
   placeForce(kind: 'attractor' | 'repulsor' | 'vortex' | 'blackhole', x: number, y: number): void {
@@ -749,12 +899,19 @@ export class PSys {
         // wander, unhurried, and never fall
         vx = (vx + (this.rng.next() - 0.5) * 0.14 * ts) * (1 - 0.04 * ts);
         vy = (vy + (this.rng.next() - 0.5) * 0.14 * ts) * (1 - 0.04 * ts);
-      } else if (this.gravityOn) {
-        vy += GRAVITY * (this.kind[i] === PK_SPARK ? 0.5 : 1) * ts;
+      } else if (this.gravityOn && this.kind[i] !== PK_JET) {
+        const kd = this.kind[i];
+        vy += GRAVITY * (kd === PK_SPARK ? 0.5 : kd === PK_WILLOW ? 0.45 : kd === PK_PALM ? 0.8 : 1) * ts;
+      }
+      if (this.kind[i] === PK_WILLOW) {
+        // willow stars slow quickly and hang: that is what draws the trails down
+        vx *= 1 - 0.03 * ts;
+        vy *= 1 - 0.03 * ts;
       }
 
       let swallowed = false;
-      for (const f of this.forces) {
+      let eaten: Force | null = null;
+      for (const f of this.kind[i] === PK_JET ? NO_FORCES : this.forces) {
         const dx = f.x - this.px[i];
         const dy = f.y - this.py[i];
         const d2 = dx * dx + dy * dy;
@@ -778,6 +935,7 @@ export class PSys {
           // black hole: a hard pull with a swirl, so matter spirals in
           if (d < 7) {
             swallowed = true;
+            eaten = f;
             break;
           }
           vx += ux * k * 3 - uy * k * 1.1;
@@ -793,6 +951,11 @@ export class PSys {
       }
       if (swallowed) {
         this.st.swallowed++;
+        // only fireworks feed a flare; a crossette star or palm comet is a
+        // whole cluster to come, so it weighs as one
+        const kd = this.kind[i];
+        const meal = kd === PK_SHELL || kd === PK_WILLOW ? 1 : kd === PK_CROSS || kd === PK_PALM ? 8 : 0;
+        if (eaten && meal) this.eatenNow.set(eaten, (this.eatenNow.get(eaten) ?? 0) + meal);
         this.kill(i);
         i--;
         continue;
@@ -849,6 +1012,21 @@ export class PSys {
       if (this.portals.length) this.warp(i);
 
       this.life[i] -= ts;
+      const kd = this.kind[i];
+      if (kd === PK_PALM && this.rng.chance(0.85 * ts)) {
+        // the frond: sparks shed behind the comet, falling away
+        this.push(px, py, vx * 0.15 + (this.rng.next() - 0.5) * 0.4, vy * 0.15 + (this.rng.next() - 0.5) * 0.4, 22 + this.rng.int(16), this.hue[i], this.pz[i], 0, PK_SPARK);
+      } else if (kd === PK_CROSS && this.life[i] <= CROSS_SPLIT) {
+        // split into a cross of four, turned to the star's own heading
+        const sp = Math.sqrt(vx * vx + vy * vy) || 1;
+        const ux = vx / sp;
+        const uy = vy / sp;
+        for (const [cx, cy] of [[ux, uy], [-uy, ux], [-ux, -uy], [uy, -ux]] as const)
+          this.push(px, py, cx * 1.7 + vx * 0.35, cy * 1.7 + vy * 0.35, 34 + this.rng.int(16), this.hue[i], this.pz[i], 0, PK_SHELL);
+        this.kill(i);
+        i--;
+        continue;
+      }
       const ix = this.px[i] | 0;
       const iy = this.py[i] | 0;
       const oob =
@@ -864,6 +1042,22 @@ export class PSys {
     }
 
     this.liveFireflies = fireflies;
+
+    // black holes: a firework swallowed whole flares
+    for (const h of this.holes) {
+      const c = this.eatenNow.get(h) ?? 0;
+      const st = this.feed.get(h) ?? [0, 0];
+      st[0] += (c - st[0]) * FEED_FAST;
+      if (st[1] > 0) st[1]--;
+      else if (st[0] >= FLARE_RATE) {
+        st[1] = FLARE_COOL;
+        this.flare(h);
+      }
+      this.feed.set(h, st);
+    }
+    this.eatenNow.clear();
+    // a shockwave outlives no one: prune the finished rings here, not in draw
+    while (this.flares.length && frame - this.flares[0].f0 > FLARE_RING) this.flares.shift();
 
   }
 
@@ -955,6 +1149,22 @@ export class PSys {
         const my = (y - this.vy[i] * 0.5) | 0;
         if (mx >= 0 && my >= 0 && mx < SIM_W && my < SIM_H)
           pix[my * SIM_W + mx] = addSat(pix[my * SIM_W + mx], col);
+      }
+    }
+
+    // black hole flares: a shockwave ring of blue-white light running out
+    for (const fl of this.flares) {
+      const age = frame - fl.f0;
+      if (age < 0 || age > FLARE_RING) continue;
+      const k = 1 - age / FLARE_RING;
+      const rad = 6 + age * 4.2;
+      const pts = Math.ceil(rad * 6.3);
+      const col = ((255 << 24) | (((BG_B + 235 * k) | 0) << 16) | (((BG_G + 215 * k) | 0) << 8) | ((BG_R + 170 * k) | 0)) >>> 0;
+      for (let j = 0; j < pts; j++) {
+        const a = (j / pts) * Math.PI * 2;
+        const ix = (fl.x + Math.cos(a) * rad) | 0;
+        const iy = (fl.y + Math.sin(a) * rad) | 0;
+        if (ix >= 0 && iy >= 0 && ix < SIM_W && iy < SIM_H) pix[iy * SIM_W + ix] = addSat(pix[iy * SIM_W + ix], col);
       }
     }
 
