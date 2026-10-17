@@ -1,5 +1,6 @@
 import { RNG } from '../core/rng';
 import { Mat, colorAt } from './materials';
+import { drawStars, skyLayer } from './starfield';
 import { SIM_H, SIM_W, PgToolMsg } from './protocol';
 
 const CAP = 24000;
@@ -868,21 +869,32 @@ export class PSys {
 
   /** Draw the playground into pix (trails fade here). Reads state only. */
   draw(pix: Uint32Array, forceFull: boolean, frame: number): void {
-    if (forceFull) pix.fill(PG_BG);
-    // Trail decay, toward the background. Scaling toward black instead left
-    // trails darker than the background - a black wedge under every fountain.
+    // the sky - nebula bent by the forces - is what trails fade back to
+    const sky = skyLayer(frame, this.forces);
+    if (forceFull) pix.set(sky);
+    // Trail decay, toward the sky. Scaling toward black instead left trails
+    // darker than the background - a black wedge under every fountain. The
+    // sky rides on this loop rather than a blend pass of its own: it already
+    // visits every pixel.
     const nPx = SIM_W * SIM_H;
     for (let i = 0; i < nPx; i++) {
       const c = pix[i];
-      if (c === PG_BG) continue;
-      const r = BG_R + ((((c & 255) - BG_R) * 230) >> 8);
-      const g = BG_G + (((((c >>> 8) & 255) - BG_G) * 230) >> 8);
-      const b = BG_B + (((((c >>> 16) & 255) - BG_B) * 230) >> 8);
+      const t = sky[i];
+      if (c === t) continue;
+      const tr = t & 255;
+      const tg = (t >>> 8) & 255;
+      const tb = (t >>> 16) & 255;
+      const r = tr + ((((c & 255) - tr) * 230) >> 8);
+      const g = tg + (((((c >>> 8) & 255) - tg) * 230) >> 8);
+      const b = tb + (((((c >>> 16) & 255) - tb) * 230) >> 8);
       pix[i] =
-        Math.abs(r - BG_R) + Math.abs(g - BG_G) + Math.abs(b - BG_B) < 4
-          ? PG_BG
+        Math.abs(r - tr) + Math.abs(g - tg) + Math.abs(b - tb) < 4
+          ? t
           : ((255 << 24) | (b << 16) | (g << 8) | r) >>> 0;
     }
+
+    // stars over the sky, behind everything else
+    drawStars(pix, frame, this.forces);
 
     // draw painted grid cells (WALL brush constructions) so they are visible
     {

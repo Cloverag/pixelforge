@@ -1,7 +1,6 @@
 /// <reference lib="webworker" />
 import { CHUNKS_X, CHUNKS_Y, HASH_EVERY, SIM_H, SIM_W, Req, Res, SaveData } from './protocol';
 import { World } from './world';
-import { PG_BG } from './particles';
 
 const ctx = self as unknown as DedicatedWorkerGlobalScope;
 
@@ -134,8 +133,7 @@ function handle(e: MessageEvent<Req>): void {
       }
       if (w.mode === 'playground' && w.parts && master) {
         // trails are authoritative on master; copy the finished frame out
-        if (forceFull) master.fill(PG_BG);
-        w.parts.draw(master, false, w.f);
+        w.parts.draw(master, forceFull, w.f);
         pix.set(master);
       } else if (master) {
         // Sand mode is authoritative on master for the same reason playground

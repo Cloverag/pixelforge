@@ -138,6 +138,10 @@ rounding. It is wrapped to 32 bits now, with every sequence unchanged.
 | **Scenes** | GALAXY, FOUNTAINS, PINBALL, MUSIC STAIRS, MEADOW, PORTAL LOOP - self-running demos - and SURPRISE ME |
 | **Actions** | GRAVITY (`G`), SLOW-MO (`Q`), CLEAR (`X`) |
 
+- **A living sky:** a dim nebula and stars in three depths that drift and
+  twinkle, with the odd shooting star, so the playground is never a black
+  void. Forces bend it: a black hole casts a dark shadow ringed by lensed
+  stars, and vortices stir the nebula into spiral arms.
 - **Film look:** particles are light - HDR bloom over five mips, ACES filmic
   tone mapping, faint lens fringing and grain; walls are lit by what glows near
   them.
