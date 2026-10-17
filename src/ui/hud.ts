@@ -64,6 +64,7 @@ interface TopbarCallbacks {
   onToggleGrid(): void;
   onToggleSoft(): void;
   onCycleTheme(): void;
+  onToggleImmersive(): void;
 }
 
 interface SandPaletteCallbacks {
@@ -152,6 +153,7 @@ export class Hud {
     this.crtBtn = crtBtn;
     this.gridBtn = this.mkBtn('GRID', cbs.onToggleGrid, 'Chunky block view - cycles size (B)', true);
     this.view3dBtn = this.mkBtn('3D', cbs.onToggle3d, 'Toggle 3D voxel view (3)', true);
+    this.immersiveBtn = this.mkBtn('IMMERSE', cbs.onToggleImmersive, 'Fill the window, hide the panels (I)', true);
     const bgBtn = this.mkBtn('BG', cbs.onToggleBg, 'Cycle wallpaper');
     this.themeBtn = this.mkBtn('THEME', cbs.onCycleTheme, 'Light / dark / follow system (T)');
     this.muteBtn = this.mkBtn('SFX', cbs.onToggleMute, 'Mute sound effects (M)', true);
@@ -164,7 +166,7 @@ export class Hud {
     const groups: [string, HTMLButtonElement[]][] = [
       ['Run', [this.pauseBtn, stepBtn]],
       ['File', [this.saveBtn, this.loadBtn, this.shareBtn]],
-      ['View', [this.softBtn, crtBtn, this.gridBtn, this.view3dBtn, bgBtn, this.themeBtn]],
+      ['View', [this.immersiveBtn, this.softBtn, crtBtn, this.gridBtn, this.view3dBtn, bgBtn, this.themeBtn]],
       ['Sound', [this.muteBtn, this.musicBtn]],
     ];
     // On a phone these fold into a drop-down behind the MORE button (CSS);
@@ -479,6 +481,7 @@ export class Hud {
   private windBtn: HTMLButtonElement | null = null;
   private musicBtn!: HTMLButtonElement;
   private view3dBtn!: HTMLButtonElement;
+  private immersiveBtn!: HTMLButtonElement;
   private shareBtn!: HTMLButtonElement;
   private softBtn!: HTMLButtonElement;
   private crtBtn!: HTMLButtonElement;
@@ -493,6 +496,10 @@ export class Hud {
   setGridSize(n: number | null): void {
     this.gridBtn.classList.toggle('toggled', n !== null);
     this.setLabel(this.gridBtn, n === null ? 'GRID' : `GRID ${n}`);
+  }
+
+  setImmersiveToggled(v: boolean): void {
+    this.immersiveBtn.classList.toggle('toggled', v);
   }
 
   set3dToggled(v: boolean): void {

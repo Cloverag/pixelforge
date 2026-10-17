@@ -88,11 +88,15 @@ export function chrome(el: HTMLElement): { w: number; h: number } {
 export function fitSize(stage: HTMLElement, bezel: HTMLElement | null): { w: number; h: number } {
   const rect = stage.getBoundingClientRect();
   const pad = bezel ? chrome(bezel) : { w: 0, h: 0 };
-  const availW = rect.width - 16 - pad.w;
-  const availH = rect.height - 16 - pad.h;
+  // immersive mode fills the window edge to edge, so no margin and no
+  // snapping to a whole scale (snapping left 1440x900 at 2x with wide bars)
+  const immersive = document.body.classList.contains('immersive');
+  const margin = immersive ? 0 : 16;
+  const availW = rect.width - margin - pad.w;
+  const availH = rect.height - margin - pad.h;
   const fit = Math.min(availW / SIM_W, availH / SIM_H);
   let scale = fit;
-  if (fit >= 2) {
+  if (fit >= 2 && !immersive) {
     const snapped = Math.floor(fit);
     scale = fit - snapped < fit * 0.12 ? snapped : fit;
   }

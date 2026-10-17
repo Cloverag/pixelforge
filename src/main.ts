@@ -29,6 +29,7 @@ import { decodeShare, encodeShare, shareUrl, takeUrlCode } from './game/share';
 import { showSharePanel } from './ui/share-panel';
 import { applyWallpaper, loadBgIndex, WALLPAPER_NAMES } from './game/wallpapers';
 import { initHelp, toggleHelp } from './ui/help';
+import { initImmersive, isImmersive, setImmersive, toggleImmersive } from './ui/immersive';
 import { initMusic } from './game/music';
 import { applyTheme, cycleTheme, loadTheme } from './ui/theme';
 
@@ -975,6 +976,7 @@ async function requestMenu(): Promise<void> {
 }
 
 function openMenu(): void {
+  setImmersive(false);
   leaveRoom('YOU LEFT THE ROOM');
   sfx.playground(null); // no frames in the menu, so nothing else would fade it
   screen = 'menu';
@@ -1159,6 +1161,10 @@ hud.initTopbar({
   onToggleGrid: toggleGrid,
   onToggleSoft: toggleSoft,
   onCycleTheme: () => void nextTheme(),
+  onToggleImmersive: () => {
+    sfx.ui();
+    toggleImmersive();
+  },
 });
 hud.setThemeLabel(loadTheme());
 
@@ -1224,7 +1230,12 @@ new Input(
         setBrush(brush + 2);
         break;
       case 'escape':
-        if (screen === 'game') void requestMenu();
+        // one step back at a time: out of immersive first, then the menu
+        if (isImmersive()) setImmersive(false);
+        else if (screen === 'game') void requestMenu();
+        break;
+      case 'i':
+        if (screen === 'game') toggleImmersive();
         break;
       case 'z':
         if (mp && screen === 'game') react(PING);
@@ -1286,6 +1297,10 @@ let pgGravityOn = true;
 // ---- boot ----
 overlay.classList.add('hidden');
 initHelp();
+initImmersive((on) => {
+  hud.setImmersiveToggled(on);
+  if (on) toast('IMMERSIVE - EDGES FOR CONTROLS - I OR ESC TO LEAVE');
+});
 applyWallpaper(bgIndex);
 
 // The worker drops every message that arrives before `init`, so nothing that

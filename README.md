@@ -168,11 +168,12 @@ rounding. It is wrapped to 32 bits now, with every sequence unchanged.
 | `O` | Open a room (menu) |
 | `Z` | Ping where your cursor is (in a room) |
 | `3` | 3D view |
+| `I` | Immersive: the canvas fills the window; push the pointer to an edge for the panels |
 | `B` | Grid view: chunky blocks, cycles 4 / 8 / 16 px then off |
 | `S` / `C` | Soft glow / CRT filter |
 | `T` | Theme: auto / light / dark |
 | `M` | Mute SFX |
-| `ESC` | Back to menu (asks first in a room) |
+| `ESC` | Leave immersive mode, then back to menu (asks first in a room) |
 
 On a phone the top bar folds into one row with a **MORE** menu, the canvas
 goes full width and the materials become large buttons below it (beside it

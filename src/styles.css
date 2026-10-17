@@ -6,7 +6,8 @@
    status strip under the canvas. Everything is driven off the tokens below.
    =========================================================================== */
 
-:root {
+:root,
+.force-dark {
   /* ---- ground: one warm grey family, no blue-purple ---- */
   --bg: #0c0a09;
   --bg-2: #13100e;
@@ -1804,4 +1805,41 @@ kbd, .mode-key {
   :root:not([data-theme]) .game-title { text-shadow: 2px 2px 0 rgba(122, 63, 11, 0.25); }
   :root:not([data-theme]) .swatch { background: rgba(255, 255, 255, 0.45); }
   :root:not([data-theme]) #stage::before { opacity: 0.5; }
+}
+
+/* ==== IMMERSIVE MODE ====
+   ui/immersive.ts: the canvas fills the window on black and the panels slide
+   off-screen; each comes back as dark glass while the pointer is at its edge
+   (body.reveal-*). body carries .force-dark, so the glass is dark in either
+   theme; the :root prefix outranks the light theme's per-element rules. */
+body.immersive #stage { padding: 0; background: #000; }
+body.immersive #stage::before { display: none; }
+body.immersive #bezel { padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+body.immersive #screen-wrap { border-radius: 0; box-shadow: none; }
+:root body.immersive #topbar,
+:root body.immersive #toolbar,
+:root body.immersive #statusbar {
+  position: fixed;
+  z-index: 40;
+  opacity: 0;
+  pointer-events: none;
+  background: rgba(17, 14, 12, 0.84);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.55);
+  transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 160ms ease-out;
+}
+body.immersive #topbar { top: 0; left: 0; right: 0; transform: translateY(-100%); }
+body.immersive #toolbar { top: 0; bottom: 0; left: 0; transform: translateX(-100%); }
+body.immersive #statusbar { left: 0; right: 0; bottom: 0; height: var(--status-h); transform: translateY(100%); }
+body.immersive.reveal-top #topbar,
+body.immersive.reveal-left #toolbar,
+body.immersive.reveal-bottom #statusbar { transform: none; opacity: 1; pointer-events: auto; }
+/* the light theme's paper swatches and shadows, put back to soot on glass */
+:root body.immersive .swatch { background: rgba(255, 255, 255, 0.04); }
+:root body.immersive #topbar .title { text-shadow: none; }
+@media (prefers-reduced-motion: reduce) {
+  body.immersive #topbar,
+  body.immersive #toolbar,
+  body.immersive #statusbar { transition: opacity 120ms linear; }
 }
