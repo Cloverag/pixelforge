@@ -1,6 +1,8 @@
 import type { PgStats } from '../sim/particles';
 import { SIM_W } from '../sim/protocol';
 import { busGain, loadVolumes, saveVolumes, type Bus, type Volumes } from './volume';
+import { boomSlot, type Slot } from './sample-slots';
+import { Samples, type LoadResult } from './samples';
 
 /** bumper notes: C major pentatonic, three octaves up from middle C */
 const NOTE_FREQS: number[] = [];
@@ -19,6 +21,9 @@ export class Sfx {
   private musicBus: GainNode | null = null;
   private noiseBuf: AudioBuffer | null = null;
   private volumes: Volumes = loadVolumes();
+  /** the recorded one-shots, fetched after the first gesture; until then (or if a slot fails) the synth plays */
+  private samples: Samples | null = null;
+  sampleResult: LoadResult | null = null;
   /** runs once, when the first user gesture creates the audio context */
   onReady: (() => void) | null = null;
   private lastPlace = 0;
@@ -111,6 +116,8 @@ export class Sfx {
       this.noiseBuf = this.ac.createBuffer(1, len, this.ac.sampleRate);
       const d = this.noiseBuf.getChannelData(0);
       for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+      this.samples = new Samples(this.ac, `${import.meta.env.BASE_URL}sfx/`);
+      void this.samples.load().then((r) => (this.sampleResult = r));
       this.onReady?.();
     }
     // a hidden tab stays silent until it is shown again
@@ -196,10 +203,21 @@ export class Sfx {
     src.stop(t0 + dur + 0.02);
   }
 
+  /**
+   * Play a recorded one-shot. True when it played (or nothing should: the effects
+   * are muted); false means the slot has no decoded sample, so the caller plays its synth.
+   */
+  private sample(slot: Slot, pan = 0, opts: { gain?: number; rate?: number; delaySec?: number } = {}): boolean {
+    if (this.muted) return true;
+    if (!this.ac || !this.samples) return false;
+    return this.samples.play(slot, this.out(pan), opts);
+  }
+
   place(): void {
     const now = performance.now();
     if (now - this.lastPlace < 50) return;
     this.lastPlace = now;
+    if (this.sample('place')) return;
     this.blip(280 + Math.random() * 160, 0.03, 'square', 0.04);
   }
 
@@ -411,36 +429,43 @@ export class Sfx {
     else this.noise(0.5, 300, 3000, 0.07, 0, 'lowpass');
   }
 
+  // The interface sounds are Kenney recordings; each synth below is the
+  // fallback for when a sample did not load or decode.
+
+  /** a game button: a click */
   ui(): void {
+    if (this.sample('click')) return;
     this.blip(640, 0.05, 'square', 0.05);
   }
 
-  // The title screen's sounds. Short synthesized blips for now; the CC0 samples
-  // that replace them (R2) keep these four names.
-
   /** the cursor moved: a tiny tick */
   uiMove(): void {
+    if (this.sample('move')) return;
     this.blip(520, 0.03, 'square', 0.035);
   }
 
   /** an item confirmed: two quick rising notes */
   uiSelect(): void {
+    if (this.sample('select')) return;
     this.blip(520, 0.06, 'square', 0.05);
     this.blip(780, 0.1, 'square', 0.05, undefined, 55);
   }
 
   /** back out of a menu: one falling note */
   uiBack(): void {
+    if (this.sample('back')) return;
     this.blip(520, 0.09, 'square', 0.045, 330);
   }
 
   /** a locked item: a low, short buzz */
   uiDeny(): void {
+    if (this.sample('deny')) return;
     this.blip(150, 0.14, 'sawtooth', 0.05, 110);
   }
 
   /** a rocket going up: a rising whistle over a little hiss */
   fireworkLaunch(): void {
+    if (this.sample('launch')) return;
     this.blip(700, 0.85, 'sine', 0.045, 2300);
     this.blip(1400, 0.85, 'sine', 0.012, 4600);
     this.noise(0.6, 4500, 1500, 0.025, 0, 'highpass');
@@ -472,6 +497,7 @@ export class Sfx {
       return;
     }
     this.lastBoom = now;
+    if (this.sample(boomSlot(r), pan)) return;
     this.blip(90 - big * 30, 0.4 + big * 0.25, 'sine', 0.28 + big * 0.14, 24, 0, pan * 0.5);
     this.noise(0.45 + big * 0.35, 1100, 50, 0.26 + big * 0.16, pan);
     this.noise(0.06, 5200, 1800, 0.12 + big * 0.08, pan, 'highpass');
@@ -501,6 +527,7 @@ export class Sfx {
     const now = performance.now();
     if (now - this.lastZap < 90) return;
     this.lastZap = now;
+    if (this.sample('zap')) return;
     this.blip(1800, 0.05, 'square', 0.035, 600);
     this.noise(0.03, 8000, 4000, 0.04, 0, 'highpass');
   }
@@ -518,18 +545,22 @@ export class Sfx {
   }
 
   win(): void {
+    if (this.sample('win')) return;
     [523, 659, 784, 1046].forEach((f, i) =>
       this.blip(f, 0.13, 'triangle', 0.12, undefined, i * 110),
     );
   }
 
   lose(): void {
+    if (this.sample('lose')) return;
     [392, 311, 233].forEach((f, i) =>
       this.blip(f, 0.2, 'sawtooth', 0.08, undefined, i * 170),
     );
   }
 
   star(i: number): void {
+    // each star a little higher than the last, spaced as before
+    if (this.sample('star', 0, { rate: 1 + i * 0.12, delaySec: i * 0.24 })) return;
     this.blip(880 + i * 240, 0.16, 'triangle', 0.13, undefined, i * 240);
   }
 }

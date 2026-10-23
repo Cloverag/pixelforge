@@ -914,7 +914,7 @@ function previewAttract(kind: 'pg' | 'chem'): void {
 if (import.meta.env.DEV)
   (window as unknown as { __audio: () => unknown }).__audio = () => {
     const ac = sfx.context();
-    return { ctx: ac && { state: ac.state, time: ac.currentTime, rate: ac.sampleRate }, vols: sfx.getVolumes(), gains: sfx.busGains() };
+    return { ctx: ac && { state: ac.state, time: ac.currentTime, rate: ac.sampleRate }, vols: sfx.getVolumes(), gains: sfx.busGains(), samples: sfx.sampleResult };
   };
 
 // dev only: lets automated checks read the menu's demo
