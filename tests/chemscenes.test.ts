@@ -58,6 +58,14 @@ describe('chem lab experiments', { timeout: 120_000 }, () => {
     expect(tinted).toBeGreaterThan(plain * 3);
   });
 
+  it('FLAME TESTS: the burner stays a thin line', () => {
+    // seven cups, each a bed 2 rows deep and 57 cells wide. The 3x test above
+    // guards the tinting; it cannot tell a thin bed from a thick one (the old
+    // 28-row bed scored 4.7x against 5.7x), so pin the bed itself, exactly:
+    // a block of torch is a yellow glow that tints every flame the same
+    expect(scene('flames').grid.counts[Mat.TORCH]).toBe(7 * 2 * 57);
+  });
+
   it('builds the same bench for everyone, and only in the chem lab', () => {
     for (const s of CHEM_SCENES) {
       // different seeds: a scene that rolled the world's RNG would differ
