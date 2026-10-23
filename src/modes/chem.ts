@@ -2,6 +2,8 @@ import type { PointerEvt } from '../core/input';
 import { MATS, Mat } from '../sim/materials';
 import { rulesFor } from '../sim/reactions';
 import { CHEM_SCENES } from '../sim/chemscenes';
+import type { Res } from '../sim/protocol';
+import { RxWindow, readoutNote } from './rxwindow';
 import type { PaletteSection, Swatch } from '../ui/hud';
 import { Stroke } from './stroke';
 import type { CursorLook, ModeController, ModeCtx } from './types';
@@ -63,6 +65,9 @@ export class ChemMode implements ModeController {
   private selMat: number = Mat.NA;
   private stroke: Stroke;
   private table: typeof import('../ui/periodic') | null = null;
+  /** the status bar's reactions readout: a rolling second of Res.rx deltas */
+  private rx = new RxWindow();
+  private rxShownAt = 0;
 
   constructor(private ctx: ModeCtx) {
     this.stroke = new Stroke(ctx);
@@ -78,6 +83,7 @@ export class ChemMode implements ModeController {
   }
 
   buildUI(): void {
+    this.rxShownAt = 0; // show the readout on the first frame, not 250 ms later
     const swatch = (m: number): Swatch => {
       const d = MATS[m];
       const sym = SYMBOL.get(m);
@@ -128,6 +134,20 @@ export class ChemMode implements ModeController {
     this.table?.closeTable();
   }
 
+  /**
+   * The readout: the worker reports what fired each frame (display only, so
+   * the clock here is the page's, not the simulation's); about four times a
+   * second it is summed over the last second and handed to the status bar.
+   */
+  onFrame(r: Res): void {
+    const now = performance.now();
+    if (r.rx) this.rx.add(now, r.rx);
+    if (now - this.rxShownAt < 250) return;
+    this.rxShownAt = now;
+    const { rate, top } = this.rx.read(now);
+    this.ctx.hud.setReadout(rate, top === null ? null : readoutNote(top));
+  }
+
   /** ESC closes the table before it leaves the lab */
   onEscape(): boolean {
     return this.table?.closeTable() ?? false;
@@ -167,7 +187,7 @@ const CHEM_NOTE: Partial<Record<number, string>> = {
   [Mat.LAVA]: 'Heat that flows.',
   [Mat.GLASS]: 'Holds anything, reacts with nothing.',
   [Mat.WALL]: 'Holds anything, reacts with nothing.',
-  [Mat.PLANT]: 'Chlorine bleaches it.',
+  [Mat.PLANT]: 'Fluorine, chlorine and bromine bleach it.',
   // elements with no rule of their own
   [Mat.HE]: 'Inert. The lightest thing in the lab: it rises above hydrogen.',
   [Mat.AU]: 'Inert. Nothing in the lab attacks it; it sinks through almost everything.',

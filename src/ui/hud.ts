@@ -169,6 +169,11 @@ export class Hud {
     tool: HTMLElement;
     cells: HTMLElement;
     cellsKey: HTMLElement;
+    /** the CHEM LAB's live readout: rate and the busiest rule (hidden elsewhere) */
+    rxSeg: HTMLElement;
+    rxVal: HTMLElement;
+    nowSeg: HTMLElement;
+    nowVal: HTMLElement;
   };
   /** the playground counts particles, not cells */
   private particleMode = false;
@@ -299,6 +304,14 @@ export class Hud {
     const note = h('span', 'sb-note', '');
     matSeg.append(chip, name, note);
 
+    // CHEM LAB only (setReadout): how much is reacting, and what mostly is
+    const rxSeg = seg('sb-rx hidden');
+    const rxVal = h('span', 'sb-val num', '0/s');
+    rxSeg.append(h('span', 'sb-key', 'Reactions'), rxVal);
+    const nowSeg = seg('sb-now hidden');
+    const nowVal = h('span', 'sb-note', '');
+    nowSeg.append(h('span', 'sb-key', 'Now'), nowVal);
+
     const tool = h('span', 'sb-val', '');
     seg('sb-tool').append(h('span', 'sb-key', 'Tool'), tool);
     const cells = h('span', 'sb-val num', '0');
@@ -307,7 +320,7 @@ export class Hud {
     this.fpsEl = h('span', 'sb-val num', '');
     this.fpsEl.id = 'fps';
     seg('sb-fps').append(this.fpsEl);
-    this.status = { lamp, run, chip, name, note, tool, cells, cellsKey };
+    this.status = { lamp, run, chip, name, note, tool, cells, cellsKey, rxSeg, rxVal, nowSeg, nowVal };
   }
 
   private renderTool(): void {
@@ -360,7 +373,23 @@ export class Hud {
     this.fpsEl.textContent = `${f} FPS`;
   }
 
+  /**
+   * The CHEM LAB's readout: rules fired in the last second, and the note of
+   * the busiest one. `null` hides it (every other mode); no note hides just
+   * the NOW segment, so a stale line never lingers. Display only.
+   */
+  setReadout(rate: number | null, note: string | null): void {
+    const s = this.status;
+    if (!s) return;
+    s.rxSeg.classList.toggle('hidden', rate === null);
+    s.nowSeg.classList.toggle('hidden', rate === null || !note);
+    if (rate !== null) s.rxVal.textContent = `${rate.toLocaleString('en-US')}/s`;
+    if (note) s.nowVal.textContent = note;
+  }
+
   setPaused(p: boolean): void {
+    // a paused world fires nothing, and no frames arrive to say so
+    if (p && this.status && !this.status.rxSeg.classList.contains('hidden')) this.setReadout(0, null);
     this.setLabel(this.pauseBtn, p ? 'RESUME' : 'PAUSE');
     this.pauseBtn.classList.toggle('toggled', p);
     if (this.status) this.status.run.textContent = p ? 'PAUSED' : 'RUNNING';
@@ -409,6 +438,9 @@ export class Hud {
     this.budgetEls.clear();
     this.lamps.clear();
     this.onPick = spec.onPick;
+    // every mode builds its palette on the way in, so this is what hides the
+    // CHEM LAB's readout when another mode (or a room switch) takes over
+    this.setReadout(null, null);
 
     const pal = h('div');
     pal.id = 'palette';

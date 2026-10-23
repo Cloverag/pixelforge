@@ -474,6 +474,22 @@ body.crt-on #crt {
 .sb-seg:last-child { border-right: 0; }
 .sb-mat { flex: 1 1 auto; min-width: 0; }
 .sb-key { color: var(--ink-faint); text-transform: uppercase; }
+/* the CHEM LAB readout: the rate keeps its width so the bar does not twitch,
+   and NOW gives way (with an ellipsis) before the FPS segment does */
+.sb-rx .sb-val { min-width: 8ch; }
+.sb-now { flex: 0 1 auto; min-width: 0; max-width: 46ch; }
+/* while NOW shows, the selected material's description is what gives way:
+   it takes what is left rather than sharing the squeeze (:has keeps every
+   other mode's bar as it was) */
+@media (min-width: 1181px) {
+  #statusbar:has(.sb-now:not(.hidden)) .sb-mat { flex: 1 1 0; min-width: 150px; overflow: hidden; }
+}
+/* Narrower bars give up the readout in steps, so the FPS segment never leaves
+   the bar: below 1180px NOW would be a sliver, so the rate stays and the line
+   goes; below 1000px the lab's cell count goes too; on a phone, the rate. */
+@media (max-width: 1180px) { .sb-now { display: none; } }
+@media (max-width: 1000px) { #statusbar:has(.sb-rx:not(.hidden)) .sb-cells { display: none; } }
+@media (max-width: 720px) { .sb-rx { display: none; } }
 .sb-val { color: var(--ink); }
 .sb-val.num { font-variant-numeric: tabular-nums; font-family: var(--font-read); font-size: 11px; letter-spacing: 0; }
 .sb-note {
@@ -1102,7 +1118,7 @@ kbd, .mode-key {
   .gswatches.tiles { grid-template-columns: none; grid-template-rows: repeat(2, 44px); grid-auto-columns: 44px; grid-auto-flow: column; }
   .swatch.tile { width: auto; }
   .toolcol { margin-top: 0; min-width: 190px; }
-  .sb-note, .sb-cells { display: none; }
+  .sb-note, .sb-cells, .sb-now { display: none; }
 }
 @media (max-width: 720px) {
   #topbar { padding: 6px 10px; gap: 6px 10px; }
