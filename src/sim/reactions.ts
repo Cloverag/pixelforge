@@ -63,6 +63,18 @@ export const RULES: Rule[] = [
   r(M.CL, M.PLANT, KEEP, M.ASH, 0.05, 'bleaches plants to ash'),
   r(M.CL, M.FLORA, KEEP, M.ASH, 0.05, 'bleaches flowers to ash'),
   r(M.AL, M.I, M.OXIDE, M.IODINE_GAS, 0.1, 'smokes violet with iodine once wet', { needs: M.WATER, fx: 'ignite' }),
+  // fluorine needs no heat and no help: the most violent thing in the lab
+  r(M.F, M.H, M.ACID, M.EMPTY, 0.6, 'explodes with hydrogen, even cold', { fx: 'boom' }),
+  r(M.F, M.WATER, M.O, M.ACID, 0.2, 'splits water into oxygen and acid', { fx: 'fizz' }),
+  r(M.F, M.GLASS, M.EMPTY, M.EMPTY, 0.05, 'etches glass away'),
+  r(M.F, M.NA, M.SALT, M.EMPTY, 0.3, 'burns sodium into salt', { fx: 'flash', spark: M.FLAME_YELLOW }),
+  r(M.F, M.WOOD, M.EMPTY, M.FIRE, 0.2, 'sets wood alight', { fx: 'ignite' }),
+  r(M.F, M.PLANT, KEEP, M.ASH, 0.1, 'withers plants to ash'),
+  // bromine, the liquid halogen: slower than chlorine on plants, hard on metals
+  r(M.AL, M.BR, M.SALT, M.EMPTY, 0.3, 'aluminium sparks in bromine', { fx: 'flash' }),
+  r(M.K, M.BR, M.SALT, M.EMPTY, 0.2, 'burns in bromine into salt', { fx: 'flash', spark: M.FLAME_LILAC }),
+  r(M.NA, M.BR, M.SALT, M.EMPTY, 0.05, 'slowly turns to salt in bromine'),
+  r(M.BR, M.PLANT, KEEP, M.ASH, 0.03, 'bleaches plants'),
   // ---- fire and oxygen ----
   r(M.H, M.O, M.STEAM, M.STEAM, 0.7, 'explodes with oxygen near heat, making water', { needs: 'heat', fx: 'boom' }),
   r(M.C, M.O, M.FIRE, M.SMOKE, 0.3, 'burns hot in oxygen', { needs: 'heat', fx: 'ignite' }),
