@@ -1,16 +1,22 @@
 import { CHALLENGES } from '../sim/challenges';
 import { isUnlocked, loadProgress, Progress } from '../game/progress';
 import { h } from './widgets';
-import { MATS } from '../sim/materials';
 
-/** Counted, not typed: the menu said 20 while the palette held 25. */
-const PLACEABLE = MATS.filter((m) => m?.placeable).length;
+/** A card in the PLAY column; main.ts owns the list and its hotkeys. */
+export interface MenuEntry {
+  name: string;
+  sub: string;
+  /** the key shown on the card */
+  key: string;
+  /** the key as Input reports it ('enter', 'p') */
+  hotkey: string;
+  primary?: boolean;
+  cls?: string;
+  run(): void;
+}
 
 export interface MenuCallbacks {
-  onSandbox(): void;
-  onPlayground(): void;
-  onSurprise(): void;
-  onPlayTogether(): void;
+  entries: MenuEntry[];
   onChallenge(id: string): void;
   onToggleMute(): void;
   onToggleCrt(): void;
@@ -117,18 +123,11 @@ export function showMenu(cbs: MenuCallbacks): void {
 
   const modes = h('section', 'menu-modes');
   modes.appendChild(h('h2', 'section-title', 'PLAY'));
-  modes.appendChild(
-    modeButton('SANDBOX', `Paint ${PLACEABLE} materials. No rules, no timer.`, 'ENTER', true, cbs.onSandbox),
-  );
-  modes.appendChild(
-    modeButton('PLAYGROUND', 'Fireworks, portals, black holes and musical bumpers.', 'P', false, cbs.onPlayground),
-  );
-  const sur = modeButton('SURPRISE ME', 'A brand-new light show, made up on the spot.', 'R', false, cbs.onSurprise);
-  sur.classList.add('surprise');
-  modes.appendChild(sur);
-  modes.appendChild(
-    modeButton('PLAY TOGETHER (BETA)', 'Open a sandbox room and send friends the link.', 'O', false, cbs.onPlayTogether),
-  );
+  for (const e of cbs.entries) {
+    const b = modeButton(e.name, e.sub, e.key, e.primary ?? false, e.run);
+    if (e.cls) b.classList.add(e.cls);
+    modes.appendChild(b);
+  }
   const tip = h('aside', 'menu-tip');
   tip.appendChild(h('span', 'tip-label', 'TIP'));
   tip.appendChild(h('p', 'tip-text', TIPS[Math.floor(Math.random() * TIPS.length)]));

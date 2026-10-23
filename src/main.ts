@@ -7,9 +7,9 @@ import type { PG3D } from './render/pg3d';
 import { Sfx } from './game/audio';
 import { Juice } from './game/juice';
 import { Hud } from './ui/hud';
-import { showMenu } from './ui/menu';
+import { showMenu, type MenuEntry } from './ui/menu';
 import { hideOverlay, showResult, toast } from './ui/widgets';
-import { Mat } from './sim/materials';
+import { Mat, MATS } from './sim/materials';
 import { MpSession, newRoomCode, roomFromUrl, roomUrl, type MpHooks } from './net/mp';
 import type { NetInput, Snapshot } from './sim/protocol';
 import { RoomPill } from './ui/roompill';
@@ -18,7 +18,7 @@ import { confirmDialog, isDialogOpen, nameDialog } from './ui/dialog';
 import { EmoteLayer } from './ui/emotes';
 import { EMOTES, PING } from './net/presence';
 import { myIdentity, saveIdentity } from './net/presence';
-import { Mode, PaintKind, Req, Res, SIM_H, SIM_W, SimEvents, Stats } from './sim/protocol';
+import { Mode, MODES, PaintKind, Req, Res, SIM_H, SIM_W, SimEvents, Stats } from './sim/protocol';
 import { CHALLENGES } from './sim/challenges';
 import { recordStars } from './game/progress';
 import { readSave, rleDecode, rleEncode, storeSave } from './game/rle';
@@ -333,7 +333,7 @@ worker.onmessage = (e: MessageEvent<Res>) => {
     if (mp && r.mode && r.mode !== current.id && current.challengeId === null) {
       // the host switched the room: rebuild this screen, the world already has
       showMode(MODE_CTRL[r.mode]);
-      roomPill.setMode(r.mode);
+      roomPill.setNext(nextRoomMode().roomName);
       toast(`THE ROOM IS NOW IN THE ${current.roomName}`);
     }
     current.onFrame?.(r);
@@ -607,7 +607,7 @@ async function hostRoom(reuse?: string): Promise<void> {
   history.replaceState(null, '', roomUrl(code));
   rememberHosting(code);
   roomPill.show(code, 'host');
-  roomPill.setMode(current.id);
+  roomPill.setNext(nextRoomMode().roomName);
   roomPill.setRoster(me, []);
   emotes.open();
   if (reuse) toast(`ROOM ${code} REOPENED`);
@@ -631,7 +631,7 @@ async function joinRoom(code: string): Promise<void> {
     return;
   }
   roomPill.show(code, 'guest');
-  roomPill.setMode(current.id);
+  roomPill.setNext(nextRoomMode().roomName);
   roomPill.setRoster(me, []);
   emotes.open();
 }
@@ -658,17 +658,22 @@ function leaveRoom(reason?: string, bad = false): void {
   if (reason) toast(reason, bad);
 }
 roomPill.onCopy = () => mp && copyRoomLink(mp.code);
-/** The host takes the whole room to the other mode (the world starts empty). */
+/** The mode after this one, in MODES order: the host's room button offers it. */
+function nextRoomMode(): ModeController {
+  return MODE_CTRL[MODES[(MODES.indexOf(current.id) + 1) % MODES.length]];
+}
+
+/** The host takes the whole room to the next mode (the world starts empty). */
 roomPill.onSwitchMode = async () => {
   if (!mp?.host) return;
-  const next = current.id === 'sand' ? 'playground' : 'sand';
+  const next = nextRoomMode();
   const ok = await confirmDialog({
-    title: next === 'playground' ? 'TO THE PLAYGROUND?' : 'BACK TO THE SANDBOX?',
-    body: `Everyone in the room goes with you, and the ${next === 'playground' ? 'playground' : 'sandbox'} starts empty.`,
+    title: next.id === 'sand' ? 'BACK TO THE SANDBOX?' : `TO THE ${next.roomName}?`,
+    body: `Everyone in the room goes with you, and the ${next.roomName.toLowerCase()} starts empty.`,
     ok: 'GO',
     cancel: 'STAY',
   });
-  if (ok && mp) mp.local([{ k: 'mode', m: next }]);
+  if (ok && mp) mp.local([{ k: 'mode', m: next.id }]);
 };
 // dev only: paint straight into this peer's own world, bypassing the room,
 // to test that a desync is detected and repaired
@@ -803,27 +808,7 @@ function openMenu(): void {
   current.leave();
   hud.showBars(false);
   showMenu({
-    onSandbox: () => {
-      sfx.ensure();
-      sfx.ui();
-      startSandbox();
-    },
-    onPlayground: () => {
-      sfx.ensure();
-      sfx.ui();
-      startPlayground();
-    },
-    onSurprise: () => {
-      sfx.ensure();
-      startPlayground();
-      playground.surprise();
-    },
-    onPlayTogether: () => {
-      sfx.ensure();
-      sfx.ui();
-      startSandbox();
-      void hostRoom();
-    },
+    entries: MENU,
     onChallenge: (id) => {
       sfx.ensure();
       sfx.ui();
@@ -839,6 +824,58 @@ function openMenu(): void {
     theme: loadTheme(),
   });
 }
+
+/** The menu's PLAY column; each card's hotkey works on the menu too. */
+const MENU: MenuEntry[] = [
+  {
+    name: 'SANDBOX',
+    // counted, not typed: the menu once said 20 while the palette held 25
+    sub: `Paint ${MATS.filter((m) => m?.placeable).length} materials. No rules, no timer.`,
+    key: 'ENTER',
+    hotkey: 'enter',
+    primary: true,
+    run: () => {
+      sfx.ensure();
+      sfx.ui();
+      startSandbox();
+    },
+  },
+  {
+    name: 'PLAYGROUND',
+    sub: 'Fireworks, portals, black holes and musical bumpers.',
+    key: 'P',
+    hotkey: 'p',
+    run: () => {
+      sfx.ensure();
+      sfx.ui();
+      startPlayground();
+    },
+  },
+  {
+    name: 'SURPRISE ME',
+    sub: 'A brand-new light show, made up on the spot.',
+    key: 'R',
+    hotkey: 'r',
+    cls: 'surprise',
+    run: () => {
+      sfx.ensure();
+      startPlayground();
+      playground.surprise();
+    },
+  },
+  {
+    name: 'PLAY TOGETHER (BETA)',
+    sub: 'Open a sandbox room and send friends the link.',
+    key: 'O',
+    hotkey: 'o',
+    run: () => {
+      sfx.ensure();
+      sfx.ui();
+      startSandbox();
+      void hostRoom();
+    },
+  },
+];
 
 function closeResult(): void {
   resultOpen = false;
@@ -1000,29 +1037,9 @@ new Input(
       // a focused control already handles its own Enter/Space
       const a = document.activeElement as HTMLElement | null;
       const onControl = a !== null && (a.tagName === 'BUTTON' || a.getAttribute('role') === 'button');
-      if (k === 'enter' && !onControl) {
-        sfx.ensure();
-        sfx.ui();
-        startSandbox();
-        return;
-      }
-      if (k === 'p') {
-        sfx.ensure();
-        sfx.ui();
-        startPlayground();
-        return;
-      }
-      if (k === 'r') {
-        sfx.ensure();
-        startPlayground();
-        playground.surprise();
-        return;
-      }
-      if (k === 'o') {
-        sfx.ensure();
-        sfx.ui();
-        startSandbox();
-        void hostRoom();
+      const entry = MENU.find((e) => e.hotkey === k);
+      if (entry && !(k === 'enter' && onControl)) {
+        entry.run();
         return;
       }
     }

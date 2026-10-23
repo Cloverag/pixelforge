@@ -18,7 +18,7 @@ export class RoomPill {
   onCopy: () => void = () => {};
   /** the player renamed themselves */
   onRename: (name: string) => void = () => {};
-  /** host: switch the room to the other mode */
+  /** host: take the room to the mode the button offers */
   onSwitchMode: () => void = () => {};
   private modeBtn!: HTMLButtonElement;
 
@@ -144,10 +144,9 @@ export class RoomPill {
 
   private role = 'GUEST';
 
-  /** The mode the room is in; the host's button offers the other one. */
-  setMode(m: 'sand' | 'playground'): void {
+  /** The mode the host's button offers next, e.g. PLAYGROUND. */
+  setNext(next: string): void {
     if (!this.modeBtn) return;
-    const next = m === 'sand' ? 'PLAYGROUND' : 'SANDBOX';
     this.modeBtn.textContent = `→ ${next}`;
     this.modeBtn.title = `Take everyone to the ${next.toLowerCase()}`;
   }
