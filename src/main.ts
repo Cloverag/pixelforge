@@ -21,7 +21,7 @@ import { myIdentity, saveIdentity } from './net/presence';
 import { Mode, MODES, PaintKind, Req, Res, SIM_H, SIM_W, SimEvents, Stats } from './sim/protocol';
 import { CHALLENGES } from './sim/challenges';
 import { CHEM_SCENES } from './sim/chemscenes';
-import { recordStars } from './game/progress';
+import { loadProgress, recordStars } from './game/progress';
 import { readSave, rleDecode, rleEncode, storeSave } from './game/rle';
 import { decodeShare, encodeShare, shareUrl, takeUrlCode } from './game/share';
 import { showSharePanel } from './ui/share-panel';
@@ -33,7 +33,7 @@ import { applyTheme, cycleTheme, loadTheme } from './ui/theme';
 import type { ModeController, ModeCtx } from './modes/types';
 import { SandMode } from './modes/sand';
 import { PlaygroundMode } from './modes/playground';
-import { ChemMode, LAB_ELEMENTS } from './modes/chem';
+import { ChemMode } from './modes/chem';
 
 const STEP_MS = 1000 / 60;
 
@@ -814,7 +814,8 @@ async function requestMenu(): Promise<void> {
   openMenu();
 }
 
-function openMenu(): void {
+/** `firstVisit`: the first menu of a page load with nothing saved - PRESS START comes first. */
+function openMenu(firstVisit = false): void {
   setImmersive(false);
   leaveRoom('YOU LEFT THE ROOM');
   // the demo behind the menu replaces the world: save the sandbox first
@@ -827,24 +828,28 @@ function openMenu(): void {
   hud.showBars(false);
   showMenu({
     entries: MENU,
+    firstVisit,
+    onStart: () => sfx.ensure(),
     onChallenge: (id) => {
       sfx.ensure();
-      sfx.ui();
       startChallenge(id);
     },
-    onToggleMute: toggleMute,
-    onToggleCrt: toggleCrt,
-    onToggleBg: cycleWallpaper,
-    backdrop: WALLPAPER_NAMES[bgIndex],
-    onToggleMusic: toggleMusic,
-    onHelp: () => toggleHelp(),
-    onToggle3d: () => void toggle3d(),
+    sound: (k) => {
+      if (k === 'move') sfx.uiMove();
+      else if (k === 'select') sfx.uiSelect();
+      else if (k === 'back') sfx.uiBack();
+      else sfx.uiDeny();
+    },
     onPreview: previewAttract,
-    tagline:
-      `Paint with ${PLACEABLE} materials and ${LAB_ELEMENTS.size} real elements that burn, flow, grow and explode - ` +
-      'build light shows, run chemistry, or play with friends in one world.',
-    onCycleTheme: nextTheme,
-    theme: loadTheme(),
+    onToggleMute: toggleMute,
+    onToggleMusic: toggleMusic,
+    isMusicOn: () => music.isOn(),
+    onCycleTheme: () => void nextTheme(),
+    theme: loadTheme,
+    onToggleBg: () => void cycleWallpaper(),
+    backdrop: () => WALLPAPER_NAMES[bgIndex],
+    onToggleCrt: toggleCrt,
+    onHelp: () => toggleHelp(),
   });
   startAttract('pg');
 }
@@ -910,51 +915,44 @@ if (import.meta.env.DEV)
 /** counted, not typed: the menu once said 20 while the palette held 25 */
 const PLACEABLE = MATS.filter((m) => m?.placeable).length;
 
-/** The menu's PLAY column; each card's hotkey works on the menu too. */
+/**
+ * The title screen's MAIN list, top to bottom. The one list: it also drives the
+ * hotkeys (P, L, R, O) and the attract preview behind the cursor.
+ */
 const MENU: MenuEntry[] = [
   {
     name: 'SANDBOX',
-    sub: `Paint ${PLACEABLE} materials. No rules, no timer.`,
-    key: 'ENTER',
-    hotkey: 'enter',
-    primary: true,
+    sub: `paint ${PLACEABLE} materials - no rules, no timer`,
     run: () => {
       sfx.ensure();
-      sfx.ui();
       startSandbox();
     },
   },
   {
     name: 'PLAYGROUND',
     preview: 'pg',
-    sub: 'Fireworks, portals, black holes and musical bumpers.',
-    key: 'P',
+    sub: 'fireworks, portals, black holes and musical bumpers',
     hotkey: 'p',
     run: () => {
       sfx.ensure();
-      sfx.ui();
       startPlayground();
     },
   },
   {
     name: 'CHEM LAB',
     preview: 'chem',
-    sub: 'Pick elements off the periodic table and watch them react.',
-    key: 'L',
+    sub: 'pick elements off the periodic table and watch them react',
     hotkey: 'l',
     run: () => {
       sfx.ensure();
-      sfx.ui();
       startChemLab();
     },
   },
   {
     name: 'SURPRISE ME',
     preview: 'pg',
-    sub: 'A brand-new light show, made up on the spot.',
-    key: 'R',
+    sub: 'a brand-new light show, made up on the spot',
     hotkey: 'r',
-    cls: 'surprise',
     run: () => {
       sfx.ensure();
       startPlayground();
@@ -962,16 +960,28 @@ const MENU: MenuEntry[] = [
     },
   },
   {
-    name: 'PLAY TOGETHER (BETA)',
-    sub: 'Open a sandbox room and send friends the link.',
-    key: 'O',
+    name: 'CHALLENGES',
+    opens: 'challenges',
+    sub: () => {
+      const prog = loadProgress();
+      const earned = CHALLENGES.reduce((sum, c) => sum + (prog[c.id] ?? 0), 0);
+      return `${CHALLENGES.length} puzzles - ${earned} of ${CHALLENGES.length * 3} stars`;
+    },
+  },
+  {
+    name: 'PLAY WITH FRIENDS',
+    sub: 'open a sandbox room and send friends the link',
     hotkey: 'o',
     run: () => {
       sfx.ensure();
-      sfx.ui();
       startSandbox();
       void hostRoom();
     },
+  },
+  {
+    name: 'OPTIONS',
+    opens: 'options',
+    sub: 'sound, music, theme, backdrop, controls',
   },
 ];
 
@@ -1047,8 +1057,6 @@ applyTheme(loadTheme());
 function nextTheme(): string {
   const t = cycleTheme();
   hud.setThemeLabel(t);
-  for (const el of document.querySelectorAll<HTMLElement>('[data-role="theme-label"]'))
-    el.textContent = `THEME: ${t.toUpperCase()}`;
   sfx.ui();
   toast(`THEME: ${t.toUpperCase()}`);
   return t;
@@ -1132,16 +1140,6 @@ new Input(
   onPointer,
   (k) => {
     if (isDialogOpen()) return; // typing a name must not paint, pause or leave
-    if (screen === 'menu') {
-      // a focused control already handles its own Enter/Space
-      const a = document.activeElement as HTMLElement | null;
-      const onControl = a !== null && (a.tagName === 'BUTTON' || a.getAttribute('role') === 'button');
-      const entry = MENU.find((e) => e.hotkey === k);
-      if (entry && !(k === 'enter' && onControl)) {
-        entry.run();
-        return;
-      }
-    }
     switch (k) {
       case ' ':
         togglePause();
@@ -1253,7 +1251,7 @@ if (urlRoom && hostingCode() === urlRoom) {
     adoptWorld(bootWorld);
     toast('WORLD RESTORED');
   } else {
-    openMenu();
+    openMenu(true);
   }
 }
 

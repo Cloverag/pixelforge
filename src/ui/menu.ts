@@ -1,68 +1,74 @@
 import { CHALLENGES } from '../sim/challenges';
 import { isUnlocked, loadProgress, Progress } from '../game/progress';
+import { isDialogOpen } from './dialog';
+import { isHelpOpen } from './help';
+import { back, initialNav, move, moveTo, open, start, type Nav } from './menucursor';
 import { h } from './widgets';
 
-/** A card in the PLAY column; main.ts owns the list and its hotkeys. */
+/** An item of the title screen's MAIN list; main.ts owns the list and its hotkeys. */
 export interface MenuEntry {
   name: string;
-  sub: string;
-  /** the key shown on the card */
-  key: string;
-  /** the key as Input reports it ('enter', 'p') */
-  hotkey: string;
-  primary?: boolean;
-  cls?: string;
-  /** hovering or focusing the card previews this on the background */
+  /** the one description line shown under the list while this item is selected */
+  sub: string | (() => string);
+  /** the key as Input reports it ('p', 'l'); works on MAIN */
+  hotkey?: string;
+  /** moving the cursor here previews this on the background */
   preview?: 'pg' | 'chem';
-  run(): void;
+  /** opens a submenu instead of running */
+  opens?: 'challenges' | 'options';
+  run?(): void;
 }
+
+export type MenuSound = 'move' | 'select' | 'back' | 'deny';
 
 export interface MenuCallbacks {
   entries: MenuEntry[];
+  /** a fresh visit: show PRESS START first */
+  firstVisit: boolean;
+  /** PRESS START was pressed: the user gesture that unlocks audio */
+  onStart(): void;
   onChallenge(id: string): void;
-  onToggleMute(): void;
-  onToggleCrt(): void;
-  /** cycles the backdrop; returns the new one's name */
-  onToggleBg(): string;
-  /** the backdrop now showing */
-  backdrop: string;
-  onToggleMusic(): void;
+  sound(s: MenuSound): void;
   onPreview(kind: 'pg' | 'chem'): void;
+  // OPTIONS: a toggle acts, and the view reads the new value back
+  onToggleMute(): void;
+  onToggleMusic(): void;
+  isMusicOn(): boolean;
+  /** cycle the theme */
+  onCycleTheme(): void;
+  theme(): string;
+  /** cycle the backdrop */
+  onToggleBg(): void;
+  backdrop(): string;
+  onToggleCrt(): void;
   onHelp(): void;
-  onToggle3d(): void;
-  /** one sentence saying what the game is */
-  tagline: string;
-  onCycleTheme(): string;
-  theme: string;
 }
 
 const STARS_PER_LEVEL = 3;
+const MODIFIERS = new Set(['shift', 'control', 'alt', 'meta', 'capslock', 'tab']);
 
-function starHtml(n: number): string {
-  let out = '';
-  for (let i = 0; i < STARS_PER_LEVEL; i++)
-    out += `<span class="${i < n ? 'on' : 'off'}">★</span>`;
-  return out;
+/** One row of a list. */
+interface Row {
+  /** the text, or [number, name, stars] laid out as a grid (challenges) */
+  label: string | [string, string, string];
+  desc: string;
+  locked?: boolean;
+  /** Left/Right change the value (OPTIONS) */
+  adjusts?: boolean;
+  go(): void;
 }
 
-/** A mode card: big label, one line of what it is, the key that starts it. */
-function modeButton(label: string, sub: string, key: string, primary: boolean, onClick: () => void, onPreview?: () => void): HTMLElement {
-  const b = h('button', 'px mode-btn' + (primary ? ' primary' : '')) as HTMLButtonElement;
-  b.type = 'button';
-  const text = h('span', 'mode-text');
-  text.appendChild(h('span', 'mode-name', label));
-  text.appendChild(h('span', 'sub', sub));
-  b.appendChild(text);
-  b.appendChild(h('kbd', 'mode-key', key));
-  b.onclick = onClick;
-  if (onPreview) {
-    b.onmouseenter = onPreview;
-    b.onfocus = onPreview;
-  }
-  return b;
-}
+let cbs: MenuCallbacks | null = null;
+let nav: Nav = initialNav(false);
+let root: HTMLElement | null = null;
+let rows: Row[] = [];
+let itemEls: HTMLElement[] = [];
+let descEl: HTMLElement | null = null;
+let listening = false;
 
-/** "LIVE: <scene>" under the panel while the game runs behind the menu; null hides it. */
+const coarse = (): boolean => matchMedia('(pointer: coarse)').matches;
+
+/** "LIVE: <scene>" while the game runs behind the menu; null hides it. */
 export function setMenuLive(name: string | null): void {
   const el = document.getElementById('menu-live');
   if (!el) return;
@@ -70,161 +76,274 @@ export function setMenuLive(name: string | null): void {
   el.classList.toggle('hidden', !name);
 }
 
-/** A settings key with an indicator lamp, matching the in-game topbar. */
-function lampButton(label: string, on: boolean, onClick: (b: HTMLButtonElement) => void): HTMLButtonElement {
-  const b = h('button', 'px has-led' + (on ? ' toggled' : '')) as HTMLButtonElement;
-  b.type = 'button';
-  const led = h('span', 'led');
-  led.setAttribute('aria-hidden', 'true');
-  b.append(led, h('span', 'lbl', label));
-  b.onclick = () => onClick(b);
-  return b;
+function stars(n: number): string {
+  return '★'.repeat(n) + '☆'.repeat(STARS_PER_LEVEL - n);
 }
 
-/** One per visit. Each names a mechanic that nothing on screen teaches. */
-const TIPS: string[] = [
-  'Fire lights TNT on a short fuse - watch it blink, then stand back. Stacks go off in a chain.',
-  'A torch on the end of a wire sends sparks down it. Sparks set off TNT and gunpowder instantly.',
-  'W turns the brush into wind. Fan fire to spread it, or blow smoke out of a chimney.',
-  'Salt melts ice. Snow piles up light and drifts in the wind.',
-  'Water on lava cools it to stone - and sizzles.',
-  'F is a bucket: one click fills the whole connected area.',
-  'SHARE copies a link that loads your world on someone else\'s screen.',
-  'Clone copies whatever touches it first. Void deletes everything that touches it.',
-];
+const onOff = (b: boolean): string => (b ? 'ON' : 'OFF');
 
-const KEYS: [string, string][] = [
-  ['LMB', 'paint'], ['RMB', 'erase'], ['WHEEL', 'brush size'], ['SPACE', 'pause'],
-  ['R', 'surprise'], ['N', 'step'], ['F', 'bucket'], ['W', 'wind'], ['M', 'sound'], ['C', 'crt'], ['T', 'theme'], ['ESC', 'menu'],
-];
+/** The rows of the list screen now showing. */
+function buildRows(c: MenuCallbacks): Row[] {
+  if (nav.screen === 'main') {
+    return c.entries.map((e) => ({
+      label: e.opens ? `${e.name} >` : e.name,
+      desc: typeof e.sub === 'function' ? e.sub() : e.sub,
+      go: () => {
+        c.sound('select');
+        if (e.opens) setNav(open(nav, e.opens));
+        else e.run?.();
+      },
+    }));
+  }
+  if (nav.screen === 'challenges') {
+    const prog: Progress = loadProgress();
+    const order = CHALLENGES.map((x) => x.id);
+    const out: Row[] = CHALLENGES.map((ch, i) => {
+      const unlocked = isUnlocked(i, order, prog);
+      return {
+        label: [String(i + 1).padStart(2, '0'), ch.name, unlocked ? stars(prog[ch.id] ?? 0) : 'LOCKED'],
+        desc: unlocked ? ch.desc : 'Clear the level above to unlock.',
+        locked: !unlocked,
+        go: () => {
+          if (!unlocked) {
+            c.sound('deny');
+            return;
+          }
+          c.sound('select');
+          c.onChallenge(ch.id);
+        },
+      };
+    });
+    // touch has no ESC: BACK is an item too
+    out.push({ label: 'BACK', desc: 'Back to the main list.', go: () => goBack(c) });
+    return out;
+  }
+  // OPTIONS: the value is part of the label, redrawn after each change
+  const change = (fn: () => void) => () => {
+    fn();
+    c.sound('select');
+    repaintLabels();
+  };
+  return [
+    { label: `SOUND EFFECTS: ${onOff(!document.body.classList.contains('muted'))}`, desc: 'Clicks, blasts and fizzes.', adjusts: true, go: change(c.onToggleMute) },
+    { label: `MUSIC: ${onOff(c.isMusicOn())}`, desc: 'The chiptune loop.', adjusts: true, go: change(c.onToggleMusic) },
+    { label: `THEME: ${c.theme().toUpperCase()}`, desc: 'Light, dark or follow your system - for the game screens.', adjusts: true, go: change(c.onCycleTheme) },
+    { label: `BACKDROP: ${c.backdrop()}`, desc: 'The picture around the game screen.', adjusts: true, go: change(c.onToggleBg) },
+    { label: `CRT FILTER: ${onOff(document.body.classList.contains('crt-on'))}`, desc: 'Scanlines and a soft vignette over the game.', adjusts: true, go: change(c.onToggleCrt) },
+    { label: 'CONTROLS', desc: 'Keys, brushes and how to play.', go: () => { c.sound('select'); c.onHelp(); } },
+    { label: 'BACK', desc: 'Back to the main list.', go: () => goBack(c) },
+  ];
+}
 
-export function showMenu(cbs: MenuCallbacks): void {
+function goBack(c: MenuCallbacks): void {
+  const b = back(nav);
+  if (!b) return;
+  c.sound('back');
+  setNav(b);
+}
+
+function setNav(n: Nav): void {
+  const screenChanged = n.screen !== nav.screen;
+  nav = n;
+  if (screenChanged) render();
+  else paint();
+}
+
+/** Redraw the labels of the current list in place (an OPTIONS value changed). */
+function repaintLabels(): void {
+  if (!cbs) return;
+  rows = buildRows(cbs);
+  rows.forEach((r, i) => {
+    const lbl = itemEls[i]?.querySelector('.ts-label');
+    if (lbl && typeof r.label === 'string') lbl.firstChild!.textContent = r.label;
+  });
+}
+
+/** The cursor: its classes, its focus, the description, and the preview. */
+function paint(): void {
+  if (nav.screen === 'start' || !cbs) return;
+  const cur = nav.cursor[nav.screen];
+  itemEls.forEach((el, i) => {
+    const on = i === cur;
+    el.classList.toggle('sel', on);
+    el.setAttribute('aria-selected', String(on));
+    el.tabIndex = on ? 0 : -1;
+  });
+  itemEls[cur]?.focus({ preventScroll: true });
+  if (descEl) descEl.textContent = rows[cur]?.desc ?? '';
+  if (nav.screen === 'main') {
+    const kind = cbs.entries[cur]?.preview;
+    if (kind) cbs.onPreview(kind);
+  }
+}
+
+function moveCursor(d: number): void {
+  if (!cbs || nav.screen === 'start') return;
+  const next = move(nav, rows.length, d);
+  if (next === nav) return;
+  cbs.sound('move');
+  setNav(next);
+}
+
+function pressStart(): void {
+  if (!cbs || nav.screen !== 'start') return;
+  cbs.onStart(); // the gesture that unlocks audio
+  cbs.sound('select');
+  setNav(start(nav));
+}
+
+function confirm(): void {
+  if (nav.screen === 'start') pressStart();
+  else rows[nav.cursor[nav.screen]]?.go();
+}
+
+const HINTS = {
+  start: '',
+  main: '↑↓ SELECT · ENTER OK',
+  challenges: '↑↓ SELECT · ENTER OK · ESC BACK',
+  options: '↑↓ SELECT · ENTER / ←→ CHANGE · ESC BACK',
+};
+
+/** Build the screen for the current state into the overlay. */
+function render(): void {
+  if (!root || !cbs) return;
+  const c = cbs;
+  root.dataset.screen = nav.screen;
+  root.querySelector('.ts-body')?.remove();
+  root.querySelector('.ts-desc')?.remove();
+  const foot = root.querySelector('.ts-foot')!;
+  const body = h('div', 'ts-body');
+  itemEls = [];
+  rows = [];
+  descEl = null;
+
+  if (nav.screen === 'start') {
+    body.appendChild(h('p', 'ts-press', coarse() ? 'TAP TO START' : 'PRESS ENTER'));
+    root.insertBefore(body, foot);
+  } else {
+    rows = buildRows(c);
+    const name = nav.screen;
+    if (name !== 'main') body.appendChild(h('h2', 'ts-heading', name === 'challenges' ? 'CHALLENGES' : 'OPTIONS'));
+    const list = h('div', `ts-list ts-${name}`);
+    list.setAttribute('role', 'menu');
+    list.setAttribute('aria-label', name === 'main' ? 'Main menu' : name === 'challenges' ? 'Challenges' : 'Options');
+    rows.forEach((r, i) => {
+      const el = h('div', 'ts-item' + (r.locked ? ' locked' : ''));
+      el.setAttribute('role', 'menuitem');
+      if (r.locked) el.setAttribute('aria-disabled', 'true');
+      const lbl = h('span', 'ts-label');
+      if (typeof r.label === 'string') lbl.append(document.createTextNode(r.label));
+      else {
+        lbl.classList.add('ts-grid');
+        lbl.append(h('span', 'ts-num', r.label[0]), h('span', 'ts-name', r.label[1]), h('span', 'ts-stars', r.label[2]));
+      }
+      const arrows = [h('span', 'ts-arrow l', '▶'), h('span', 'ts-arrow r', '◀')];
+      for (const a of arrows) a.setAttribute('aria-hidden', 'true');
+      lbl.append(...arrows);
+      el.appendChild(lbl);
+      // the mouse moves the cursor; a click or a tap confirms
+      el.addEventListener('pointerenter', (e) => {
+        if (e.pointerType === 'mouse' && nav.screen !== 'start' && nav.cursor[nav.screen] !== i) {
+          c.sound('move');
+          setNav(moveTo(nav, i));
+        }
+      });
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        setNav(moveTo(nav, i));
+        confirm();
+      });
+      itemEls.push(el);
+      list.appendChild(el);
+    });
+    body.appendChild(list);
+    root.insertBefore(body, foot);
+    descEl = h('p', 'ts-desc');
+    descEl.setAttribute('aria-live', 'polite');
+    root.insertBefore(descEl, foot);
+  }
+  foot.textContent = coarse() ? '' : HINTS[nav.screen];
+  paint();
+}
+
+/** Keys while the title screen is up: what it handles it stops, the rest (M, T, C) passes on. */
+function onKey(e: KeyboardEvent): void {
+  if (!cbs || !root?.isConnected || root.closest('#overlay')?.classList.contains('hidden')) return;
+  if (isDialogOpen() || isHelpOpen()) return;
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const k = e.key.toLowerCase();
+  if (MODIFIERS.has(k)) return;
+  const used = (): void => {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+  };
+  if (nav.screen === 'start') {
+    used();
+    if (!e.repeat) pressStart();
+    return;
+  }
+  const repeatable = k === 'arrowup' || k === 'arrowdown' || k === 'w' || k === 's';
+  if (e.repeat && !repeatable) return;
+  const row = rows[nav.cursor[nav.screen]];
+  switch (k) {
+    case 'arrowup':
+    case 'w':
+      used();
+      moveCursor(-1);
+      return;
+    case 'arrowdown':
+    case 's':
+      used();
+      moveCursor(1);
+      return;
+    case 'enter':
+    case ' ':
+      used();
+      confirm();
+      return;
+    case 'escape':
+    case 'backspace':
+      used();
+      goBack(cbs);
+      return;
+    case 'arrowleft':
+    case 'arrowright':
+      if (row?.adjusts) {
+        used();
+        row.go();
+      }
+      return;
+  }
+  if (nav.screen === 'main') {
+    const i = cbs.entries.findIndex((en) => en.hotkey === k);
+    if (i >= 0) {
+      used();
+      setNav(moveTo(nav, i));
+      confirm();
+    }
+  }
+}
+
+export function showMenu(callbacks: MenuCallbacks): void {
+  cbs = callbacks;
+  nav = initialNav(callbacks.firstVisit);
   const overlay = document.getElementById('overlay')!;
   overlay.innerHTML = '';
   overlay.classList.remove('hidden');
 
-  const screen = h('div', 'screen menu');
-
-  // ---- head: wordmark left, settings right ----
-  const head = h('header', 'menu-head');
-  const brand = h('div', 'menu-brand');
-  brand.appendChild(h('h1', 'game-title', 'PIXELFORGE'));
-  brand.appendChild(h('p', 'tagline', cbs.tagline));
-  head.appendChild(brand);
-
-  const settings = h('div', 'menu-settings');
-  settings.appendChild(lampButton('SFX', !document.body.classList.contains('muted'), (b) => {
-    cbs.onToggleMute();
-    b.classList.toggle('toggled', !document.body.classList.contains('muted'));
-  }));
-  settings.appendChild(lampButton('CRT', document.body.classList.contains('crt-on'), (b) => {
-    cbs.onToggleCrt();
-    b.classList.toggle('toggled', document.body.classList.contains('crt-on'));
-  }));
-  const bg = h('button', 'px', `BACKDROP: ${cbs.backdrop}`) as HTMLButtonElement;
-  bg.type = 'button';
-  bg.title = 'The picture around the game screen';
-  bg.onclick = () => { bg.textContent = `BACKDROP: ${cbs.onToggleBg()}`; };
-  const help = h('button', 'px', '? HELP') as HTMLButtonElement;
-  help.type = 'button';
-  help.onclick = () => cbs.onHelp();
-  const themeLabel = (t: string) => `THEME: ${t.toUpperCase()}`;
-  const theme = h('button', 'px', themeLabel(cbs.theme)) as HTMLButtonElement;
-  theme.type = 'button';
-  theme.title = 'Light / dark / follow system (T)';
-  // the T key changes theme without clicking this; main.ts updates it by role
-  theme.dataset.role = 'theme-label';
-  theme.onclick = () => { theme.textContent = themeLabel(cbs.onCycleTheme()); };
-  settings.append(bg, theme, help);
-  head.appendChild(settings);
-  screen.appendChild(head);
-
-  // ---- body: modes | challenges ----
-  const body = h('div', 'menu-body');
-
-  const modes = h('section', 'menu-modes');
-  modes.appendChild(h('h2', 'section-title', 'PLAY'));
-  for (const e of cbs.entries) {
-    const kind = e.preview;
-    const b = modeButton(e.name, e.sub, e.key, e.primary ?? false, e.run, kind && (() => cbs.onPreview(kind)));
-    if (e.cls) b.classList.add(e.cls);
-    modes.appendChild(b);
-  }
-  const tip = h('aside', 'menu-tip');
-  tip.appendChild(h('span', 'tip-label', 'TIP'));
-  tip.appendChild(h('p', 'tip-text', TIPS[Math.floor(Math.random() * TIPS.length)]));
-  modes.appendChild(tip);
-  body.appendChild(modes);
-
-  const prog: Progress = loadProgress();
-  const order = CHALLENGES.map((c) => c.id);
-  const earned = CHALLENGES.reduce((sum, c) => sum + (prog[c.id] ?? 0), 0);
-  const total = CHALLENGES.length * STARS_PER_LEVEL;
-
-  const chal = h('section', 'menu-chal');
-  const chalTitle = h('h2', 'section-title');
-  chalTitle.appendChild(h('span', '', 'CHALLENGES'));
-  chalTitle.appendChild(h('span', 'count', `★ ${earned} / ${total}`));
-  chal.appendChild(chalTitle);
-  const bar = h('div', 'chal-progress');
-  const fill = h('span', 'chal-fill');
-  fill.style.width = `${((earned / total) * 100).toFixed(1)}%`;
-  bar.appendChild(fill);
-  bar.setAttribute('role', 'progressbar');
-  bar.setAttribute('aria-valuemin', '0');
-  bar.setAttribute('aria-valuemax', String(total));
-  bar.setAttribute('aria-valuenow', String(earned));
-  bar.setAttribute('aria-label', 'Stars earned');
-  chal.appendChild(bar);
-
-  const listEl = h('ol', 'challenge-list');
-  CHALLENGES.forEach((c, i) => {
-    const unlocked = isUnlocked(i, order, prog);
-    const stars = prog[c.id] ?? 0;
-    const row = h(
-      'li',
-      'challenge-card' + (unlocked ? '' : ' locked') + (stars > 0 ? ' cleared' : ''),
-    );
-    row.appendChild(h('span', 'cnum', String(i + 1).padStart(2, '0')));
-    const text = h('div', 'ctext');
-    text.appendChild(h('span', 'cname', c.name));
-    // a locked level says why once, quietly - not seven times in full
-    text.appendChild(h('span', 'cdesc', unlocked ? c.desc : 'Clear the level above to unlock.'));
-    row.appendChild(text);
-    const starsEl = h('span', 'stars');
-    starsEl.innerHTML = unlocked ? starHtml(stars) : '<span class="lock" aria-label="locked">LOCKED</span>';
-    row.appendChild(starsEl);
-
-    if (unlocked) {
-      row.onclick = () => cbs.onChallenge(c.id);
-      row.title = c.hint;
-      row.tabIndex = 0;
-      row.setAttribute('role', 'button');
-      row.onkeydown = (e) => {
-        const k = (e as KeyboardEvent).key;
-        if (k === 'Enter' || k === ' ') {
-          e.preventDefault();
-          cbs.onChallenge(c.id);
-        }
-      };
-    }
-    listEl.appendChild(row);
-  });
-  chal.appendChild(listEl);
-  body.appendChild(chal);
-  screen.appendChild(body);
-
-  // ---- foot: the controls, as keys rather than a sentence ----
-  const foot = h('footer', 'menu-keys');
-  for (const [k, what] of KEYS) {
-    const item = h('span', 'key-item');
-    item.append(h('kbd', '', k), h('span', '', what));
-    foot.appendChild(item);
-  }
-  screen.appendChild(foot);
-
-  overlay.appendChild(screen);
+  root = h('div', 'title-screen');
+  root.appendChild(h('h1', 'ts-logo', 'PIXELFORGE'));
+  root.appendChild(h('div', 'ts-foot'));
+  // PRESS START: any click or tap goes on
+  root.addEventListener('click', pressStart);
+  overlay.appendChild(root);
   const live = h('div', 'menu-live hidden');
   live.id = 'menu-live';
   overlay.appendChild(live);
+
+  if (!listening) {
+    listening = true;
+    window.addEventListener('keydown', onKey, true);
+  }
+  render();
 }
