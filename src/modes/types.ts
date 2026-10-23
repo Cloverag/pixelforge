@@ -17,6 +17,8 @@ export interface ModeCtx {
   setPaintKind(k: PaintKind): void;
   /** paused: step once, so an action still shows */
   nudge(): void;
+  /** what this screen's music adapts to (the chem lab: reactions per second) */
+  musicAdapt(v: number): void;
 }
 
 /** Cursor fields a room shares: material colour and tool mark. */

@@ -146,6 +146,7 @@ export class ChemMode implements ModeController {
     this.rxShownAt = now;
     const { rate, top } = this.rx.read(now);
     this.ctx.hud.setReadout(rate, top === null ? null : readoutNote(top));
+    this.ctx.musicAdapt(rate);
   }
 
   /** ESC closes the table before it leaves the lab */

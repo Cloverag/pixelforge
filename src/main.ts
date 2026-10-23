@@ -28,7 +28,7 @@ import { showSharePanel } from './ui/share-panel';
 import { applyWallpaper, loadBgIndex, WALLPAPER_NAMES } from './game/wallpapers';
 import { initHelp, toggleHelp } from './ui/help';
 import { initImmersive, isImmersive, setImmersive, toggleImmersive } from './ui/immersive';
-import { initMusic } from './game/music';
+import { initMusic, trackForMode } from './game/music';
 import { applyTheme, cycleTheme, loadTheme } from './ui/theme';
 import type { ModeController, ModeCtx } from './modes/types';
 import { SandMode } from './modes/sand';
@@ -118,6 +118,7 @@ const modeCtx: ModeCtx = {
   nudge: () => {
     if (paused && !inFlight) sendStep();
   },
+  musicAdapt: (v) => music.adapt(v),
 };
 const sandbox = new SandMode(modeCtx);
 const playground = new PlaygroundMode(modeCtx);
@@ -333,6 +334,11 @@ worker.onmessage = (e: MessageEvent<Res>) => {
     // the menu's demo is silent and still: the worker clears its events itself
     if (r.events && screen === 'game') playEvents(r.events);
     if (r.parts !== undefined) hud.setParticles(r.parts);
+    // the soundtrack opens up with what the screen is doing (the chem lab reports its own rate)
+    if (screen === 'game') {
+      if (current.id === 'playground') music.adapt(r.parts ?? 0);
+      else if (current.id === 'sand' && r.counts) music.adapt(r.counts[Mat.FIRE] + r.counts[Mat.EMBER]);
+    }
     lastLive = r.parts ?? (r.counts ? r.counts.reduce((s, n) => s + n, 0) - r.counts[0] : 0);
     if (r.hashes && mp) mp.hashes(r.hashes);
     if (mp && r.mode && r.mode !== current.id && current.challengeId === null) {
@@ -772,6 +778,7 @@ function showMode(m: ModeController): void {
   // a mode switch would otherwise leave the last composite ghosting
   renderer.reset();
   current = m;
+  music.setScreen(trackForMode(m.id));
   m.buildUI();
   enterGame();
 }
@@ -823,6 +830,7 @@ function openMenu(firstVisit = false): void {
   autosaveNow();
   sfx.playground(null); // the menu's demo is silent
   screen = 'menu';
+  music.setScreen('title');
   current.leave();
   close3d();
   hud.showBars(false);
@@ -914,7 +922,16 @@ function previewAttract(kind: 'pg' | 'chem'): void {
 if (import.meta.env.DEV)
   (window as unknown as { __audio: () => unknown }).__audio = () => {
     const ac = sfx.context();
-    return { ctx: ac && { state: ac.state, time: ac.currentTime, rate: ac.sampleRate }, vols: sfx.getVolumes(), gains: sfx.busGains(), samples: sfx.sampleResult };
+    return { ctx: ac && { state: ac.state, time: ac.currentTime, rate: ac.sampleRate }, vols: sfx.getVolumes(), gains: sfx.busGains(), samples: sfx.sampleResult, music: music.gains() };
+  };
+
+// dev only: render a track offline (to measure it, and to record it for listening)
+if (import.meta.env.DEV)
+  (window as unknown as { __renderMusic: (id: string, secs: number, url: string, adapt?: number) => Promise<number> }).__renderMusic = async (id, secs, url, adapt) => {
+    const { renderTrackWav } = await import('./game/music-render');
+    const wav = await renderTrackWav(id as import('./game/tracks').TrackId, secs, adapt);
+    await fetch(url, { method: "POST", body: wav.buffer as ArrayBuffer });
+    return wav.length;
   };
 
 // dev only: lets automated checks read the menu's demo
