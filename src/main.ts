@@ -676,7 +676,7 @@ roomPill.onSwitchMode = async () => {
 // to test that a desync is detected and repaired
 if (import.meta.env.DEV)
   (window as unknown as { __mpCorrupt: () => void }).__mpCorrupt = () =>
-    post({ t: 'paint', pts: [300, 150, 340, 150], mat: Mat.WATER, size: 10, kind: 'brush' });
+    post({ t: 'input', inp: { k: 'paint', pts: [300, 150, 340, 150], mat: Mat.WATER, size: 10, kind: 'brush' } });
 // dev only: lets automated two-browser tests read the session state
 if (import.meta.env.DEV)
   (window as unknown as { __mp: () => unknown }).__mp = () =>
@@ -703,7 +703,7 @@ function loop(now: number): void {
             tool.dx = hoseDir.x;
             tool.dy = hoseDir.y;
           }
-          pgSend({ k: 'pg', tool }, { t: 'pg', tool });
+          send({ k: 'pg', tool });
         }
       }
       frameNo++;
@@ -764,19 +764,18 @@ function paintAt(e: PointerEvt, forcedMat?: number): void {
   }
   if (pts.length === 0) return;
   strokeLast = { x: e.x, y: e.y };
-  if (mp) mp.local([{ k: 'paint', pts, mat, size: brush, kind: paintKind }]);
-  else post({ t: 'paint', pts, mat, size: brush, kind: paintKind });
+  send({ k: 'paint', pts, mat, size: brush, kind: paintKind });
   sfx.place();
   if (paused && !inFlight) sendStep(); // visual feedback while paused
 }
 
 /**
- * A playground action: in a room it is an input, applied at the same frame
- * for everyone; alone it goes straight to the worker.
+ * A player action: in a room it is an input, applied at the same frame for
+ * everyone; alone it goes straight to the worker - the same input either way.
  */
-function pgSend(inp: NetInput, solo: Req): void {
+function send(inp: NetInput): void {
   if (mp) mp.local([inp]);
-  else post(solo);
+  else post({ t: 'input', inp });
 }
 
 /** the hose's spray direction, worked out here: the simulation is shared */
@@ -790,7 +789,7 @@ let pgSlowmo = false;
 
 function setPgGravity(on: boolean, quiet = false): void {
   pgGravityOn = on;
-  pgSend({ k: 'pgGravity', on }, { t: 'pgGravity', on });
+  send({ k: 'pgGravity', on });
   hud.setGravityLamp(on);
   if (quiet) return;
   sfx.ui();
@@ -804,7 +803,7 @@ function setPgGravity(on: boolean, quiet = false): void {
 function surprise(): void {
   const seed = (Math.random() * 0x7fffffff) | 0;
   const plan = planSurprise(seed);
-  pgSend({ k: 'pgSurprise', seed }, { t: 'pgSurprise', seed });
+  send({ k: 'pgSurprise', seed });
   setPgGravity(plan.gravity, true);
   sfx.ui();
   toast(`SURPRISE: ${plan.name}`);
@@ -814,7 +813,7 @@ function surprise(): void {
 function loadPgPreset(id: string): void {
   const p = PRESET_INFO.find((q) => q.id === id);
   if (!p) return;
-  pgSend({ k: 'pgPreset', id }, { t: 'pgPreset', id });
+  send({ k: 'pgPreset', id });
   setPgGravity(p.gravity, true);
   sfx.ui();
   toast(`SCENE: ${p.label}`);
@@ -822,13 +821,13 @@ function loadPgPreset(id: string): void {
 
 function setPgSlowmo(on: boolean): void {
   pgSlowmo = on;
-  pgSend({ k: 'pgTime', scale: on ? 0.33 : 1 }, { t: 'pgTime', scale: on ? 0.33 : 1 });
+  send({ k: 'pgTime', scale: on ? 0.33 : 1 });
   hud.setSlowmoLamp(on);
   sfx.slowmo(on);
 }
 
 function clearPlayground(): void {
-  pgSend({ k: 'pgClear' }, { t: 'pgClear' });
+  send({ k: 'pgClear' });
   sfx.ui();
 }
 
@@ -860,7 +859,7 @@ function pgAt(e: PointerEvt, forced?: PgTool): void {
     msg.dx = hoseDir.x;
     msg.dy = hoseDir.y;
   }
-  pgSend({ k: 'pg', tool: msg }, { t: 'pg', tool: msg });
+  send({ k: 'pg', tool: msg });
   if (tool === 'firework' && e.phase === 'down') sfx.fireworkLaunch();
   if (paused && !inFlight) sendStep();
 }
@@ -910,7 +909,7 @@ function sandboxUI(): void {
 
 function startPlayground(): void {
   leaveRoom('YOU LEFT THE ROOM');
-  post({ t: 'mode', mode: 'playground' });
+  post({ t: 'input', inp: { k: 'mode', m: 'playground' } });
   playgroundUI();
 }
 

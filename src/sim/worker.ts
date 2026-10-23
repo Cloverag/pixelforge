@@ -1,5 +1,5 @@
 /// <reference lib="webworker" />
-import { CHUNKS_X, CHUNKS_Y, HASH_EVERY, SIM_H, SIM_W, Req, Res, SaveData } from './protocol';
+import { CHUNKS_X, CHUNKS_Y, HASH_EVERY, SIM_H, SIM_W, NetInput, Req, Res, SaveData } from './protocol';
 import { World } from './world';
 
 const ctx = self as unknown as DedicatedWorkerGlobalScope;
@@ -50,31 +50,8 @@ function handle(e: MessageEvent<Req>): void {
     case 'init':
       break;
 
-    case 'mode': {
-      w.mode = msg.mode;
-      if (msg.mode === 'playground') {
-        w.challenge = null;
-        w.clear();
-        w.parts?.reset();
-      } else {
-        w.parts?.reset();
-      }
-      forceFull = true;
-      break;
-    }
-
-    case 'paint':
-      w.paint(msg.pts, msg.mat, msg.size, msg.kind ?? 'brush');
-      pgWallsDirty = true;
-      break;
-
-    case 'pg':
-      w.parts?.tool(msg.tool);
-      if (msg.tool.kind === 'erase') pgWallsDirty = true;
-      break;
-
-    case 'pgTime':
-      if (w.parts) w.parts.timeScale = msg.scale;
+    case 'input':
+      apply(w, msg.inp);
       break;
 
     case 'netSnap':
@@ -84,29 +61,6 @@ function handle(e: MessageEvent<Req>): void {
     case 'netRestore':
       w.restore(msg.snap);
       forceFull = true;
-      break;
-
-    case 'pgPreset':
-      if (w.loadPreset(msg.id)) {
-        forceFull = true;
-        pgWallsDirty = true;
-      }
-      break;
-
-    case 'pgSurprise':
-      w.loadSurprise(msg.seed);
-      forceFull = true;
-      pgWallsDirty = true;
-      break;
-
-    case 'pgClear':
-      w.clearPlayground();
-      forceFull = true; // wipe the trails too
-      pgWallsDirty = true; // and the 3D view's walls
-      break;
-
-    case 'pgGravity':
-      if (w.parts) w.parts.gravityOn = msg.on;
       break;
 
     case 'watch3d':
@@ -124,7 +78,7 @@ function handle(e: MessageEvent<Req>): void {
       let hashes: number[] | undefined;
       if (msg.inputs) {
         for (const batch of msg.inputs) {
-          for (const inp of batch) w.applyInput(inp);
+          for (const inp of batch) apply(w, inp);
           w.step();
           if (w.f % HASH_EVERY === 0) (hashes ??= []).push(w.f, w.hash(), ...w.hashParts());
         }
@@ -233,11 +187,6 @@ function handle(e: MessageEvent<Req>): void {
       break;
     }
 
-    case 'clear':
-      w.clear();
-      forceFull = true;
-      break;
-
     case 'loadChallenge':
       if (w.loadChallenge(msg.id)) forceFull = true;
       break;
@@ -278,6 +227,31 @@ function handle(e: MessageEvent<Req>): void {
     }
 
     default:
+      break;
+  }
+}
+
+/**
+ * One player action, solo or from a room. The world does the action; this
+ * only notes what has to be redrawn. (Solo and room actions used to be two
+ * switches, and they drifted: a room's CLEAR left the playground's trails.)
+ */
+function apply(w: World, inp: NetInput): void {
+  w.applyInput(inp);
+  switch (inp.k) {
+    case 'paint':
+      pgWallsDirty = true;
+      break;
+    case 'pg':
+      if (inp.tool.kind === 'erase') pgWallsDirty = true;
+      break;
+    case 'clear':
+    case 'mode':
+    case 'pgPreset':
+    case 'pgSurprise':
+    case 'pgClear':
+      forceFull = true; // a new world: wipe the trails too
+      pgWallsDirty = true; // and the 3D view's walls
       break;
   }
 }

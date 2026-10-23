@@ -53,14 +53,9 @@ export interface ChallengeResult {
 
 export type Req =
   | { t: 'init'; w: number; h: number; buf: ArrayBuffer }
-  | { t: 'mode'; mode: Mode }
-  | { t: 'paint'; pts: number[]; mat: number; size: number; kind?: PaintKind }
-  | { t: 'pg'; tool: PgToolMsg }
-  | { t: 'pgGravity'; on: boolean }
-  | { t: 'pgTime'; scale: number }
-  | { t: 'pgClear' }
-  | { t: 'pgPreset'; id: string }
-  | { t: 'pgSurprise'; seed: number }
+  /** a player action, alone: the same NetInput a room applies at a frame,
+   *  so playing solo and playing together run one code path */
+  | { t: 'input'; inp: NetInput }
   | { t: 'watch3d'; on: boolean }
   | { t: 'watchFluid'; on: boolean }
   /**
@@ -73,7 +68,6 @@ export type Req =
   | { t: 'netSnap' }
   /** multiplayer: become this snapshot */
   | { t: 'netRestore'; snap: Snapshot }
-  | { t: 'clear' }
   | { t: 'loadChallenge'; id: string }
   | { t: 'toSandbox' }
   | { t: 'save' }
