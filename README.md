@@ -2,7 +2,8 @@
 
 A pixel-art falling-sand forge for the browser. Paint 29 materials that burn,
 flow, grow and explode; build with friends in the same world over a link; make
-light shows with fireworks, portals, black holes and musical bumpers; or solve
+light shows with fireworks, portals, black holes and musical bumpers; pick
+elements off a periodic table and watch them react in the chem lab; or solve
 7 goal-based challenges. Everything is simulated in a Web Worker at a fixed
 60 Hz on a 640x360 grid and rendered with WebGL.
 
@@ -51,6 +52,7 @@ get their own layout.
 | **SANDBOX** | Paint any material with the brush, flood-fill (`F`) or blow wind (`W`); right-drag erases. Your world autosaves and comes back on reload; SAVE / LOAD / SHARE a link to it. |
 | **PLAY TOGETHER (beta)** | A room for friends: open one, send the link, and everyone builds in the same world - the sandbox or the playground. See [Playing together](#playing-together). |
 | **PARTICLE PLAYGROUND** | Light shows instead of materials: emitters, forces, bumpers that play notes, portals - with a film-look renderer, a full 3D view and sound design. See [The playground](#the-playground). |
+| **CHEM LAB** | Pick elements off a periodic table and drop them into water, acid, fire or each other: 20 elements, 48 reactions, 3 ready-made experiments. See [The chem lab](#the-chem-lab). |
 | **SURPRISE ME** | A brand-new generated playground scene every click (`R`). |
 | **CHALLENGES** | 7 goal-based puzzles with material budgets, time limits, win/lose checks and a 3-star rating. Levels unlock in order; stars persist in `localStorage`. |
 
@@ -84,9 +86,10 @@ your world. Pasted into WhatsApp or Discord, the link shows a preview card.
 - **Reactions.** A bar along the bottom of the canvas: 👍 🔥 😂 😮 ❤️ pop up as
   a bubble on your cursor and on your avatar; **PING** (or `Z`) marks a spot
   with pulsing rings, "NAME: LOOK HERE".
-- **Sandbox or playground.** The host's `→ PLAYGROUND` / `→ SANDBOX` button
-  takes the whole room across; fireworks, portals, black holes, bumpers and
-  scenes are shared like everything else.
+- **Sandbox, playground or chem lab.** The host's `→ PLAYGROUND` /
+  `→ CHEM LAB` / `→ SANDBOX` button takes the whole room to the next one;
+  fireworks, portals, scenes, reactions and experiments are shared like
+  everything else.
 - **Leaving** asks first. A host who refreshes reopens the same room from the
   autosave and guests re-sync on their own; a host who leaves closes it.
 
@@ -156,6 +159,46 @@ rounding. It is wrapped to 32 bits now, with every sequence unchanged.
   cascade, festival, storm - with a generated name like NEON WHIRLPOOL. 200
   seeds are checked headless so none comes out empty.
 
+## The chem lab
+
+The chem lab is the sandbox's world painted with elements instead of
+materials. Its left rail holds the 20 elements it simulates, grouped as gases,
+metals and non-metals, plus a bench of water, acid, lye, rust, fire, a torch,
+lava, plants, glass and wall.
+
+- **Periodic table** (`E`): all 118 elements in their usual places, coloured
+  by family. The lab's 20 are lit and clickable; the rest are dim. Hovering
+  one shows its family, state, mass, melting and boiling points, and every
+  reaction it takes part in here.
+- **Reactions are a table** (`src/sim/reactions.ts`): when two cells touch, a
+  rule says what each becomes, the chance per tick, and an optional condition
+  (heat, or a helper such as water) and effect. Some of the 48:
+
+| Pair | What happens |
+|------|--------------|
+| lithium / sodium / potassium + water | fizz into hydrogen and lye, faster down the group; potassium bursts into lilac flame |
+| hydrogen + oxygen, near heat | explode into steam, and the blast carries through the cloud |
+| hydrogen + chlorine, near heat | explode into acid |
+| sodium + chlorine | burn into table salt |
+| aluminium + rust, near heat | thermite: both melt into molten iron |
+| magnesium + fire | burns with a blinding white flame |
+| metals + fire, or over a torch | flame tests: sodium yellow, potassium lilac, lithium and strontium crimson, copper blue-green, barium apple green, calcium orange |
+| lye + acid | neutralise into salt water |
+| iron + oxygen or water | rusts, slowly |
+| neon + torch | glows red-orange, and passes the glow along |
+| iodine + fire or lava | turns straight to violet vapour, which settles back as crystals |
+
+- **Experiments**: ALKALI BATH, THERMITE (a magnesium ribbon burns into a
+  crucible that melts down and through its floor) and FLAME TESTS.
+- Real densities keep their order: sodium, potassium and lithium float on
+  water, iron and copper sink.
+- **Element data** comes from [PubChem](https://pubchem.ncbi.nlm.nih.gov/periodic-table/)
+  (NCBI), fetched once by `scripts/fetch-elements.mjs` into
+  `src/data/elements.json` and shipped with the game; no player's browser
+  calls PubChem. The reactions are hand-written: no machine-readable dataset
+  of element-pair reactions exists. The periodic table loads on first open,
+  so its data (5 kB gzip) is not in the entry bundle.
+
 ## Controls
 
 | Input | Action |
@@ -169,6 +212,8 @@ rounding. It is wrapped to 32 bits now, with every sequence unchanged.
 | `SPACE` / `N` | Pause / single step while paused |
 | `G` / `Q` / `X` | Gravity / slow-mo / clear (playground) |
 | `R` | SURPRISE ME (menu and playground) |
+| `L` | Chem lab (menu) |
+| `E` | Periodic table (chem lab) |
 | `O` | Open a room (menu) |
 | `Z` | Ping where your cursor is (in a room) |
 | `3` | 3D view |
@@ -177,7 +222,7 @@ rounding. It is wrapped to 32 bits now, with every sequence unchanged.
 | `S` / `C` | Soft glow / CRT filter |
 | `T` | Theme: auto / light / dark |
 | `M` | Mute SFX |
-| `ESC` | Leave immersive mode, then back to menu (asks first in a room) |
+| `ESC` | Close the periodic table, leave immersive mode, then back to menu (asks first in a room) |
 
 On a phone the top bar folds into one row with a **MORE** menu, the canvas
 goes full width and the materials become large buttons below it (beside it
@@ -243,9 +288,17 @@ solids stay put.
 ```
 index.html                 app shell, theme bootstrap, link-preview tags
 public/og.jpg              link-preview card
+scripts/fetch-elements.mjs regenerates src/data/elements.json from PubChem (by hand)
 src/
-  main.ts                  app state machine, fixed-step loop, worker + room wiring
+  main.ts                  fixed-step loop, worker + room wiring, menu; asks the current mode
   styles.css               all styling (themes, CRT, phone layout, dialogs)
+  data/elements.json       the periodic table: 118 elements, trimmed PubChem data
+  modes/
+    types.ts               ModeController: what a game screen provides to main.ts
+    sand.ts                the sandbox, and each challenge
+    playground.ts          the particle playground
+    chem.ts                the chem lab
+    stroke.ts              brush strokes, shared by every mode
   core/
     input.ts               pointer + keyboard -> simulation coords
     rng.ts                 seeded PRNG (32-bit state)
@@ -259,6 +312,8 @@ src/
     presets.ts             playground demo scenes
     surprise.ts            SURPRISE ME scene generator
     challenges.ts          declarative challenge definitions
+    reactions.ts           the chem lab's reaction table, compiled to a pair lookup
+    chemscenes.ts          the chem lab's ready-made experiments
     worker.ts              Web Worker entry: steps and renders off the main thread
   net/
     lockstep.ts            host-sequenced lockstep (HostCore / GuestCore)
@@ -286,10 +341,12 @@ src/
     cursors.ts             remote cursors and reaction bubbles
     emotes.ts              reaction bar and pings
     dialog.ts              in-game confirm and name dialogs
+    periodic.ts            the chem lab's periodic table (lazy)
     theme.ts, help.ts, tooltips.ts, cursor.ts, share-panel.ts, widgets.ts
 tests/                     vitest: world rules, TNT debris, rendering, playground,
                            scenes, surprise, lockstep, network simulation, RNG,
-                           presence
+                           presence, snapshots, chem reactions + experiments,
+                           periodic table layout
 ```
 
 ### How a frame flows
@@ -304,11 +361,13 @@ tests/                     vitest: world rules, TNT debris, rendering, playgroun
 
 ### Testing
 
-138 tests. Beyond the material rules: two worlds fed the same inputs must
+174 tests. Beyond the material rules: two worlds fed the same inputs must
 match for 1200 frames; a world restored mid-game into a different seed must
 stay identical; host and two guests over a simulated network with random
 delays, reordering and a late joiner must agree at every frame; a corrupted
-guest must be repaired. New tests are checked against a broken version of
+guest must be repaired; every chem rule must fire on contact and not without
+its condition, each experiment must do what its button says, and a world must
+not depend on how often its sound events are read. New tests are checked against a broken version of
 the code they guard, so a test that cannot fail does not ship.
 
 ### Performance budget
