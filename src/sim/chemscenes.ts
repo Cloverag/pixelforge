@@ -74,11 +74,13 @@ export const CHEM_SCENES: ChemScene[] = [
       const metals = [Mat.LI, Mat.NA, Mat.K, Mat.CA, Mat.SR, Mat.BA, Mat.CU];
       metals.forEach((m, k) => {
         const x0 = 40 + k * 82;
-        tank(g, x0, 250, x0 + 60, FLOOR);
+        tank(g, x0, FLOOR - 70, x0 + 60, FLOOR);
         // a torch bed is a steady burner: heat without an orange flame of
-        // its own (burning wood drowned every colour in plain fire)
-        rect(g, x0 + 2, 330, x0 + 58, FLOOR - 2, Mat.TORCH);
-        for (let x = x0 + 3; x < x0 + 58; x += 2) put(g, x, 329, m);
+        // its own (burning wood drowned every colour in plain fire). Two rows
+        // is enough heat; twenty rows were a yellow block whose glow tinted
+        // every flame the same.
+        rect(g, x0 + 2, FLOOR - 3, x0 + 58, FLOOR - 2, Mat.TORCH);
+        for (let x = x0 + 3; x < x0 + 58; x += 2) put(g, x, FLOOR - 4, m);
       });
     },
   },
