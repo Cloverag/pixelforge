@@ -31,6 +31,43 @@ export const Mat = {
   TURBINE: 29,
   ANT: 30,
   BIRD: 31,
+  // ---- CHEM LAB: elements (see sim/reactions.ts) ----
+  H: 32,
+  O: 33,
+  N: 34,
+  CL: 35,
+  NE: 36,
+  LI: 37,
+  NA: 38,
+  K: 39,
+  MG: 40,
+  AL: 41,
+  CA: 42,
+  FE: 43,
+  CU: 44,
+  ZN: 45,
+  SR: 46,
+  BA: 47,
+  C: 48,
+  P: 49,
+  S: 50,
+  I: 51,
+  // ---- CHEM LAB: what reactions make ----
+  LYE: 52,
+  RUST: 53,
+  OXIDE: 54,
+  SULFIDE: 55,
+  IODINE_GAS: 56,
+  NEON_GLOW: 57,
+  // flame-test colours: fire that a metal has tinted
+  FLAME_YELLOW: 58,
+  FLAME_LILAC: 59,
+  FLAME_CRIMSON: 60,
+  FLAME_GREEN: 61,
+  FLAME_APPLE: 62,
+  FLAME_ORANGE: 63,
+  FLAME_BLUE: 64,
+  FLAME_WHITE: 65,
 } as const;
 
 export type MatId = (typeof Mat)[keyof typeof Mat];
@@ -132,6 +169,59 @@ MATS[Mat.TURBINE] = def(Mat.TURBINE, 'TURBINE', Cat.SOLID, 100, ['#8fa3b3', '#7d
 // dens < water so an ant that falls in floats.
 MATS[Mat.ANT] = def(Mat.ANT, 'ANT', Cat.SOLID, 0.9, ['#d0482f', '#b83c27', '#e0583b', '#a8341f'], { flam: 0.4, acidChance: 0.3 });
 MATS[Mat.BIRD] = def(Mat.BIRD, 'BIRD', Cat.SOLID, 0.5, ['#f4f3ee', '#d6dade', '#ffffff', '#b4bac2'], { flam: 0.5, acidChance: 0.3 });
+
+// ---- CHEM LAB ----
+// Elements and their products live only in the CHEM LAB (placeable: false
+// keeps them out of the sandbox rail). Densities are on the game's scale -
+// water 1, sand 1.6 - and keep the real order where it shows: sodium,
+// potassium and lithium float on water, the heavy metals sink. Metals resist
+// ACID's generic eating (acidChance 0): their reaction with acid is a rule
+// that makes hydrogen, not a cell quietly vanishing.
+const chem = (id: number, name: string, cat: number, dens: number, ramp: [string, string, string, string], opts: Partial<MatDef> = {}) =>
+  (MATS[id] = def(id, name, cat, dens, ramp, { placeable: false, ...opts }));
+chem(Mat.H, 'HYDROGEN', Cat.GAS, 0.09, ['#d9f2ff', '#c4e6fa', '#eaf8ff', '#b4dcf5'], { flam: 0.9, acidChance: 0 });
+chem(Mat.O, 'OXYGEN', Cat.GAS, 0.4, ['#8fb8ff', '#7aa6f2', '#a6c8ff', '#6894e0'], { acidChance: 0 });
+chem(Mat.N, 'NITROGEN', Cat.GAS, 0.35, ['#9a9ab8', '#8a8aa8', '#acacc8', '#7c7c9a'], { acidChance: 0 });
+chem(Mat.CL, 'CHLORINE', Cat.GAS, 0.8, ['#c8e64a', '#b4d43a', '#d8f064', '#a2c22c'], { acidChance: 0 });
+chem(Mat.NE, 'NEON', Cat.GAS, 0.2, ['#8a6a72', '#7a5c64', '#9a7880', '#6c5058'], { acidChance: 0 });
+chem(Mat.LI, 'LITHIUM', Cat.POWDER, 0.53, ['#c8c8d0', '#b8b8c2', '#d8d8e0', '#a8a8b4'], { acidChance: 0 });
+chem(Mat.NA, 'SODIUM', Cat.POWDER, 0.97, ['#d2d6dc', '#c0c4cc', '#e2e6ea', '#b0b4bc'], { acidChance: 0 });
+chem(Mat.K, 'POTASSIUM', Cat.POWDER, 0.86, ['#c4c8d8', '#b2b6c8', '#d4d8e6', '#a2a6b8'], { acidChance: 0 });
+chem(Mat.MG, 'MAGNESIUM', Cat.POWDER, 1.74, ['#e6e8ee', '#d4d6de', '#f4f6fa', '#c2c4ce'], { acidChance: 0 });
+chem(Mat.AL, 'ALUMINIUM', Cat.POWDER, 2.7, ['#b8c0cc', '#a6aebc', '#cad2dc', '#949cac'], { acidChance: 0 });
+chem(Mat.CA, 'CALCIUM', Cat.POWDER, 1.55, ['#e4e0d4', '#d2cec2', '#f0ece2', '#c0bcb0'], { acidChance: 0 });
+chem(Mat.FE, 'IRON', Cat.POWDER, 7.87, ['#6c6e76', '#5c5e66', '#7c7e86', '#4e5058'], { acidChance: 0 });
+chem(Mat.CU, 'COPPER', Cat.POWDER, 8.96, ['#d0804a', '#bc6e3a', '#e2945c', '#a65e2e'], { acidChance: 0 });
+chem(Mat.ZN, 'ZINC', Cat.POWDER, 7.14, ['#a4acb8', '#949ca8', '#b4bcc8', '#848c98'], { acidChance: 0 });
+chem(Mat.SR, 'STRONTIUM', Cat.POWDER, 2.64, ['#e2dcc0', '#d0caae', '#eee8d0', '#beb89c'], { acidChance: 0 });
+chem(Mat.BA, 'BARIUM', Cat.POWDER, 3.5, ['#c6ccbe', '#b4baac', '#d6dcd0', '#a2a89a'], { acidChance: 0 });
+chem(Mat.C, 'CARBON', Cat.POWDER, 2.0, ['#2c2a2e', '#242226', '#38363a', '#1c1a1e'], { flam: 0.04, acidChance: 0 });
+chem(Mat.P, 'PHOSPHORUS', Cat.POWDER, 1.82, ['#f2ecc4', '#e4dcac', '#faf4d6', '#d4cc98'], { flam: 0.5, acidChance: 0.05 });
+chem(Mat.S, 'SULFUR', Cat.POWDER, 2.07, ['#f0dc3c', '#e0ca28', '#f8e85a', '#cfb81c'], { acidChance: 0 });
+chem(Mat.I, 'IODINE', Cat.POWDER, 4.93, ['#4a3a5e', '#3c2e4e', '#5a4a70', '#30243e'], { acidChance: 0 });
+chem(Mat.LYE, 'LYE', Cat.LIQUID, 1.1, ['#cfd8e4', '#bcc8d6', '#dde6ee', '#aab8c8'], { disp: 4, acidChance: 0 });
+chem(Mat.RUST, 'RUST', Cat.POWDER, 5.2, ['#a4482a', '#8e3c22', '#b85634', '#7a321c'], { acidChance: 0.02 });
+chem(Mat.OXIDE, 'OXIDE', Cat.POWDER, 3.0, ['#f2f2ee', '#e2e2de', '#fafaf8', '#d2d2cc'], { acidChance: 0.01 });
+chem(Mat.SULFIDE, 'SULFIDE', Cat.POWDER, 4.8, ['#4c4640', '#3e3934', '#5a544c', '#322d28'], { acidChance: 0.02 });
+chem(Mat.IODINE_GAS, 'IODINE GAS', Cat.GAS, 0.5, ['#a04ae0', '#8c3ccc', '#b45cf0', '#7a30b8'], { life: [80, 200], acidChance: 0 });
+chem(Mat.NEON_GLOW, 'NEON GLOW', Cat.GAS, 0.2, ['#ff4a2a', '#ff6a3a', '#ff8a4a', '#ff3a1a'], { life: [20, 50], acidChance: 0 });
+// flames burn like FIRE (same life) and only their colour differs
+const flame = (id: number, name: string, ramp: [string, string, string, string]) =>
+  chem(id, name, Cat.GAS, MATS[Mat.FIRE].dens, ramp, { life: [12, 42], acidChance: 0 });
+flame(Mat.FLAME_YELLOW, 'YELLOW FLAME', ['#ffc81a', '#ffdc3a', '#ffe866', '#ffb000']);
+flame(Mat.FLAME_LILAC, 'LILAC FLAME', ['#b67cff', '#c896ff', '#dab4ff', '#9c5cf0']);
+flame(Mat.FLAME_CRIMSON, 'CRIMSON FLAME', ['#ff1e46', '#ff3c5e', '#ff6a82', '#e00a32']);
+flame(Mat.FLAME_GREEN, 'GREEN FLAME', ['#1ee6a0', '#3cf4b4', '#7affd0', '#0ac888']);
+flame(Mat.FLAME_APPLE, 'APPLE FLAME', ['#a8f03a', '#bcfa5a', '#d4ff8a', '#8cd822']);
+flame(Mat.FLAME_ORANGE, 'ORANGE FLAME', ['#ff6a14', '#ff8434', '#ffa25c', '#e85200']);
+flame(Mat.FLAME_BLUE, 'BLUE FLAME', ['#3a6cff', '#5a88ff', '#8aacff', '#2050e8']);
+flame(Mat.FLAME_WHITE, 'WHITE FLAME', ['#ffffff', '#f4f6ff', '#fffef0', '#e6ecff']);
+
+/** The coloured flames: each burns exactly like FIRE. */
+export const FLAMES = new Set<number>([
+  Mat.FLAME_YELLOW, Mat.FLAME_LILAC, Mat.FLAME_CRIMSON, Mat.FLAME_GREEN,
+  Mat.FLAME_APPLE, Mat.FLAME_ORANGE, Mat.FLAME_BLUE, Mat.FLAME_WHITE,
+]);
 
 /** Materials that live: grouped together in the palette, drawn unlit. */
 export const LIFE_MATS = new Set<number>([Mat.SEED, Mat.PLANT, Mat.ANT, Mat.BIRD]);
@@ -296,6 +386,15 @@ export function rampIndexAt(mat: number, x: number, y: number, frame: number, me
     case Mat.ICE:
       return iceCracks(x, y);
     case Mat.FIRE:
+    case Mat.FLAME_YELLOW:
+    case Mat.FLAME_LILAC:
+    case Mat.FLAME_CRIMSON:
+    case Mat.FLAME_GREEN:
+    case Mat.FLAME_APPLE:
+    case Mat.FLAME_ORANGE:
+    case Mat.FLAME_BLUE:
+    case Mat.FLAME_WHITE:
+    case Mat.NEON_GLOW:
       return (v + frame * 7 + meta * 5) & 3;
     case Mat.LAVA:
       return (v + (frame >> 2)) & 3;

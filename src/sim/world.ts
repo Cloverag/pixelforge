@@ -4,8 +4,9 @@ import { planSurprise } from './surprise';
 import { Grid } from './grid';
 import {
   Cat, GRAINY, LIT, Lit, MATS, Mat, NMATS, OPEN, SHADED, Shade, WIND_SUSC,
-  Flora, applyShade, colorAt, offRamp, petal, rampIndexAt, SPARK_LIFE,
+  Flora, applyShade, colorAt, offRamp, petal, rampIndexAt, SPARK_LIFE, FLAMES,
 } from './materials';
+import { CHEM, COMPILED, DECAY, HOT, KEEP, RULES, RX, type Compiled } from './reactions';
 import { CHUNK, CHUNK_SHIFT, CHUNKS_X, CHUNKS_Y, SIM_H, SIM_W, Stats, ChallengeResult, Mode, PaintKind, SimEvents, emptyEvents, NetInput, Snapshot } from './protocol';
 import { PSys } from './particles';
 import { Wind } from './wind';
@@ -143,6 +144,9 @@ export class World {
    * and moved with + - * / only so every engine lands it on the same cell.
    */
   debris: number[] = [];
+  /** CHEM LAB: how often each rule (RULES index) has fired. A diagnostic,
+   *  like events: not part of snapshots or the fingerprint. */
+  readonly rxFired = new Uint32Array(RULES.length);
 
   constructor(seed = 1234567) {
     this.grid = new Grid(SIM_W, SIM_H);
@@ -310,16 +314,16 @@ export class World {
     }
   }
 
-  /** Switch between sandbox and playground; either way starts empty. */
+  /** Switch worlds (sandbox, playground, chem lab); each starts empty. */
   setMode(m: Mode): void {
-    if (m === 'playground') {
-      this.mode = 'playground';
-      this.challenge = null;
-      this.clear();
-      this.parts?.reset();
-    } else {
+    if (m === 'sand') {
       this.toSandbox();
+      return;
     }
+    this.mode = m;
+    this.challenge = null;
+    this.clear();
+    this.parts?.reset();
   }
 
   /** Hand over everything that happened since the last call, and reset. */
@@ -598,6 +602,9 @@ export class World {
         this.voidCell(x, y);
         break;
       default:
+        // a tinted flame burns exactly like fire; elements run the reaction table
+        if (FLAMES.has(m)) this.fire(x, y, i);
+        else if (CHEM[m]) this.chem(x, y, m);
         break; // static solids
     }
   }
@@ -1839,6 +1846,87 @@ export class World {
     // always hot: voids are rare and must notice new neighbors
     g.chunks.wakeCell(x, y);
     void ate;
+  }
+
+  // ---------- CHEM LAB: the reaction table (sim/reactions.ts) ----------
+
+  /**
+   * One element or product cell: react with one random neighbour if the
+   * table has a rule for the pair, otherwise move by its kind. A cell next
+   * to any partner stays awake, so a settled pile still reacts on contact.
+   */
+  private chem(x: number, y: number, m: number): void {
+    const g = this.grid;
+    const row = m * NMATS;
+    if (
+      RX[row + g.get(x + 1, y)] >= 0 || RX[row + g.get(x - 1, y)] >= 0 ||
+      RX[row + g.get(x, y + 1)] >= 0 || RX[row + g.get(x, y - 1)] >= 0
+    ) {
+      g.chunks.wakeCell(x, y);
+      const d = this.rng.int(4);
+      const nx = d === 0 ? x + 1 : d === 1 ? x - 1 : x;
+      const ny = d === 2 ? y + 1 : d === 3 ? y - 1 : y;
+      const k = RX[row + g.get(nx, ny)];
+      if (k >= 0) {
+        const rule = COMPILED[k];
+        if (this.rng.chance(rule.p) && this.ruleReady(rule, x, y, nx, ny)) {
+          this.react(rule, x, y, nx, ny);
+          return;
+        }
+      }
+    }
+    const md = MATS[m];
+    if (md.cat === Cat.POWDER) this.powder(x, y, m);
+    else if (md.cat === Cat.LIQUID) this.liquid(x, y, m);
+    else if (md.cat === Cat.GAS) {
+      // vapours with a lifetime settle back (iodine deposits, neon dims);
+      // the elemental gases last until something uses them up
+      if (md.life) this.gas(x, y, DECAY[m], 1);
+      else this.gasStep(x, y, m);
+    }
+  }
+
+  /** A rule's condition: heat, or a given material, touching either cell. */
+  private ruleReady(rule: Compiled, x: number, y: number, nx: number, ny: number): boolean {
+    if (rule.needs === -1) return true;
+    const g = this.grid;
+    const ok = (t: number) => (rule.needs === -2 ? HOT[t] === 1 : t === rule.needs);
+    return (
+      ok(g.get(x + 1, y)) || ok(g.get(x - 1, y)) || ok(g.get(x, y + 1)) || ok(g.get(x, y - 1)) ||
+      ok(g.get(nx + 1, ny)) || ok(g.get(nx - 1, ny)) || ok(g.get(nx, ny + 1)) || ok(g.get(nx, ny - 1))
+    );
+  }
+
+  private react(rule: Compiled, x: number, y: number, nx: number, ny: number): void {
+    const g = this.grid;
+    this.rxFired[rule.rule]++;
+    const put = (px: number, py: number, m: number) => {
+      const life = MATS[m].life;
+      g.setXY(px, py, m, life ? this.rng.range(life[0], life[1]) : 0);
+    };
+    if (rule.outA !== KEEP) put(x, y, rule.outA);
+    if (rule.outB !== KEEP) put(nx, ny, rule.outB);
+    // the heat of the reaction: a flame licks up from the spot
+    if (rule.spark >= 0 && g.get(x, y - 1) === Mat.EMPTY) put(x, y - 1, rule.spark);
+    switch (rule.fx) {
+      case 'fizz':
+        this.events.sizzles++;
+        break;
+      case 'ignite':
+        this.events.ignites++;
+        break;
+      case 'flash':
+        // a flash without a crater: the light and a small thump
+        this.events.booms.push(x, y, 2);
+        break;
+      case 'boom':
+        // a gas explosion: a shock and a bang, but the products stay - the
+        // chain through a hydrogen cloud is the show, not a hole in the floor
+        this.events.booms.push(x, y, 4);
+        this.shake = Math.min(30, this.shake + 4);
+        this.wind.addBlast(x, y, 16, 0.8);
+        break;
+    }
   }
 
   private adjacent(x: number, y: number, mat: number): boolean {
