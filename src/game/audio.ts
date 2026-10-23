@@ -351,6 +351,30 @@ export class Sfx {
     this.blip(640, 0.05, 'square', 0.05);
   }
 
+  // The title screen's sounds. Short synthesized blips for now; the CC0 samples
+  // that replace them (R2) keep these four names.
+
+  /** the cursor moved: a tiny tick */
+  uiMove(): void {
+    this.blip(520, 0.03, 'square', 0.035);
+  }
+
+  /** an item confirmed: two quick rising notes */
+  uiSelect(): void {
+    this.blip(520, 0.06, 'square', 0.05);
+    this.blip(780, 0.1, 'square', 0.05, undefined, 55);
+  }
+
+  /** back out of a menu: one falling note */
+  uiBack(): void {
+    this.blip(520, 0.09, 'square', 0.045, 330);
+  }
+
+  /** a locked item: a low, short buzz */
+  uiDeny(): void {
+    this.blip(150, 0.14, 'sawtooth', 0.05, 110);
+  }
+
   /** a rocket going up: a rising whistle over a little hiss */
   fireworkLaunch(): void {
     this.blip(700, 0.85, 'sine', 0.045, 2300);
