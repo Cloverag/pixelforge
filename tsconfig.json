@@ -11,6 +11,7 @@
     "noUncheckedSideEffectImports": false,
     "skipLibCheck": true,
     "isolatedModules": true,
+    "resolveJsonModule": true,
     "forceConsistentCasingInFileNames": true,
     "useDefineForClassFields": true,
     "types": ["vite/client"]
