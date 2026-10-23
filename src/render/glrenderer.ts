@@ -1,4 +1,4 @@
-import { MATS, Mat, NMATS, Cat } from '../sim/materials';
+import { FLAMES, MATS, Mat, NMATS, Cat } from '../sim/materials';
 import { CHUNKS_X, CHUNKS_Y, SIM_H, SIM_W } from '../sim/protocol';
 import { Blockifier, fitSize } from './blocks';
 import { EMIT_LUT, Fluid } from './fluid';
@@ -161,6 +161,20 @@ function emissionTable(): Uint8Array {
   put(Mat.LAVA, 0xd8481c, 0.32);
   put(Mat.EMBER, 0xc8461e, 0.28);
   put(Mat.TORCH, 0xffcf5a, 0.18);
+  // CHEM LAB: the elemental gases fill the lab for good, so they only tint
+  // the air (chlorine, the one you can see, most); flames burn in their own
+  // colour; glowing neon and iodine vapour are the show
+  put(Mat.H, 0xc4e6fa, 0.06);
+  put(Mat.O, 0x7aa6f2, 0.06);
+  put(Mat.N, 0x8a8aa8, 0.05);
+  put(Mat.NE, 0x7a5c64, 0.04);
+  put(Mat.CL, 0xb4d43a, 0.22);
+  put(Mat.NEON_GLOW, 0xff4a2a, 0.9);
+  put(Mat.IODINE_GAS, 0x9c40e0, 0.55);
+  for (const m of FLAMES) {
+    const abgr = MATS[m].ramp[1];
+    put(m, ((abgr & 255) << 16) | (((abgr >>> 8) & 255) << 8) | ((abgr >>> 16) & 255), 1.0);
+  }
   return lut;
 }
 

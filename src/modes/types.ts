@@ -58,6 +58,8 @@ export interface ModeController {
   tick?(frameNo: number): void;
   /** every frame from the worker */
   onFrame?(r: Res): void;
+  /** ESC in game: true if the mode used it (closed a panel of its own) */
+  onEscape?(): boolean;
   /** a blast at this stereo pan, for mode-specific sound */
   onBoom?(pan: number): void;
   cursor(pointerDown: boolean, button: number): CursorLook;

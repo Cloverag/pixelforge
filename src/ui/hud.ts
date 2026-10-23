@@ -544,6 +544,11 @@ export class Hud {
     this.setBrushDisplay(brush);
   }
 
+  /** Pick a swatch as if clicked (the periodic table picks this way). */
+  select(id: string): void {
+    if (this.swatchEls.has(id)) this.pick(id);
+  }
+
   private pick(id: string): void {
     for (const [k, el] of this.swatchEls) el.classList.toggle('sel', k === id);
     const info = this.swatchInfo.get(id);

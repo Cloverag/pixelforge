@@ -32,6 +32,7 @@ import { applyTheme, cycleTheme, loadTheme } from './ui/theme';
 import type { ModeController, ModeCtx } from './modes/types';
 import { SandMode } from './modes/sand';
 import { PlaygroundMode } from './modes/playground';
+import { ChemMode } from './modes/chem';
 
 const STEP_MS = 1000 / 60;
 
@@ -119,8 +120,9 @@ const modeCtx: ModeCtx = {
 };
 const sandbox = new SandMode(modeCtx);
 const playground = new PlaygroundMode(modeCtx);
+const chemLab = new ChemMode(modeCtx);
 /** each world's free-play screen; a challenge is a SandMode of its own */
-const MODE_CTRL: Record<Mode, ModeController> = { sand: sandbox, playground };
+const MODE_CTRL: Record<Mode, ModeController> = { sand: sandbox, playground, chem: chemLab };
 /** the screen being played (the menu keeps the last one) */
 let current: ModeController = sandbox;
 
@@ -776,6 +778,11 @@ function startPlayground(): void {
   startMode(playground);
 }
 
+function startChemLab(): void {
+  leaveRoom('YOU LEFT THE ROOM');
+  startMode(chemLab);
+}
+
 function startChallenge(id: string): void {
   leaveRoom('YOU LEFT THE ROOM');
   const def = CHALLENGES.find((c) => c.id === id);
@@ -849,6 +856,17 @@ const MENU: MenuEntry[] = [
       sfx.ensure();
       sfx.ui();
       startPlayground();
+    },
+  },
+  {
+    name: 'CHEM LAB',
+    sub: 'Pick elements off the periodic table and watch them react.',
+    key: 'L',
+    hotkey: 'l',
+    run: () => {
+      sfx.ensure();
+      sfx.ui();
+      startChemLab();
     },
   },
   {
@@ -1068,7 +1086,7 @@ new Input(
       case 'escape':
         // one step back at a time: out of immersive first, then the menu
         if (isImmersive()) setImmersive(false);
-        else if (screen === 'game') void requestMenu();
+        else if (screen === 'game' && !current.onEscape?.()) void requestMenu();
         break;
       case 'i':
         if (screen === 'game') toggleImmersive();
