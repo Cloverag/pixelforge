@@ -169,6 +169,8 @@ function emissionTable(): Uint8Array {
   put(Mat.N, 0x8a8aa8, 0.05);
   put(Mat.NE, 0x7a5c64, 0.04);
   put(Mat.CL, 0xb4d43a, 0.22);
+  put(Mat.HE, 0xfbe9f0, 0.03);
+  put(Mat.F, 0xe8e070, 0.08);
   put(Mat.NEON_GLOW, 0xff4a2a, 0.9);
   put(Mat.IODINE_GAS, 0x9c40e0, 0.55);
   for (const m of FLAMES) {

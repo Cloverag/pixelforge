@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { World } from '../src/sim/world';
-import { MATS, Mat, NMATS } from '../src/sim/materials';
+import { FLAMES, MATS, Mat, NMATS } from '../src/sim/materials';
 import { CHEM, COMPILED, KEEP, RULES, RX } from '../src/sim/reactions';
 import { materialSections } from '../src/ui/hud';
 
@@ -40,6 +40,9 @@ function run(w: World, n: number): void {
   for (let i = 0; i < n; i++) w.step();
 }
 
+/** The V2 elements: appended after the flames, so outside the H..NEON_GLOW range. */
+const V2 = [Mat.HE, Mat.B, Mat.F, Mat.SI, Mat.BR, Mat.AG, Mat.SN, Mat.CS, Mat.AU, Mat.HG];
+
 const needsOf = (ri: number) => {
   const n = RULES[ri].needs;
   return { heat: n === 'heat', with: typeof n === 'number' ? n : undefined };
@@ -68,7 +71,9 @@ describe('chem lab reactions', { timeout: 120_000 }, () => {
   });
 
   it('an element alone in a box reacts with nothing', () => {
-    for (let m: number = Mat.H; m <= Mat.I; m++) {
+    // none of the V2 elements react with the box: only phosphorus does, with the air
+    const elements = [...Array.from({ length: Mat.I - Mat.H + 1 }, (_, i) => Mat.H + i), ...V2];
+    for (const m of elements) {
       if (m === Mat.P) continue; // phosphorus reacts with the air itself
       const w = bench(5, m, Mat.EMPTY);
       run(w, 300);
@@ -146,6 +151,15 @@ describe('chem lab reactions', { timeout: 120_000 }, () => {
     const cuFire = COMPILED[RX[Mat.CU * NMATS + Mat.FIRE]];
     const cuYellow = COMPILED[RX[Mat.CU * NMATS + Mat.FLAME_YELLOW]];
     expect(cuYellow?.rule).toBe(cuFire.rule);
+  });
+
+  it('marks the V2 elements as chem and keeps the flames out of it', () => {
+    for (const m of V2) expect([MATS[m].name, CHEM[m]]).toEqual([MATS[m].name, 1]);
+    // flames run fire(), not the reaction table
+    for (const m of FLAMES) expect([MATS[m].name, CHEM[m]]).toEqual([MATS[m].name, 0]);
+    // appended, never renumbered: the ids a room snapshot already holds
+    expect([Mat.FLAME_WHITE, Mat.HE, Mat.HG]).toEqual([65, 66, 75]);
+    expect(NMATS).toBe(76);
   });
 
   it('keeps the chem materials out of the sandbox rail', () => {

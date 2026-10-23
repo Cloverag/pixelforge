@@ -68,6 +68,18 @@ export const Mat = {
   FLAME_ORANGE: 63,
   FLAME_BLUE: 64,
   FLAME_WHITE: 65,
+  // ---- CHEM LAB V2: ten more elements, appended - ids travel in room
+  // snapshots, so nothing above is ever renumbered ----
+  HE: 66,
+  B: 67,
+  F: 68,
+  SI: 69,
+  BR: 70,
+  AG: 71,
+  SN: 72,
+  CS: 73,
+  AU: 74,
+  HG: 75,
 } as const;
 
 export type MatId = (typeof Mat)[keyof typeof Mat];
@@ -216,6 +228,20 @@ flame(Mat.FLAME_APPLE, 'APPLE FLAME', ['#a8f03a', '#bcfa5a', '#d4ff8a', '#8cd822
 flame(Mat.FLAME_ORANGE, 'ORANGE FLAME', ['#ff6a14', '#ff8434', '#ffa25c', '#e85200']);
 flame(Mat.FLAME_BLUE, 'BLUE FLAME', ['#3a6cff', '#5a88ff', '#8aacff', '#2050e8']);
 flame(Mat.FLAME_WHITE, 'WHITE FLAME', ['#ffffff', '#f4f6ff', '#fffef0', '#e6ecff']);
+// V2 elements. Helium is the lightest thing in the lab, gold and mercury the
+// heaviest; bromine and mercury are the two liquid elements (a runny bromine,
+// a thick mercury). Gold, silver and the rest resist ACID's generic eating
+// like every other metal: acid reacts with them by rule, or not at all.
+chem(Mat.HE, 'HELIUM', Cat.GAS, 0.05, ['#fbe9f0', '#f4dbe6', '#fff4f8', '#eacfdc'], { acidChance: 0 });
+chem(Mat.B, 'BORON', Cat.POWDER, 2.34, ['#3a2c24', '#2e231c', '#4a382d', '#231a14'], { acidChance: 0 });
+chem(Mat.F, 'FLUORINE', Cat.GAS, 0.9, ['#f2ee9a', '#e6e284', '#faf6b4', '#d6d270'], { acidChance: 0 });
+chem(Mat.SI, 'SILICON', Cat.POWDER, 2.33, ['#7a8aa0', '#6a7a90', '#8e9eb4', '#5a6a80'], { acidChance: 0 });
+chem(Mat.BR, 'BROMINE', Cat.LIQUID, 3.1, ['#7a2a1a', '#6a2214', '#8c3622', '#581a0e'], { disp: 3, acidChance: 0 });
+chem(Mat.AG, 'SILVER', Cat.POWDER, 10.5, ['#e8eaee', '#d6d8de', '#f8fafc', '#c4c6ce'], { acidChance: 0 });
+chem(Mat.SN, 'TIN', Cat.POWDER, 7.3, ['#9a9ca0', '#8a8c90', '#aaacb0', '#7a7c82'], { acidChance: 0 });
+chem(Mat.CS, 'CAESIUM', Cat.POWDER, 1.93, ['#e8d49a', '#dcc684', '#f4e4b2', '#ccb870'], { acidChance: 0 });
+chem(Mat.AU, 'GOLD', Cat.POWDER, 19.3, ['#f0c030', '#e0ae20', '#ffd54a', '#c89a14'], { acidChance: 0 });
+chem(Mat.HG, 'MERCURY', Cat.LIQUID, 13.5, ['#d8dce4', '#c6cad4', '#eceff4', '#b2b8c4'], { disp: 2, acidChance: 0 });
 
 /** The coloured flames: each burns exactly like FIRE. */
 export const FLAMES = new Set<number>([

@@ -107,6 +107,9 @@ export const RULES: Rule[] = [
 /** Materials the engine runs: every element and product. */
 export const CHEM = new Uint8Array(NMATS);
 for (let m = Mat.H; m <= Mat.NEON_GLOW; m++) CHEM[m] = 1;
+// the flames (58-65) sit between the two blocks and stay out: they run fire().
+// The V2 elements come after them, so they are marked by name, not by range.
+for (const m of [Mat.HE, Mat.B, Mat.F, Mat.SI, Mat.BR, Mat.AG, Mat.SN, Mat.CS, Mat.AU, Mat.HG]) CHEM[m] = 1;
 
 /** What sets off a 'heat' rule. */
 export const HOT = new Uint8Array(NMATS);
