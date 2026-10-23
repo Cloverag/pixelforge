@@ -4,9 +4,26 @@ import { PG_BUMPER } from '../sim/particles';
 import { PRESET_INFO } from '../sim/presets';
 import type { PgToolMsg, Res } from '../sim/protocol';
 import { planSurprise } from '../sim/surprise';
-import type { PgTool } from '../ui/hud';
+import type { PaletteSection, PgTool, Swatch } from '../ui/hud';
 import { Stroke } from './stroke';
 import type { CursorLook, ModeController, ModeCtx } from './types';
+
+/** The rail: [tool, label, chip gradient, group, tooltip]. */
+const PG_TOOLS: [PgTool, string, string, string, string][] = [
+  ['fountain', 'FOUNTAIN', 'linear-gradient(135deg,#7fd8ff 0 50%,#2b7fd4 50% 100%)', 'EMITTERS', 'Streams particles upward from the cursor'],
+  ['firework', 'FIREWORK', 'linear-gradient(135deg,#ffe97f 0 50%,#ff9a2b 50% 100%)', 'EMITTERS', 'Launches a rocket that bursts where you click'],
+  ['sparkler', 'SPARKLER', 'linear-gradient(135deg,#fff3b0 0 50%,#ffb22b 50% 100%)', 'EMITTERS', 'Hold for a crackle of gold sparks'],
+  ['hose', 'HOSE', 'linear-gradient(135deg,#9fe8ff 0 50%,#3b8cff 50% 100%)', 'EMITTERS', 'Drag to spray the way you are moving'],
+  ['fireflies', 'FIREFLIES', 'linear-gradient(135deg,#f4ff9f 0 50%,#9fd43b 50% 100%)', 'EMITTERS', 'Release slow, blinking fireflies'],
+  ['attract', 'ATTRACT', 'linear-gradient(135deg,#9ff7ea 0 50%,#2ea996 50% 100%)', 'FORCES', 'Pulls nearby particles in'],
+  ['repel', 'REPULSE', 'linear-gradient(135deg,#ffa8c6 0 50%,#d43e77 50% 100%)', 'FORCES', 'Pushes nearby particles away'],
+  ['vortex', 'VORTEX', 'linear-gradient(135deg,#e0f79f 0 50%,#8fc42b 50% 100%)', 'FORCES', 'Swirls particles around the cursor'],
+  ['blackhole', 'BLACK HOLE', 'radial-gradient(circle,#000 0 35%,#ffb36b 40% 55%,#3a2410 60%)', 'FORCES', 'Pulls everything in and swallows it'],
+  ['wall', 'WALL', 'linear-gradient(135deg,#a0a0bc 0 50%,#5c5c72 50% 100%)', 'TOOLS', 'Draw a solid barrier'],
+  ['bumper', 'BUMPER', 'linear-gradient(135deg,#c8f4ff 0 50%,#5fb0d0 50% 100%)', 'TOOLS', 'A bouncy wall that plays a note when hit - higher up, higher pitch'],
+  ['portal', 'PORTAL', 'linear-gradient(135deg,#ffb066 0 50%,#4cb4ff 50% 100%)', 'TOOLS', 'Click twice to open a linked pair - what goes in one comes out the other'],
+  ['erase', 'ERASE', 'linear-gradient(135deg,#ff8a8a 0 50%,#a82c2c 50% 100%)', 'TOOLS', 'Clear walls and particles'],
+];
 
 /** Tools that keep emitting while the button is held, even standing still. */
 const HELD_TOOLS = new Set<PgTool>(['fountain', 'sparkler', 'hose', 'fireflies']);
@@ -46,22 +63,48 @@ export class PlaygroundMode implements ModeController {
   }
 
   buildUI(): void {
-    const hud = this.ctx.hud;
     this.tool = 'fountain';
-    hud.buildPgPalette('fountain', this.ctx.brush(), {
-      onTool: (t) => {
-        this.tool = t;
-        this.ctx.sfx.ui();
-      },
-      onGravity: () => this.setGravity(!this.gravityOn),
-      onSlowmo: () => this.setSlowmo(!this.slowmo),
-      onClear: () => this.clear(),
-      presets: PRESET_INFO.map((p) => [p.id, p.label, p.tip]),
-      onPreset: (id) => this.loadPreset(id),
-      onSurprise: () => this.surprise(),
+    const swatches = (group: string): Swatch[] =>
+      PG_TOOLS.filter((t) => t[3] === group).map(([id, label, chip, , title]) => ({
+        id,
+        label,
+        chip,
+        title,
+        info: [id.toUpperCase(), '', title, chip],
+      }));
+    const sections: PaletteSection[] = ['EMITTERS', 'FORCES', 'TOOLS'].map((g) => ({ label: g, swatches: swatches(g) }));
+    // demo scenes, one click each
+    sections.push({
+      label: 'SCENES',
+      cls: 'scenebtns',
+      buttons: [
+        ...PRESET_INFO.map((p) => ({ label: p.label, title: p.tip, onClick: () => this.loadPreset(p.id) })),
+        { label: 'SURPRISE ME', title: 'A brand-new generated scene, every time (R)', onClick: () => this.surprise(), cls: 'surprise' },
+      ],
     });
-    hud.setGravityLamp(this.gravityOn);
-    hud.setSlowmoLamp(this.slowmo);
+    // world-wide actions: things that are not a brush
+    sections.push({
+      label: 'ACTIONS',
+      cls: 'toolbtns',
+      buttons: [
+        { label: 'GRAVITY', title: 'Particles fall (G)', onClick: () => this.setGravity(!this.gravityOn), lamp: 'gravity', on: this.gravityOn },
+        { label: 'SLOW-MO', title: 'Run the playground at a third of the speed (Q)', onClick: () => this.setSlowmo(!this.slowmo), lamp: 'slowmo', on: this.slowmo },
+        { label: 'CLEAR', title: 'Remove everything: particles, forces, portals, walls and bumpers (X)', onClick: () => this.clear() },
+      ],
+    });
+    this.ctx.hud.buildPalette(
+      {
+        sections,
+        initial: 'fountain',
+        onPick: (id) => {
+          this.tool = id as PgTool;
+          this.ctx.sfx.ui();
+        },
+        bucket: false,
+        counts: 'particles',
+      },
+      this.ctx.brush(),
+    );
   }
 
   onPointer(e: PointerEvt): void {
@@ -118,11 +161,11 @@ export class PlaygroundMode implements ModeController {
   onFrame(r: Res): void {
     if (r.pgGravity !== undefined && r.pgGravity !== this.gravityOn) {
       this.gravityOn = r.pgGravity;
-      this.ctx.hud.setGravityLamp(this.gravityOn);
+      this.ctx.hud.setLamp('gravity', this.gravityOn);
     }
     if (r.pgTime !== undefined && r.pgTime < 1 !== this.slowmo) {
       this.slowmo = r.pgTime < 1;
-      this.ctx.hud.setSlowmoLamp(this.slowmo);
+      this.ctx.hud.setLamp('slowmo', this.slowmo);
     }
   }
 
@@ -161,7 +204,7 @@ export class PlaygroundMode implements ModeController {
   private setGravity(on: boolean, quiet = false): void {
     this.gravityOn = on;
     this.ctx.send({ k: 'pgGravity', on });
-    this.ctx.hud.setGravityLamp(on);
+    this.ctx.hud.setLamp('gravity', on);
     if (quiet) return;
     this.ctx.sfx.ui();
     this.ctx.toast(`GRAVITY ${on ? 'ON' : 'OFF'}`);
@@ -170,7 +213,7 @@ export class PlaygroundMode implements ModeController {
   private setSlowmo(on: boolean): void {
     this.slowmo = on;
     this.ctx.send({ k: 'pgTime', scale: on ? 0.33 : 1 });
-    this.ctx.hud.setSlowmoLamp(on);
+    this.ctx.hud.setLamp('slowmo', on);
     this.ctx.sfx.slowmo(on);
   }
 

@@ -67,19 +67,82 @@ interface TopbarCallbacks {
   onToggleImmersive(): void;
 }
 
-interface SandPaletteCallbacks {
-  onSelect(mat: number): void;
+/** One pickable thing in the rail: a material, a tool, an element. */
+export interface Swatch {
+  id: string;
+  label: string;
+  /** CSS background for the chip */
+  chip: string;
+  /** a chip drawn as a dashed outline (the eraser) */
+  dashed?: boolean;
+  title: string;
+  /** the status bar when picked: name, kind, note, chip */
+  info: [string, string, string, string];
 }
 
-interface PgPaletteCallbacks {
-  onTool(tool: PgTool): void;
-  onGravity?(): void;
-  onSlowmo?(): void;
-  onClear?(): void;
-  /** demo scenes: [id, label, tooltip] */
-  presets?: [string, string, string][];
-  onPreset?(id: string): void;
-  onSurprise?(): void;
+/** A button in the rail that acts at once rather than being held. */
+export interface RailButton {
+  label: string;
+  title: string;
+  onClick(): void;
+  /** a toggle with an indicator lamp, addressed by setLamp(lamp, on) */
+  lamp?: string;
+  on?: boolean;
+  cls?: string;
+}
+
+export type PaletteSection =
+  | { label: string; swatches: Swatch[] }
+  | { label: string; buttons: RailButton[]; cls: string };
+
+/** Everything a mode puts in the left rail. */
+export interface PaletteSpec {
+  sections: PaletteSection[];
+  initial: string;
+  onPick(id: string): void;
+  /** BUCKET and WIND under the brush */
+  bucket: boolean;
+  /** what the status bar counts */
+  counts: 'cells' | 'particles';
+}
+
+/**
+ * The sandbox's materials as rail sections, grouped by kind so the rail
+ * doubles as a legend, with the eraser in its own group. `allowed` narrows
+ * it to a challenge's materials.
+ */
+export function materialSections(allowed: number[] | null): PaletteSection[] {
+  const list = allowed ?? MATS.filter((m) => m.placeable).map((m) => m.id);
+  const usable = list.filter((id) => MATS[id]?.placeable);
+  const swatch = (id: number): Swatch => {
+    const m = MATS[id];
+    const chip = rampGradient(m.ramp);
+    return { id: String(id), label: m.name, chip, title: m.name, info: [m.name, CAT_WORD[m.cat], ELEMENT_NOTES[m.name] ?? '', chip] };
+  };
+  // living things get their own group, whatever their physics category
+  const groups: [string, number[]][] = CAT_ORDER.map(([cat, label]) => [
+    label,
+    usable.filter((id) => MATS[id].cat === cat && !LIFE_MATS.has(id)),
+  ]);
+  groups.splice(1, 0, ['LIFE', usable.filter((id) => LIFE_MATS.has(id))]);
+  const sections: PaletteSection[] = groups
+    .filter(([, ids]) => ids.length > 0) // challenges only allow a few materials
+    .map(([label, ids]) => ({ label, swatches: ids.map(swatch) }));
+  // eraser lives in its own group so it is never mistaken for a material
+  sections.push({
+    label: 'TOOLS',
+    swatches: [
+      {
+        id: '-1',
+        label: 'ERASE',
+        chip: '#0b0b14',
+        dashed: true,
+        title: 'Eraser (or hold right mouse button)',
+        info: ['ERASE', '', 'Clears whatever the brush covers. Right-drag erases too.', 'transparent'],
+      },
+    ],
+  });
+  return sections;
 }
 
 export class Hud {
@@ -91,7 +154,7 @@ export class Hud {
   private fpsEl!: HTMLElement;
   private brushLabel!: HTMLElement;
   private brushDot!: HTMLElement;
-  private swatchEls = new Map<number, HTMLElement>();
+  private swatchEls = new Map<string, HTMLElement>();
   private status!: {
     lamp: HTMLElement;
     run: HTMLElement;
@@ -104,15 +167,13 @@ export class Hud {
   };
   /** the playground counts particles, not cells */
   private particleMode = false;
-  private gravityBtn: HTMLButtonElement | null = null;
-  private slowBtn: HTMLButtonElement | null = null;
+  private lamps = new Map<string, HTMLButtonElement>();
+  private swatchInfo = new Map<string, Swatch['info']>();
+  private onPick: (id: string) => void = () => {};
 
-  setGravityLamp(on: boolean): void {
-    this.gravityBtn?.classList.toggle('toggled', on);
-  }
-
-  setSlowmoLamp(on: boolean): void {
-    this.slowBtn?.classList.toggle('toggled', on);
+  /** Light or dim a rail toggle (GRAVITY, SLOW-MO...). */
+  setLamp(name: string, on: boolean): void {
+    this.lamps.get(name)?.classList.toggle('toggled', on);
   }
 
   setParticles(n: number): void {
@@ -123,8 +184,6 @@ export class Hud {
   private brushN = 6;
   private toolKind: PaintKind = 'brush';
   private budgetEls = new Map<number, HTMLElement>();
-  private pgToolEls = new Map<PgTool, HTMLElement>();
-  private selTool: PgTool | null = null;
 
   constructor(
     private topbar: HTMLElement,
@@ -328,153 +387,59 @@ export class Hud {
 
   // ---------- palettes ----------
 
-  buildSandPalette(
-    allowed: number[] | null,
-    initial: number,
-    brush: number,
-    cbs: SandPaletteCallbacks,
-  ): void {
+  /** Build the left rail from a mode's sections. */
+  buildPalette(spec: PaletteSpec, brush: number): void {
     this.toolbar.innerHTML = '';
     this.swatchEls.clear();
+    this.swatchInfo.clear();
     this.budgetEls.clear();
-    this.pgToolEls.clear();
-    this.selTool = null;
+    this.lamps.clear();
+    this.onPick = spec.onPick;
 
     const pal = h('div');
     pal.id = 'palette';
-    const list = allowed ?? MATS.filter((m) => m.placeable).map((m) => m.id);
-    const usable = list.filter((id) => MATS[id]?.placeable);
-
-    // living things get their own group, whatever their physics category
-    const groups: [string, number[]][] = CAT_ORDER.map(([cat, label]) => [
-      label,
-      usable.filter((id) => MATS[id].cat === cat && !LIFE_MATS.has(id)),
-    ]);
-    groups.splice(1, 0, ['LIFE', usable.filter((id) => LIFE_MATS.has(id))]);
-    for (const [label, inCat] of groups) {
-      if (inCat.length === 0) continue; // challenges only allow a few materials
+    for (const sec of spec.sections) {
       const group = h('div', 'matgroup');
-      group.appendChild(h('span', 'glabel', label));
-      const grid = h('div', 'gswatches');
-      for (const id of inCat) {
-        const m = MATS[id];
-        const el = h('div', 'swatch');
-        const chip = h('div', 'chip');
-        chip.style.backgroundImage = rampGradient(m.ramp);
-        el.appendChild(chip);
-        el.appendChild(h('span', 'nm', m.name));
-        el.title = m.name;
-        el.onclick = () => this.selectMat(id, cbs);
-        grid.appendChild(el);
-        this.swatchEls.set(id, el);
+      group.appendChild(h('span', 'glabel', sec.label));
+      if ('swatches' in sec) {
+        const grid = h('div', 'gswatches');
+        for (const sw of sec.swatches) {
+          const el = h('div', 'swatch');
+          const chip = h('div', 'chip');
+          if (sw.dashed) {
+            chip.style.background = sw.chip;
+            chip.style.border = '1px dashed var(--danger)';
+          } else {
+            chip.style.backgroundImage = sw.chip;
+          }
+          el.appendChild(chip);
+          el.appendChild(h('span', 'nm', sw.label));
+          el.title = sw.title;
+          el.onclick = () => this.pick(sw.id);
+          grid.appendChild(el);
+          this.swatchEls.set(sw.id, el);
+          this.swatchInfo.set(sw.id, sw.info);
+        }
+        group.appendChild(grid);
+      } else {
+        const row = h('div', sec.cls);
+        for (const b of sec.buttons) {
+          const btn = this.mkBtn(b.label, b.onClick, b.title, b.lamp !== undefined);
+          if (b.cls) btn.classList.add(b.cls);
+          if (b.on) btn.classList.add('toggled');
+          if (b.lamp) this.lamps.set(b.lamp, btn);
+          row.appendChild(btn);
+        }
+        group.appendChild(row);
       }
-      group.appendChild(grid);
       pal.appendChild(group);
     }
 
-    // eraser lives in its own group so it is never mistaken for a material
-    const tools = h('div', 'matgroup');
-    tools.appendChild(h('span', 'glabel', 'TOOLS'));
-    const toolGrid = h('div', 'gswatches');
-    const erase = h('div', 'swatch');
-    const chip = h('div', 'chip');
-    chip.style.background = '#0b0b14';
-    chip.style.border = '1px dashed var(--danger)';
-    erase.appendChild(chip);
-    erase.appendChild(h('span', 'nm', 'ERASE'));
-    erase.title = 'Eraser (or hold right mouse button)';
-    erase.onclick = () => this.selectMat(-1, cbs);
-    toolGrid.appendChild(erase);
-    tools.appendChild(toolGrid);
-    pal.appendChild(tools);
-    this.swatchEls.set(-1, erase);
-
     this.toolbar.appendChild(pal);
-    this.buildBrushCol(brush);
-    this.selectMat(initial, cbs);
-    this.particleMode = false;
-    if (this.status) this.status.cellsKey.textContent = 'Cells';
-  }
-
-  buildPgPalette(
-    initial: PgTool,
-    brush: number,
-    cbs: PgPaletteCallbacks,
-  ): void {
-    this.toolbar.innerHTML = '';
-    this.swatchEls.clear();
-    this.budgetEls.clear();
-    this.pgToolEls.clear();
-
-    const pal = h('div');
-    pal.id = 'palette';
-    // [tool, label, chip gradient, group, tooltip]
-    const tools: [PgTool, string, string, string, string][] = [
-      ['fountain', 'FOUNTAIN', 'linear-gradient(135deg,#7fd8ff 0 50%,#2b7fd4 50% 100%)', 'EMITTERS', 'Streams particles upward from the cursor'],
-      ['firework', 'FIREWORK', 'linear-gradient(135deg,#ffe97f 0 50%,#ff9a2b 50% 100%)', 'EMITTERS', 'Launches a rocket that bursts where you click'],
-      ['sparkler', 'SPARKLER', 'linear-gradient(135deg,#fff3b0 0 50%,#ffb22b 50% 100%)', 'EMITTERS', 'Hold for a crackle of gold sparks'],
-      ['hose', 'HOSE', 'linear-gradient(135deg,#9fe8ff 0 50%,#3b8cff 50% 100%)', 'EMITTERS', 'Drag to spray the way you are moving'],
-      ['fireflies', 'FIREFLIES', 'linear-gradient(135deg,#f4ff9f 0 50%,#9fd43b 50% 100%)', 'EMITTERS', 'Release slow, blinking fireflies'],
-      ['attract', 'ATTRACT', 'linear-gradient(135deg,#9ff7ea 0 50%,#2ea996 50% 100%)', 'FORCES', 'Pulls nearby particles in'],
-      ['repel', 'REPULSE', 'linear-gradient(135deg,#ffa8c6 0 50%,#d43e77 50% 100%)', 'FORCES', 'Pushes nearby particles away'],
-      ['vortex', 'VORTEX', 'linear-gradient(135deg,#e0f79f 0 50%,#8fc42b 50% 100%)', 'FORCES', 'Swirls particles around the cursor'],
-      ['blackhole', 'BLACK HOLE', 'radial-gradient(circle,#000 0 35%,#ffb36b 40% 55%,#3a2410 60%)', 'FORCES', 'Pulls everything in and swallows it'],
-      ['wall', 'WALL', 'linear-gradient(135deg,#a0a0bc 0 50%,#5c5c72 50% 100%)', 'TOOLS', 'Draw a solid barrier'],
-      ['bumper', 'BUMPER', 'linear-gradient(135deg,#c8f4ff 0 50%,#5fb0d0 50% 100%)', 'TOOLS', 'A bouncy wall that plays a note when hit - higher up, higher pitch'],
-      ['portal', 'PORTAL', 'linear-gradient(135deg,#ffb066 0 50%,#4cb4ff 50% 100%)', 'TOOLS', 'Click twice to open a linked pair - what goes in one comes out the other'],
-      ['erase', 'ERASE', 'linear-gradient(135deg,#ff8a8a 0 50%,#a82c2c 50% 100%)', 'TOOLS', 'Clear walls and particles'],
-    ];
-    for (const groupName of ['EMITTERS', 'FORCES', 'TOOLS']) {
-      const group = h('div', 'matgroup');
-      group.appendChild(h('span', 'glabel', groupName));
-      const grid = h('div', 'gswatches');
-      for (const [tool, label, bg, g, tip] of tools) {
-        if (g !== groupName) continue;
-        const el = h('div', 'swatch');
-        const chip = h('div', 'chip');
-        chip.style.backgroundImage = bg;
-        el.appendChild(chip);
-        el.appendChild(h('span', 'nm', label));
-        el.title = tip;
-        el.onclick = () => this.selectTool(tool, cbs);
-        grid.appendChild(el);
-        this.pgToolEls.set(tool, el);
-      }
-      group.appendChild(grid);
-      pal.appendChild(group);
-    }
-    // demo scenes, one click each
-    if (cbs.presets?.length) {
-      const scenes = h('div', 'matgroup');
-      scenes.appendChild(h('span', 'glabel', 'SCENES'));
-      const grid = h('div', 'scenebtns');
-      for (const [id, label, tip] of cbs.presets) grid.appendChild(this.mkBtn(label, () => cbs.onPreset?.(id), tip));
-      if (cbs.onSurprise) {
-        const sur = this.mkBtn('SURPRISE ME', () => cbs.onSurprise?.(), 'A brand-new generated scene, every time (R)');
-        sur.classList.add('surprise');
-        grid.appendChild(sur);
-      }
-      scenes.appendChild(grid);
-      pal.appendChild(scenes);
-    }
-
-    // world-wide actions: things that are not a brush
-    const actions = h('div', 'matgroup');
-    actions.appendChild(h('span', 'glabel', 'ACTIONS'));
-    const row = h('div', 'toolbtns');
-    this.gravityBtn = this.mkBtn('GRAVITY', () => cbs.onGravity?.(), 'Particles fall (G)', true);
-    this.gravityBtn.classList.add('toggled');
-    this.slowBtn = this.mkBtn('SLOW-MO', () => cbs.onSlowmo?.(), 'Run the playground at a third of the speed (Q)', true);
-    const clearBtn = this.mkBtn('CLEAR', () => cbs.onClear?.(), 'Remove everything: particles, forces, portals, walls and bumpers (X)');
-    row.append(this.gravityBtn, this.slowBtn, clearBtn);
-    actions.appendChild(row);
-    pal.appendChild(actions);
-
-    this.toolbar.appendChild(pal);
-    this.buildBrushCol(brush, false);
-    this.selectTool(initial, cbs);
-    this.particleMode = true;
-    if (this.status) this.status.cellsKey.textContent = 'Particles';
+    this.buildBrushCol(brush, spec.bucket);
+    this.pick(spec.initial);
+    this.particleMode = spec.counts === 'particles';
+    if (this.status) this.status.cellsKey.textContent = this.particleMode ? 'Particles' : 'Cells';
   }
 
   private bucketBtn: HTMLButtonElement | null = null;
@@ -579,30 +544,11 @@ export class Hud {
     this.setBrushDisplay(brush);
   }
 
-  private selectMat(id: number, cbs: SandPaletteCallbacks): void {
-    for (const [mat, el] of this.swatchEls)
-      el.classList.toggle('sel', mat === id);
-    if (id === -1) {
-      this.showSelection('ERASE', '', 'Clears whatever the brush covers. Right-drag erases too.', 'transparent');
-    } else {
-      const m = MATS[id];
-      this.showSelection(m.name, CAT_WORD[m.cat], ELEMENT_NOTES[m.name] ?? '', rampGradient(m.ramp));
-    }
-    cbs.onSelect(id);
-  }
-
-  private selectTool(tool: PgTool, cbs: PgPaletteCallbacks): void {
-    this.selTool = tool;
-    for (const [t, el] of this.pgToolEls)
-      el.classList.toggle('sel', t === tool);
-    const el = this.pgToolEls.get(tool);
-    const chip = el?.querySelector<HTMLElement>('.chip');
-    this.showSelection(tool.toUpperCase(), '', el?.title ?? '', chip?.style.backgroundImage ?? '');
-    cbs.onTool(tool);
-  }
-
-  getSelectedTool(): PgTool | null {
-    return this.selTool;
+  private pick(id: string): void {
+    for (const [k, el] of this.swatchEls) el.classList.toggle('sel', k === id);
+    const info = this.swatchInfo.get(id);
+    if (info) this.showSelection(...info);
+    this.onPick(id);
   }
 
   updateStats(st: Stats): void {
@@ -623,11 +569,11 @@ export class Hud {
       let badge = this.budgetEls.get(m);
       if (!badge) {
         badge = h('span', 'budget', '');
-        this.swatchEls.get(m)?.appendChild(badge);
+        this.swatchEls.get(String(m))?.appendChild(badge);
         this.budgetEls.set(m, badge);
       }
       badge.textContent = String(remaining);
-      this.swatchEls.get(m)?.classList.toggle('exhausted', remaining <= 0);
+      this.swatchEls.get(String(m))?.classList.toggle('exhausted', remaining <= 0);
     }
   }
 

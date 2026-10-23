@@ -1,6 +1,7 @@
 import type { PointerEvt } from '../core/input';
 import type { ChallengeDef } from '../sim/challenges';
 import { Mat } from '../sim/materials';
+import { materialSections } from '../ui/hud';
 import { Stroke } from './stroke';
 import type { CursorLook, ModeController, ModeCtx } from './types';
 
@@ -50,12 +51,19 @@ export class SandMode implements ModeController {
 
   buildUI(): void {
     const ch = this.challenge;
-    this.ctx.hud.buildSandPalette(ch?.allowed ?? null, ch?.allowed[0] ?? Mat.SAND, this.ctx.brush(), {
-      onSelect: (m) => {
-        this.selMat = m;
-        this.ctx.sfx.ui();
+    this.ctx.hud.buildPalette(
+      {
+        sections: materialSections(ch?.allowed ?? null),
+        initial: String(ch?.allowed[0] ?? Mat.SAND),
+        onPick: (id) => {
+          this.selMat = Number(id);
+          this.ctx.sfx.ui();
+        },
+        bucket: true,
+        counts: 'cells',
       },
-    });
+      this.ctx.brush(),
+    );
   }
 
   onPointer(e: PointerEvt): void {
