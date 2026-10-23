@@ -29,7 +29,7 @@ describe('periodic table', () => {
 
   it('every lab element is a real element and a chem material', () => {
     const symbols = new Set((ELEMENTS as { sym: string }[]).map((e) => e.sym));
-    expect(LAB_ELEMENTS.size).toBe(20);
+    expect(LAB_ELEMENTS.size).toBe(30);
     for (const [sym, m] of LAB_ELEMENTS) {
       expect(symbols.has(sym)).toBe(true);
       expect([sym, CHEM[m]]).toEqual([sym, 1]);

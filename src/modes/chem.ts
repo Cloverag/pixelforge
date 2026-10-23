@@ -12,12 +12,15 @@ export const LAB_ELEMENTS = new Map<string, number>([
   ['Ne', Mat.NE], ['Na', Mat.NA], ['Mg', Mat.MG], ['Al', Mat.AL], ['P', Mat.P],
   ['S', Mat.S], ['Cl', Mat.CL], ['K', Mat.K], ['Ca', Mat.CA], ['Fe', Mat.FE],
   ['Cu', Mat.CU], ['Zn', Mat.ZN], ['Sr', Mat.SR], ['I', Mat.I], ['Ba', Mat.BA],
+  ['He', Mat.HE], ['B', Mat.B], ['F', Mat.F], ['Si', Mat.SI], ['Br', Mat.BR],
+  ['Ag', Mat.AG], ['Sn', Mat.SN], ['Cs', Mat.CS], ['Au', Mat.AU], ['Hg', Mat.HG],
 ]);
 const SYMBOL = new Map([...LAB_ELEMENTS].map(([sym, m]) => [m, sym]));
 
-const GASES = [Mat.H, Mat.O, Mat.N, Mat.CL, Mat.NE];
-const METALS = [Mat.LI, Mat.NA, Mat.K, Mat.MG, Mat.CA, Mat.SR, Mat.BA, Mat.AL, Mat.FE, Mat.CU, Mat.ZN];
-const NONMETALS = [Mat.C, Mat.P, Mat.S, Mat.I];
+const GASES = [Mat.H, Mat.O, Mat.N, Mat.CL, Mat.NE, Mat.HE, Mat.F];
+const METALS = [Mat.LI, Mat.NA, Mat.K, Mat.CS, Mat.MG, Mat.CA, Mat.SR, Mat.BA, Mat.AL, Mat.FE, Mat.CU, Mat.ZN, Mat.AG, Mat.SN, Mat.AU];
+const NONMETALS = [Mat.C, Mat.P, Mat.S, Mat.I, Mat.B, Mat.SI];
+const LIQUIDS = [Mat.BR, Mat.HG];
 /** the bench: things to react elements with, and to hold them */
 const BENCH = [Mat.WATER, Mat.ACID, Mat.LYE, Mat.RUST, Mat.FIRE, Mat.TORCH, Mat.LAVA, Mat.PLANT, Mat.GLASS, Mat.WALL];
 
@@ -84,6 +87,7 @@ export class ChemMode implements ModeController {
       { label: 'GASES', swatches: GASES.map(swatch) },
       { label: 'METALS', swatches: METALS.map(swatch) },
       { label: 'NON-METALS', swatches: NONMETALS.map(swatch) },
+      { label: 'LIQUIDS', swatches: LIQUIDS.map(swatch) },
       { label: 'BENCH', swatches: BENCH.map(swatch) },
       {
         label: 'TOOLS',
@@ -154,5 +158,8 @@ const CHEM_NOTE: Partial<Record<number, string>> = {
   [Mat.GLASS]: 'Holds anything, reacts with nothing.',
   [Mat.WALL]: 'Holds anything, reacts with nothing.',
   [Mat.PLANT]: 'Chlorine bleaches it.',
+  // elements with no rule of their own
+  [Mat.HE]: 'Inert. The lightest thing in the lab: it rises above hydrogen.',
+  [Mat.AU]: 'Inert. Nothing in the lab attacks it; it sinks through almost everything.',
 };
 
