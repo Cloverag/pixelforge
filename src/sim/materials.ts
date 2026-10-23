@@ -187,7 +187,7 @@ chem(Mat.NE, 'NEON', Cat.GAS, 0.2, ['#8a6a72', '#7a5c64', '#9a7880', '#6c5058'],
 chem(Mat.LI, 'LITHIUM', Cat.POWDER, 0.53, ['#c8c8d0', '#b8b8c2', '#d8d8e0', '#a8a8b4'], { acidChance: 0 });
 chem(Mat.NA, 'SODIUM', Cat.POWDER, 0.97, ['#d2d6dc', '#c0c4cc', '#e2e6ea', '#b0b4bc'], { acidChance: 0 });
 chem(Mat.K, 'POTASSIUM', Cat.POWDER, 0.86, ['#c4c8d8', '#b2b6c8', '#d4d8e6', '#a2a6b8'], { acidChance: 0 });
-chem(Mat.MG, 'MAGNESIUM', Cat.POWDER, 1.74, ['#e6e8ee', '#d4d6de', '#f4f6fa', '#c2c4ce'], { acidChance: 0 });
+chem(Mat.MG, 'MAGNESIUM', Cat.POWDER, 1.74, ['#e6e8ee', '#d4d6de', '#f4f6fa', '#c2c4ce'], { flam: 0.1, acidChance: 0 });
 chem(Mat.AL, 'ALUMINIUM', Cat.POWDER, 2.7, ['#b8c0cc', '#a6aebc', '#cad2dc', '#949cac'], { acidChance: 0 });
 chem(Mat.CA, 'CALCIUM', Cat.POWDER, 1.55, ['#e4e0d4', '#d2cec2', '#f0ece2', '#c0bcb0'], { acidChance: 0 });
 chem(Mat.FE, 'IRON', Cat.POWDER, 7.87, ['#6c6e76', '#5c5e66', '#7c7e86', '#4e5058'], { acidChance: 0 });

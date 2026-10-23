@@ -112,7 +112,9 @@ export type NetInput =
   | { k: 'pgGravity'; on: boolean }
   | { k: 'pgTime'; scale: number }
   /** the host switches everyone between sandbox and playground */
-  | { k: 'mode'; m: Mode };
+  | { k: 'mode'; m: Mode }
+  /** the chem lab: replace the bench with a ready-made experiment */
+  | { k: 'chemScene'; id: string };
 
 export interface SaveData {
   w: number;

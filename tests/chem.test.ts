@@ -122,6 +122,20 @@ describe('chem lab reactions', { timeout: 120_000 }, () => {
     expect(a.rxFired.reduce((s, n) => s + n, 0)).toBeGreaterThan(0);
   });
 
+  it('a world does not depend on how often its events are read', () => {
+    // the worker takes events once per message, and a guest catching up
+    // steps many frames per message: a bang capped on the event count must
+    // not change anything the simulation keeps (the wind)
+    const a = bench(31, Mat.H, Mat.O, { heat: true });
+    const b = bench(31, Mat.H, Mat.O, { heat: true });
+    for (let f = 0; f < 300; f++) {
+      a.step();
+      a.takeEvents();
+      b.step();
+    }
+    expect(b.hash()).toBe(a.hash());
+  });
+
   it('compiles: side A is chem, products are real materials, and FIRE rules cover every flame', () => {
     for (const c of COMPILED) {
       for (const out of [c.outA, c.outB]) if (out !== KEEP) expect(MATS[out]).toBeDefined();

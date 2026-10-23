@@ -1,6 +1,7 @@
 import type { PointerEvt } from '../core/input';
 import { MATS, Mat } from '../sim/materials';
 import { rulesFor } from '../sim/reactions';
+import { CHEM_SCENES } from '../sim/chemscenes';
 import type { PaletteSection, Swatch } from '../ui/hud';
 import { Stroke } from './stroke';
 import type { CursorLook, ModeController, ModeCtx } from './types';
@@ -75,6 +76,11 @@ export class ChemMode implements ModeController {
     };
     const sections: PaletteSection[] = [
       { label: 'TABLE', cls: 'toolbtns', buttons: [{ label: 'PERIODIC TABLE', title: 'Every element; the lit ones are in the lab (E)', onClick: () => void this.toggleTable() }] },
+      {
+        label: 'EXPERIMENTS',
+        cls: 'scenebtns',
+        buttons: CHEM_SCENES.map((s) => ({ label: s.label, title: s.tip, onClick: () => this.loadScene(s.id, s.label) })),
+      },
       { label: 'GASES', swatches: GASES.map(swatch) },
       { label: 'METALS', swatches: METALS.map(swatch) },
       { label: 'NON-METALS', swatches: NONMETALS.map(swatch) },
@@ -117,6 +123,12 @@ export class ChemMode implements ModeController {
     const kind = this.ctx.paintKind();
     const erasing = this.selMat === -1 || (pointerDown && button === 2);
     return { m: this.selMat < 0 ? 0 : this.selMat, k: kind === 'wind' ? 'w' : kind === 'flood' ? 'f' : erasing ? 'e' : 'b' };
+  }
+
+  private loadScene(id: string, label: string): void {
+    this.ctx.send({ k: 'chemScene', id });
+    this.ctx.sfx.ui();
+    this.ctx.toast(`EXPERIMENT: ${label}`);
   }
 
   private async toggleTable(): Promise<void> {

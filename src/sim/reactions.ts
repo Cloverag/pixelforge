@@ -68,13 +68,17 @@ export const RULES: Rule[] = [
   r(M.C, M.O, M.FIRE, M.SMOKE, 0.3, 'burns hot in oxygen', { needs: 'heat', fx: 'ignite' }),
   r(M.P, M.O, M.FIRE, M.SMOKE, 0.05, 'bursts into flame in oxygen', { fx: 'ignite' }),
   r(M.P, M.EMPTY, M.FIRE, KEEP, 0.0015, 'catches fire on its own in open air', { fx: 'ignite' }),
-  r(M.MG, M.FIRE, M.OXIDE, M.FLAME_WHITE, 0.25, 'burns with a blinding white flash', { fx: 'flash' }),
+  // the burning metal becomes the flame, so the front carries along a ribbon
+  r(M.MG, M.FIRE, M.FLAME_WHITE, KEEP, 0.25, 'burns with a blinding white flash', { fx: 'flash' }),
   r(M.S, M.FIRE, M.FLAME_BLUE, M.FLAME_BLUE, 0.1, 'burns with a blue flame', { fx: 'ignite' }),
   r(M.N, M.FIRE, KEEP, M.EMPTY, 0.6, 'smothers fire'),
   r(M.FE, M.O, M.RUST, M.EMPTY, 0.0008, 'rusts in oxygen'),
   r(M.FE, M.WATER, M.RUST, KEEP, 0.0003, 'rusts in water, slowly'),
   // ---- heat-started reactions between solids ----
-  r(M.AL, M.RUST, M.OXIDE, M.LAVA, 0.25, 'thermite: with heat, turns rust into molten iron', { needs: 'heat', fx: 'flash' }),
+  // both products molten (iron and slag): lava is lighter than the powders,
+  // so it stays on top and heats the next layer down - a solid oxide crust
+  // sank under it and smothered the burn after one layer
+  r(M.AL, M.RUST, M.LAVA, M.LAVA, 0.25, 'thermite: with heat, melts rust into molten iron', { needs: 'heat', fx: 'flash' }),
   r(M.FE, M.S, M.SULFIDE, M.EMPTY, 0.2, 'glows into iron sulfide when heated', { needs: 'heat', fx: 'ignite' }),
   r(M.ZN, M.S, M.SULFIDE, M.FLAME_GREEN, 0.4, 'flashes into zinc sulfide when heated', { needs: 'heat', fx: 'flash' }),
   r(M.I, M.FIRE, M.IODINE_GAS, KEEP, 0.2, 'turns straight to violet vapour in a flame'),
@@ -90,6 +94,14 @@ export const RULES: Rule[] = [
   r(M.CU, M.FIRE, KEEP, M.FLAME_GREEN, 0.4, 'flame test: blue-green'),
   r(M.BA, M.FIRE, KEEP, M.FLAME_APPLE, 0.4, 'flame test: apple green'),
   r(M.CA, M.FIRE, KEEP, M.FLAME_ORANGE, 0.4, 'flame test: orange-red'),
+  // ...and over a torch, a steady burner: the grain gives off its own flame
+  r(M.NA, M.TORCH, KEEP, KEEP, 0.12, 'over a torch: a yellow flame', { spark: M.FLAME_YELLOW }),
+  r(M.K, M.TORCH, KEEP, KEEP, 0.12, 'over a torch: a lilac flame', { spark: M.FLAME_LILAC }),
+  r(M.LI, M.TORCH, KEEP, KEEP, 0.12, 'over a torch: a crimson flame', { spark: M.FLAME_CRIMSON }),
+  r(M.SR, M.TORCH, KEEP, KEEP, 0.12, 'over a torch: a crimson flame', { spark: M.FLAME_CRIMSON }),
+  r(M.CU, M.TORCH, KEEP, KEEP, 0.12, 'over a torch: a blue-green flame', { spark: M.FLAME_GREEN }),
+  r(M.BA, M.TORCH, KEEP, KEEP, 0.12, 'over a torch: an apple-green flame', { spark: M.FLAME_APPLE }),
+  r(M.CA, M.TORCH, KEEP, KEEP, 0.12, 'over a torch: an orange-red flame', { spark: M.FLAME_ORANGE }),
 ];
 
 /** Materials the engine runs: every element and product. */

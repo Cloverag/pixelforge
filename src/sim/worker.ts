@@ -250,6 +250,7 @@ function apply(w: World, inp: NetInput): void {
     case 'pgPreset':
     case 'pgSurprise':
     case 'pgClear':
+    case 'chemScene':
       forceFull = true; // a new world: wipe the trails too
       pgWallsDirty = true; // and the 3D view's walls
       break;

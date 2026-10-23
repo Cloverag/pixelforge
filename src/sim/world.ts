@@ -1,6 +1,7 @@
 import { RNG, hash2d } from '../core/rng';
 import { buildPreset, buildSurprise } from './presets';
 import { planSurprise } from './surprise';
+import { buildChemScene } from './chemscenes';
 import { Grid } from './grid';
 import {
   Cat, GRAINY, LIT, Lit, MATS, Mat, NMATS, OPEN, SHADED, Shade, WIND_SUSC,
@@ -124,6 +125,9 @@ class ActiveChallenge {
     };
   }
 }
+
+/** CHEM LAB: at most this many reaction bangs (flash or boom) per frame */
+const CHEM_BOOMS = 3;
 
 export class World {
   grid: Grid;
@@ -310,6 +314,12 @@ export class World {
         break;
       case 'mode':
         this.setMode(inp.m);
+        break;
+      case 'chemScene':
+        if (this.mode === 'chem') {
+          this.clear();
+          buildChemScene(inp.id, this.grid);
+        }
         break;
     }
   }
@@ -1527,14 +1537,21 @@ export class World {
         g.setXY(x, y, Mat.EMPTY);
         return;
       }
+      // CHEM LAB flame tests: a tinted flame passes its colour to plain fire
+      // beside it, the way a pinch of salt colours the whole flame. Only
+      // ever true when a tinted flame exists, so sandbox fire rolls the RNG
+      // exactly as it always has.
+      if (FLAMES.has(t) && g.cells[i] === Mat.FIRE && this.rng.chance(0.3)) g.setI(i, t, g.meta[i]);
       const td = MATS[t];
       if (td.flam > 0 && this.rng.chance(td.flam)) {
         if (t === Mat.GUNPOWDER) {
           this.explode(nx, ny, 5);
           return;
         }
+        // a tinted flame lights what it touches in its own colour
+        const self = g.cells[i];
         if (t === Mat.WOOD) g.setXY(nx, ny, Mat.EMBER, this.rng.range(70, 150));
-        else g.setXY(nx, ny, Mat.FIRE, this.rng.range(12, 42));
+        else g.setXY(nx, ny, FLAMES.has(self) ? self : Mat.FIRE, this.rng.range(12, 42));
         this.events.ignites++;
       }
       // light a fuse, never relight one: resetting a burning cell every tick
@@ -1908,6 +1925,12 @@ export class World {
     if (rule.outB !== KEEP) put(nx, ny, rule.outB);
     // the heat of the reaction: a flame licks up from the spot
     if (rule.spark >= 0 && g.get(x, y - 1) === Mat.EMPTY) put(x, y - 1, rule.spark);
+    // a burning crucible fires thousands of rules a second: past a few bangs
+    // a frame, more is only noise and a cabinet that never stops shaking.
+    // Only what is heard and seen is capped - events are cleared once per
+    // worker message, and a guest catching up steps many frames per message,
+    // so anything the simulation keeps (the wind) must never depend on them.
+    const loud = this.events.booms.length < CHEM_BOOMS * 3;
     switch (rule.fx) {
       case 'fizz':
         this.events.sizzles++;
@@ -1916,15 +1939,17 @@ export class World {
         this.events.ignites++;
         break;
       case 'flash':
+        if (!loud) break;
         // a flash without a crater: the light and a small thump
         this.events.booms.push(x, y, 2);
         break;
       case 'boom':
         // a gas explosion: a shock and a bang, but the products stay - the
         // chain through a hydrogen cloud is the show, not a hole in the floor
+        this.wind.addBlast(x, y, 16, 0.8);
+        if (!loud) break;
         this.events.booms.push(x, y, 4);
         this.shake = Math.min(30, this.shake + 4);
-        this.wind.addBlast(x, y, 16, 0.8);
         break;
     }
   }
