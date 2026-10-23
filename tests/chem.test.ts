@@ -160,6 +160,75 @@ describe('chem lab reactions', { timeout: 120_000 }, () => {
     expect(run(Mat.LI).booms).toBe(0);
   });
 
+  it('gold and silver are untouched by acid, where tin is eaten', () => {
+    const left = (m: number) => {
+      const w = bench(8, m, Mat.ACID);
+      const n0 = w.grid.counts[m];
+      run(w, 600);
+      return [n0, w.grid.counts[m]];
+    };
+    for (const m of [Mat.AU, Mat.AG]) {
+      const [n0, n1] = left(m);
+      expect([MATS[m].name, n1]).toEqual([MATS[m].name, n0]);
+    }
+    // the control: the same box with tin does lose cells, so the test can fail
+    const [t0, t1] = left(Mat.SN);
+    expect(t1).toBeLessThan(t0);
+  });
+
+  describe('where things settle', () => {
+    /** A walled box with a top layer of `top` over a lower layer of `under` (rows each). */
+    function layered(top: number, topRows: number, under: number, underRows: number, seed = 2): World {
+      const w = bench(seed, Mat.EMPTY, Mat.EMPTY);
+      for (let y = Y0 + 1; y < Y0 + 1 + topRows; y++)
+        for (let x = X0 + 1; x < X0 + S - 1; x++) w.grid.setXY(x, y, top);
+      for (let y = Y0 + 1 + topRows; y < Y0 + 1 + topRows + underRows; y++)
+        for (let x = X0 + 1; x < X0 + S - 1; x++) w.grid.setXY(x, y, under);
+      return w;
+    }
+    /** mean row of a material inside the box (a bigger y is lower down) */
+    const meanY = (w: World, m: number): number => {
+      let sum = 0, n = 0;
+      for (let y = Y0 + 1; y < Y0 + S - 1; y++)
+        for (let x = X0 + 1; x < X0 + S - 1; x++) if (w.grid.get(x, y) === m) (sum += y), n++;
+      return n ? sum / n : NaN;
+    };
+
+    it('mercury ends up under water, and gold sinks through it', () => {
+      const hg = layered(Mat.HG, 4, Mat.WATER, 8);
+      run(hg, 500);
+      expect(meanY(hg, Mat.HG)).toBeGreaterThan(meanY(hg, Mat.WATER));
+      const au = layered(Mat.AU, 4, Mat.WATER, 8);
+      run(au, 500);
+      expect(meanY(au, Mat.AU)).toBeGreaterThan(meanY(au, Mat.WATER));
+      // nothing was lost on the way: mercury and gold do not react with water
+      expect(hg.grid.counts[Mat.HG]).toBe(4 * (S - 2));
+      expect(au.grid.counts[Mat.AU]).toBe(4 * (S - 2));
+    });
+
+    it('helium rises above hydrogen', () => {
+      const w = bench(5, Mat.HE, Mat.H);
+      run(w, 400);
+      expect(meanY(w, Mat.HE)).toBeLessThan(meanY(w, Mat.H) - 5);
+    });
+  });
+
+  it('fluorine etches glass away', () => {
+    const etched = (gas: number) => {
+      const w = bench(7, gas, Mat.EMPTY);
+      // a glass ceiling: the gas rises and collects under it
+      for (let y = Y0 + 1; y < Y0 + 8; y++) for (let x = X0 + 1; x < X0 + S - 1; x++) w.grid.setXY(x, y, Mat.GLASS);
+      const g0 = w.grid.counts[Mat.GLASS];
+      run(w, 600);
+      return [g0, w.grid.counts[Mat.GLASS]];
+    };
+    const [g0, g1] = etched(Mat.F);
+    expect(g1).toBeLessThan(g0);
+    // the control: an inert gas in the same box leaves it all there
+    const [h0, h1] = etched(Mat.HE);
+    expect(h1).toBe(h0);
+  });
+
   it('two chem worlds fed the same start stay identical', () => {
     const mk = () => {
       const w = bench(21, Mat.H, Mat.O, { heat: true });
