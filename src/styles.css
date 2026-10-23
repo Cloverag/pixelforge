@@ -502,8 +502,8 @@ body.sim-paused .sb-lamp {
   gap: 12px;
   min-height: 0;
   padding: 12px 10px 12px 12px;
-  overflow-y: auto;
-  overflow-x: hidden;
+  /* the list scrolls (#palette), the brush block never does */
+  overflow: hidden;
   background: linear-gradient(90deg, var(--panel), var(--panel-2));
   border-right: 1px solid var(--edge-dark);
   box-shadow: inset -1px 0 0 var(--bev-hi);
@@ -514,6 +514,12 @@ body.sim-paused .sb-lamp {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* so the scrollbar does not sit on the swatches */
+  padding-right: 4px;
 }
 
 /* materials are grouped by physical category so the palette teaches itself */
@@ -1029,7 +1035,7 @@ kbd, .mode-key {
     border-right: 0;
     border-top: 1px solid var(--edge-dark);
   }
-  #palette { flex-direction: row; }
+  #palette { flex-direction: row; flex: 0 0 auto; overflow: visible; padding-right: 0; }
   .gswatches { grid-template-columns: none; grid-template-rows: 1fr 1fr; grid-auto-flow: column; }
   .swatch:has(.budget) { grid-column: auto; }
   .swatch { width: 96px; }
@@ -1110,7 +1116,7 @@ kbd, .mode-key {
     padding: 10px 12px 18px;
     border-top: 1px solid var(--edge-dark);
   }
-  #palette { flex-direction: column; }
+  #palette { flex-direction: column; flex: 0 0 auto; overflow: visible; padding-right: 0; }
   .gswatches { grid-template-columns: repeat(3, 1fr); grid-template-rows: none; grid-auto-flow: row; }
   .swatch { width: auto; min-height: 44px; }
   .toolcol { order: -1; min-width: 0; margin: 0 0 12px; }
@@ -1130,7 +1136,7 @@ kbd, .mode-key {
     border-top: 0;
     border-right: 1px solid var(--edge-dark);
   }
-  #palette { flex-direction: column; }
+  #palette { flex-direction: column; flex: 0 0 auto; overflow: visible; padding-right: 0; }
   .gswatches { grid-template-columns: 1fr 1fr; grid-template-rows: none; grid-auto-flow: row; }
   .swatch { width: auto; min-height: 38px; }
   .toolcol { order: -1; min-width: 0; margin: 0 0 10px; }
