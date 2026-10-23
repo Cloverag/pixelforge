@@ -52,7 +52,7 @@ get their own layout.
 | **SANDBOX** | Paint any material with the brush, flood-fill (`F`) or blow wind (`W`); right-drag erases. Your world autosaves and comes back on reload; SAVE / LOAD / SHARE a link to it. |
 | **PLAY TOGETHER (beta)** | A room for friends: open one, send the link, and everyone builds in the same world - the sandbox or the playground. See [Playing together](#playing-together). |
 | **PARTICLE PLAYGROUND** | Light shows instead of materials: emitters, forces, bumpers that play notes, portals - with a film-look renderer, a full 3D view and sound design. See [The playground](#the-playground). |
-| **CHEM LAB** | Pick elements off a periodic table and drop them into water, acid, fire or each other: 20 elements, 48 reactions, 3 ready-made experiments. See [The chem lab](#the-chem-lab). |
+| **CHEM LAB** | Pick elements off a periodic table and drop them into water, acid, fire or each other: 30 elements, 68 reactions, 3 ready-made experiments. See [The chem lab](#the-chem-lab). |
 | **SURPRISE ME** | A brand-new generated playground scene every click (`R`). |
 | **CHALLENGES** | 7 goal-based puzzles with material budgets, time limits, win/lose checks and a 3-star rating. Levels unlock in order; stars persist in `localStorage`. |
 
@@ -162,23 +162,26 @@ rounding. It is wrapped to 32 bits now, with every sequence unchanged.
 ## The chem lab
 
 The chem lab is the sandbox's world painted with elements instead of
-materials. Its left rail holds the 20 elements it simulates, grouped as gases,
-metals and non-metals, plus a bench of water, acid, lye, rust, fire, a torch,
+materials. Its left rail holds the 30 elements it simulates, grouped as gases,
+metals, non-metals and liquids, plus a bench of water, acid, lye, rust, fire, a torch,
 lava, plants, glass and wall.
 
 - **Periodic table** (`E`): all 118 elements in their usual places, coloured
-  by family. The lab's 20 are lit and clickable; the rest are dim. Hovering
+  by family. The lab's 30 are lit and clickable; the rest are dim. Hovering
   one shows its family, state, mass, melting and boiling points, and every
   reaction it takes part in here.
 - **Reactions are a table** (`src/sim/reactions.ts`): when two cells touch, a
   rule says what each becomes, the chance per tick, and an optional condition
-  (heat, or a helper such as water) and effect. Some of the 48:
+  (heat, or a helper such as water) and effect. Some of the 68:
 
 | Pair | What happens |
 |------|--------------|
 | lithium / sodium / potassium + water | fizz into hydrogen and lye, faster down the group; potassium bursts into lilac flame |
 | hydrogen + oxygen, near heat | explode into steam, and the blast carries through the cloud |
 | hydrogen + chlorine, near heat | explode into acid |
+| caesium + water | explodes into hydrogen and lye: the alkali finale |
+| fluorine + hydrogen, water, glass, sodium, wood | needs no heat: it explodes, splits water, etches glass, burns sodium and sets wood alight |
+| mercury + sulfur | cinnabar: the spill clean-up trick; mercury also eats aluminium |
 | sodium + chlorine | burn into table salt |
 | aluminium + rust, near heat | thermite: both melt into molten iron |
 | magnesium + fire | burns with a blinding white flame |
@@ -191,7 +194,7 @@ lava, plants, glass and wall.
 - **Experiments**: ALKALI BATH, THERMITE (a magnesium ribbon burns into a
   crucible that melts down and through its floor) and FLAME TESTS.
 - Real densities keep their order: sodium, potassium and lithium float on
-  water, iron and copper sink.
+  water, iron and copper sink, and mercury and gold sink under everything else.
 - **Element data** comes from [PubChem](https://pubchem.ncbi.nlm.nih.gov/periodic-table/)
   (NCBI), fetched once by `scripts/fetch-elements.mjs` into
   `src/data/elements.json` and shipped with the game; no player's browser
