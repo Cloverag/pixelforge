@@ -1,4 +1,4 @@
-import type { Snapshot } from '../sim/protocol';
+import { MODES, type Snapshot } from '../sim/protocol';
 
 /**
  * A snapshot as one byte buffer, for sending to a joiner, and gzip around
@@ -22,7 +22,7 @@ export function packSnapshot(s: Snapshot): Uint8Array {
   for (let i = 0; i < shade.length; i++) if (s.cells[i] === 0) shade[i] = 0;
   // version 2 adds the mode and the playground's particle system,
   // version 3 the TNT debris in flight
-  const mode = new Uint8Array([s.mode === 'playground' ? 1 : 0]);
+  const mode = new Uint8Array([MODES.indexOf(s.mode ?? 'sand')]);
   const debris = s.debris ? new Uint8Array(s.debris.buffer, s.debris.byteOffset, s.debris.byteLength) : new Uint8Array(0);
   const parts: Uint8Array[] = [...FIELDS.map((k) => (k === 'shade' ? shade : s[k])), wind, mode, s.pg ?? new Uint8Array(0), debris];
   const size = 5 * 4 + parts.reduce((a, p) => a + 4 + p.byteLength, 0);
@@ -62,7 +62,11 @@ export function unpackSnapshot(buf: Uint8Array): Snapshot {
   const w = take();
   const snap: Snapshot = { f, rng, shadeSeed, cells, meta, clock, shade, wake, wind: new Float32Array(w.buffer, w.byteOffset, w.byteLength / 4) };
   if (version >= 2) {
-    snap.mode = take()[0] === 1 ? 'playground' : 'sand';
+    // a mode this build does not know must not quietly become a sandbox:
+    // the joiner would step a different world from everyone else
+    const m = MODES[take()[0]];
+    if (!m) throw new Error('snapshot is from a mode this version does not have');
+    snap.mode = m;
     const pg = take();
     if (pg.length) snap.pg = pg;
   }
