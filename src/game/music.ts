@@ -1,19 +1,16 @@
 /**
  * Procedural chiptune music loop - no audio assets required.
  *
- * Owned by MANAGER lane. Exposes:
- *   initMusic(): MusicController
- *     .start() / .stop() / .toggle() / .isOn()
- *
- * 16-step sequencer on a 25 ms lookahead scheduler, fully independent of
- * the SFX bus (own AudioContext + gain), so MUSIC mute never touches SFX.
+ * 16-step sequencer on a 25 ms lookahead scheduler. It plays through the music
+ * bus of the one shared audio graph (game/audio.ts), so MUSIC volume and mute
+ * never touch the effects and a hidden tab silences both together.
  */
+import type { Sfx } from './audio';
+
 
 export interface MusicController {
+  /** begin the loop (after a gesture has created the audio context); idempotent */
   start(): void;
-  stop(): void;
-  toggle(): void;
-  isOn(): boolean;
 }
 
 const BPM = 112;
@@ -35,34 +32,14 @@ const LEAD: (number | null)[] = [
 // bass root every beat: Am - F - C - G
 const BASS_ROOTS = [45, 41, 48, 43];
 
+// the shared context and music bus, from Sfx (one audio graph)
+let sfx: Sfx | null = null;
 let ac: AudioContext | null = null;
-let master: GainNode | null = null;
+let out: AudioNode | null = null;
 let noiseBuf: AudioBuffer | null = null;
 let timer: ReturnType<typeof setInterval> | null = null;
 let nextStepTime = 0;
 let stepIdx = 0;
-let on = false;
-
-function ensureCtx(): void {
-  if (!ac) {
-    ac = new AudioContext();
-    master = ac.createGain();
-    master.gain.value = 0.55;
-    master.connect(ac.destination);
-    const len = Math.floor(ac.sampleRate * 0.12);
-    noiseBuf = ac.createBuffer(1, len, ac.sampleRate);
-    const d = noiseBuf.getChannelData(0);
-    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
-  }
-  if (ac.state === 'suspended' && !document.hidden) void ac.resume();
-}
-
-// silent while the tab is hidden, like the sound effects (game/audio.ts)
-document.addEventListener('visibilitychange', () => {
-  if (!ac) return;
-  if (document.hidden) void ac.suspend();
-  else if (on) void ac.resume();
-});
 
 function tone(
   freq: number,
@@ -72,7 +49,7 @@ function tone(
   vol: number,
   slideTo?: number,
 ): void {
-  if (!ac || !master) return;
+  if (!ac || !out) return;
   const osc = ac.createOscillator();
   const g = ac.createGain();
   osc.type = type;
@@ -81,13 +58,13 @@ function tone(
     osc.frequency.exponentialRampToValueAtTime(Math.max(20, slideTo), t0 + dur);
   g.gain.setValueAtTime(vol, t0);
   g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-  osc.connect(g).connect(master);
+  osc.connect(g).connect(out);
   osc.start(t0);
   osc.stop(t0 + dur + 0.02);
 }
 
 function hat(t0: number, vol: number): void {
-  if (!ac || !master || !noiseBuf) return;
+  if (!ac || !out || !noiseBuf) return;
   const src = ac.createBufferSource();
   src.buffer = noiseBuf;
   src.playbackRate.value = 2;
@@ -97,7 +74,7 @@ function hat(t0: number, vol: number): void {
   const g = ac.createGain();
   g.gain.setValueAtTime(vol, t0);
   g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.05);
-  src.connect(hp).connect(g).connect(master);
+  src.connect(hp).connect(g).connect(out);
   src.start(t0);
   src.stop(t0 + 0.06);
 }
@@ -131,30 +108,18 @@ function tick(): void {
   }
 }
 
-export function initMusic(): MusicController {
-  const controller: MusicController = {
+export function initMusic(shared: Sfx): MusicController {
+  sfx = shared;
+  return {
     start(): void {
-      ensureCtx();
-      if (timer !== null) return;
-      nextStepTime = ac!.currentTime + 0.08;
+      if (timer !== null || !sfx) return;
+      ac = sfx.context();
+      out = sfx.musicOut();
+      noiseBuf = sfx.noiseBuffer();
+      if (!ac || !out) return;
+      nextStepTime = ac.currentTime + 0.08;
       stepIdx = 0;
       timer = setInterval(tick, TICK_MS);
-      on = true;
-    },
-    stop(): void {
-      if (timer !== null) {
-        clearInterval(timer);
-        timer = null;
-      }
-      on = false;
-    },
-    toggle(): void {
-      if (on) controller.stop();
-      else controller.start();
-    },
-    isOn(): boolean {
-      return on;
     },
   };
-  return controller;
 }

@@ -2,6 +2,7 @@ import { CHALLENGES } from '../sim/challenges';
 import { isUnlocked, loadProgress, Progress } from '../game/progress';
 import { isDialogOpen } from './dialog';
 import { isHelpOpen } from './help';
+import { cycleVolume, stepVolume, volumeBar, type Bus } from '../game/volume';
 import { back, initialNav, move, moveTo, open, start, type Nav } from './menucursor';
 import { h } from './widgets';
 
@@ -30,10 +31,9 @@ export interface MenuCallbacks {
   onChallenge(id: string): void;
   sound(s: MenuSound): void;
   onPreview(kind: 'pg' | 'chem'): void;
-  // OPTIONS: a toggle acts, and the view reads the new value back
-  onToggleMute(): void;
-  onToggleMusic(): void;
-  isMusicOn(): boolean;
+  // OPTIONS: a setting acts, and the view reads the new value back
+  volume(bus: Bus): number;
+  setVolume(bus: Bus, v: number): void;
   /** cycle the theme */
   onCycleTheme(): void;
   theme(): string;
@@ -53,8 +53,10 @@ interface Row {
   label: string | [string, string, string];
   desc: string;
   locked?: boolean;
-  /** Left/Right change the value (OPTIONS) */
-  adjusts?: boolean;
+  /** the value as a bar of cells, shown after the label (a volume) */
+  bar?: string;
+  /** Left/Right change the value (OPTIONS): -1 or +1 */
+  adjust?: (d: number) => void;
   go(): void;
 }
 
@@ -124,12 +126,32 @@ function buildRows(c: MenuCallbacks): Row[] {
     c.sound('select');
     repaintLabels();
   };
+  const toggleRow = (label: string, desc: string, fn: () => void): Row => {
+    const go = change(fn);
+    return { label, desc, adjust: go, go };
+  };
+  // Left/Right step the level, Enter steps up and wraps; each is heard at the new level
+  const volumeRow = (label: string, bus: Bus, desc: string): Row => {
+    const set = (v: number) => () => {
+      c.setVolume(bus, v);
+      c.sound('move');
+      repaintLabels();
+    };
+    return {
+      label,
+      bar: volumeBar(c.volume(bus)),
+      desc,
+      adjust: (d) => set(stepVolume(c.volume(bus), d))(),
+      go: () => set(cycleVolume(c.volume(bus)))(),
+    };
+  };
   return [
-    { label: `SOUND EFFECTS: ${onOff(!document.body.classList.contains('muted'))}`, desc: 'Clicks, blasts and fizzes.', adjusts: true, go: change(c.onToggleMute) },
-    { label: `MUSIC: ${onOff(c.isMusicOn())}`, desc: 'The chiptune loop.', adjusts: true, go: change(c.onToggleMusic) },
-    { label: `THEME: ${c.theme().toUpperCase()}`, desc: 'Light, dark or follow your system - for the game screens.', adjusts: true, go: change(c.onCycleTheme) },
-    { label: `BACKDROP: ${c.backdrop()}`, desc: 'The picture around the game screen.', adjusts: true, go: change(c.onToggleBg) },
-    { label: `CRT FILTER: ${onOff(document.body.classList.contains('crt-on'))}`, desc: 'Scanlines and a soft vignette over the game.', adjusts: true, go: change(c.onToggleCrt) },
+    volumeRow('MASTER VOLUME', 'master', 'Everything at once. M mutes it.'),
+    volumeRow('MUSIC VOLUME', 'music', 'The soundtrack.'),
+    volumeRow('EFFECTS VOLUME', 'sfx', 'Clicks, blasts and fizzes.'),
+    toggleRow(`THEME: ${c.theme().toUpperCase()}`, 'Light, dark or follow your system - for the game screens.', c.onCycleTheme),
+    toggleRow(`BACKDROP: ${c.backdrop()}`, 'The picture around the game screen.', c.onToggleBg),
+    toggleRow(`CRT FILTER: ${onOff(document.body.classList.contains('crt-on'))}`, 'Scanlines and a soft vignette over the game.', c.onToggleCrt),
     { label: 'CONTROLS', desc: 'Keys, brushes and how to play.', go: () => { c.sound('select'); c.onHelp(); } },
     { label: 'BACK', desc: 'Back to the main list.', go: () => goBack(c) },
   ];
@@ -156,6 +178,8 @@ function repaintLabels(): void {
   rows.forEach((r, i) => {
     const lbl = itemEls[i]?.querySelector('.ts-label');
     if (lbl && typeof r.label === 'string') lbl.firstChild!.textContent = r.label;
+    const bar = itemEls[i]?.querySelector('.ts-bar');
+    if (bar && r.bar !== undefined) bar.textContent = r.bar;
   });
 }
 
@@ -232,8 +256,10 @@ function render(): void {
       el.setAttribute('role', 'menuitem');
       if (r.locked) el.setAttribute('aria-disabled', 'true');
       const lbl = h('span', 'ts-label');
-      if (typeof r.label === 'string') lbl.append(document.createTextNode(r.label));
-      else {
+      if (typeof r.label === 'string') {
+        lbl.append(document.createTextNode(r.label));
+        if (r.bar !== undefined) lbl.append(h('span', 'ts-bar', r.bar));
+      } else {
         lbl.classList.add('ts-grid');
         lbl.append(h('span', 'ts-num', r.label[0]), h('span', 'ts-name', r.label[1]), h('span', 'ts-stars', r.label[2]));
       }
@@ -308,9 +334,9 @@ function onKey(e: KeyboardEvent): void {
       return;
     case 'arrowleft':
     case 'arrowright':
-      if (row?.adjusts) {
+      if (row?.adjust) {
         used();
-        row.go();
+        row.adjust(k === 'arrowleft' ? -1 : 1);
       }
       return;
   }

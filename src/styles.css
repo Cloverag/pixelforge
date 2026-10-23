@@ -898,6 +898,9 @@ body.crt-on .title-screen::after {
 .ts-challenges .ts-item { width: 100%; font-size: inherit; }
 .ts-grid { display: grid; grid-template-columns: 2.2em 1fr auto; column-gap: 1em; width: 100%; text-align: left; }
 .ts-stars { white-space: nowrap; }
+/* a volume's bar of cells: beside the label, under it on a narrow screen */
+.ts-bar { margin-left: 0.8em; color: var(--accent); letter-spacing: 0.05em; }
+@media (max-width: 720px) { .ts-bar { display: block; margin-left: 0; } }
 .ts-item.locked .ts-stars { font-size: 0.7em; align-self: center; }
 .ts-desc {
   height: 3em;

@@ -841,9 +841,11 @@ function openMenu(firstVisit = false): void {
       else sfx.uiDeny();
     },
     onPreview: previewAttract,
-    onToggleMute: toggleMute,
-    onToggleMusic: toggleMusic,
-    isMusicOn: () => music.isOn(),
+    volume: (bus) => sfx.getVolumes()[bus],
+    setVolume: (bus, v) => {
+      sfx.setVolume(bus, v);
+      syncAudioHud();
+    },
     onCycleTheme: () => void nextTheme(),
     theme: loadTheme,
     onToggleBg: () => void cycleWallpaper(),
@@ -907,6 +909,13 @@ function previewAttract(kind: 'pg' | 'chem'): void {
     if (screen === 'menu' && !(kind === 'chem' && attract?.kind === 'chem')) startAttract(kind);
   }, PREVIEW_DELAY_MS);
 }
+
+// dev only: lets automated checks read the audio graph
+if (import.meta.env.DEV)
+  (window as unknown as { __audio: () => unknown }).__audio = () => {
+    const ac = sfx.context();
+    return { ctx: ac && { state: ac.state, time: ac.currentTime, rate: ac.sampleRate }, vols: sfx.getVolumes(), gains: sfx.busGains() };
+  };
 
 // dev only: lets automated checks read the menu's demo
 if (import.meta.env.DEV)
@@ -1046,10 +1055,23 @@ function stepOnce(): void {
   if (screen === 'game' && paused) sendStep();
 }
 
+/** The SFX and MUSIC lamps say whether that bus can be heard: its own mute or master's. */
+function syncAudioHud(): void {
+  const m = sfx.getVolumes().mute;
+  hud.setMuted(m.master || m.sfx);
+  hud.setMusicToggled(!(m.master || m.music));
+}
+
+/** The SFX button: mute or unmute the effects (their level is kept). */
 function toggleMute(): void {
-  sfx.muted = !sfx.muted;
-  document.body.classList.toggle('muted', sfx.muted);
-  hud.setMuted(sfx.muted);
+  sfx.toggleMute('sfx');
+  syncAudioHud();
+}
+
+/** The M key: mute or unmute everything, as a game's mute key does. */
+function toggleMaster(): void {
+  sfx.toggleMute('master');
+  syncAudioHud();
 }
 
 applyTheme(loadTheme());
@@ -1066,11 +1088,16 @@ function toggleCrt(): void {
   hud.setCrt(document.body.classList.toggle('crt-on'));
 }
 
-const music = initMusic();
+const music = initMusic(sfx);
+// the music starts with the audio itself: on the first gesture, at volume 5
+sfx.onReady = () => music.start();
+// ...and a restored game has no PRESS START, so any first click or key is the gesture
+for (const ev of ['pointerdown', 'keydown'] as const) addEventListener(ev, () => sfx.ensure(), { once: true, capture: true });
 
+/** The MUSIC button: mute or unmute the music (its level is kept). */
 function toggleMusic(): void {
-  music.toggle();
-  hud.setMusicToggled(music.isOn());
+  sfx.toggleMute('music');
+  syncAudioHud();
 }
 
 let bgIndex = loadBgIndex();
@@ -1134,6 +1161,7 @@ hud.setThemeLabel(loadTheme());
 // the GRID and SOFT buttons exist only after initTopbar, so restore here
 restoreGrid();
 restoreSoft();
+syncAudioHud();
 
 new Input(
   canvas,
@@ -1151,7 +1179,7 @@ new Input(
         nextTheme();
         break;
       case 'm':
-        toggleMute();
+        toggleMaster();
         break;
       case 'c':
         toggleCrt();

@@ -1,5 +1,6 @@
 import type { PgStats } from '../sim/particles';
 import { SIM_W } from '../sim/protocol';
+import { busGain, loadVolumes, saveVolumes, type Bus, type Volumes } from './volume';
 
 /** bumper notes: C major pentatonic, three octaves up from middle C */
 const NOTE_FREQS: number[] = [];
@@ -12,8 +13,14 @@ const CHIME = [523.25, 587.33, 659.25, 783.99, 880.0, 1046.5];
 /** Procedural chiptune SFX - no audio assets required. */
 export class Sfx {
   private ac: AudioContext | null = null;
+  /** the one graph: sfx -> master -> destination, and music -> master */
   private master: GainNode | null = null;
+  private sfxBus: GainNode | null = null;
+  private musicBus: GainNode | null = null;
   private noiseBuf: AudioBuffer | null = null;
+  private volumes: Volumes = loadVolumes();
+  /** runs once, when the first user gesture creates the audio context */
+  onReady: (() => void) | null = null;
   private lastPlace = 0;
   private lastBoom = 0;
   private lastSizzle = 0;
@@ -35,19 +42,76 @@ export class Sfx {
     oscs: OscillatorNode[];
   } | null = null;
   private slow = false;
-  muted = false;
+
+  /** nothing from the effects reaches the speakers: skip building it */
+  get muted(): boolean {
+    return this.volumes.mute.master || this.volumes.mute.sfx;
+  }
+
+  getVolumes(): Volumes {
+    return this.volumes;
+  }
+
+  /** Set a bus's 0-10 volume (heard at once) and remember it. */
+  setVolume(bus: Bus, v: number): void {
+    this.volumes = { ...this.volumes, [bus]: v };
+    this.applyVolumes(true);
+    saveVolumes(this.volumes);
+  }
+
+  /** Mute or unmute one bus; its level is kept. */
+  toggleMute(bus: Bus): void {
+    this.volumes = { ...this.volumes, mute: { ...this.volumes.mute, [bus]: !this.volumes.mute[bus] } };
+    this.applyVolumes(false);
+    saveVolumes(this.volumes);
+  }
+
+  private applyVolumes(instant: boolean): void {
+    if (!this.ac || !this.master || !this.sfxBus || !this.musicBus) return;
+    const t = this.ac.currentTime;
+    for (const [node, bus] of [[this.master, 'master'], [this.sfxBus, 'sfx'], [this.musicBus, 'music']] as const) {
+      const g = busGain(this.volumes, bus);
+      if (instant) node.gain.setValueAtTime(g, t);
+      else node.gain.setTargetAtTime(g, t, 0.03);
+    }
+  }
+
+  /** The buses' current gain values, for checks (null before the first gesture). */
+  busGains(): { master: number; sfx: number; music: number } | null {
+    if (!this.master || !this.sfxBus || !this.musicBus) return null;
+    return { master: this.master.gain.value, sfx: this.sfxBus.gain.value, music: this.musicBus.gain.value };
+  }
+
+  /** The shared audio context, once a gesture has created it. */
+  context(): AudioContext | null {
+    return this.ac;
+  }
+
+  /** Where the music connects. */
+  musicOut(): AudioNode | null {
+    return this.musicBus;
+  }
+
+  noiseBuffer(): AudioBuffer | null {
+    return this.noiseBuf;
+  }
 
   /** call from a user gesture */
   ensure(): void {
     if (!this.ac) {
       this.ac = new AudioContext();
       this.master = this.ac.createGain();
-      this.master.gain.value = 0.85;
       this.master.connect(this.ac.destination);
+      this.sfxBus = this.ac.createGain();
+      this.sfxBus.connect(this.master);
+      this.musicBus = this.ac.createGain();
+      this.musicBus.connect(this.master);
+      this.applyVolumes(true);
       const len = this.ac.sampleRate * 0.6;
       this.noiseBuf = this.ac.createBuffer(1, len, this.ac.sampleRate);
       const d = this.noiseBuf.getChannelData(0);
       for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+      this.onReady?.();
     }
     // a hidden tab stays silent until it is shown again
     if (this.ac.state === 'suspended' && !document.hidden) void this.ac.resume();
@@ -73,11 +137,11 @@ export class Sfx {
    * when the sound has a position (-1 left .. 1 right).
    */
   private out(pan: number): AudioNode {
-    if (!this.ac || !this.master) throw new Error('audio not started');
-    if (pan === 0) return this.master;
+    if (!this.ac || !this.sfxBus) throw new Error('audio not started');
+    if (pan === 0) return this.sfxBus;
     const p = this.ac.createStereoPanner();
     p.pan.value = Math.max(-1, Math.min(1, pan));
-    p.connect(this.master);
+    p.connect(this.sfxBus);
     return p;
   }
 
@@ -90,7 +154,7 @@ export class Sfx {
     delayMs = 0,
     pan = 0,
   ): void {
-    if (!this.ac || !this.master || this.muted) return;
+    if (!this.ac || !this.sfxBus || this.muted) return;
     const t0 = this.ac.currentTime + delayMs / 1000;
     const osc = this.ac.createOscillator();
     const gain = this.ac.createGain();
@@ -114,7 +178,7 @@ export class Sfx {
     type: BiquadFilterType = 'lowpass',
     delayMs = 0,
   ): void {
-    if (!this.ac || !this.master || !this.noiseBuf || this.muted) return;
+    if (!this.ac || !this.sfxBus || !this.noiseBuf || this.muted) return;
     const t0 = this.ac.currentTime + delayMs / 1000;
     const src = this.ac.createBufferSource();
     src.buffer = this.noiseBuf;
@@ -156,9 +220,9 @@ export class Sfx {
   }
 
   private buildPg(): void {
-    if (this.pg || !this.ac || !this.master) return;
+    if (this.pg || !this.ac || !this.sfxBus) return;
     const ac = this.ac;
-    const out = this.master;
+    const out = this.sfxBus;
     // water jet: hiss through a band-pass, brighter for the hose
     const jetFilter = ac.createBiquadFilter();
     jetFilter.type = 'bandpass';
