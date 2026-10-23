@@ -176,6 +176,9 @@ export interface Res {
   pgForces?: number[];
   /** 3D playground: wall mask at half resolution, sent only when it changes */
   pgWalls?: ArrayBuffer;
+  /** CHEM LAB only: rules fired since the last frame reported, sparse as
+   *  [ruleIndex, count, ...]; absent when nothing fired. Display only. */
+  rx?: number[];
   /** playground activity this frame, for the sound design */
   pgStats?: import('./particles').PgStats;
   result?: ChallengeResult | null;

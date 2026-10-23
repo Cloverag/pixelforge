@@ -1,6 +1,8 @@
 /// <reference lib="webworker" />
 import { CHUNKS_X, CHUNKS_Y, HASH_EVERY, SIM_H, SIM_W, NetInput, Req, Res, SaveData } from './protocol';
 import { World } from './world';
+import { RULES } from './reactions';
+import { rxDiff } from './rxdelta';
 
 const ctx = self as unknown as DedicatedWorkerGlobalScope;
 
@@ -14,6 +16,8 @@ let pgWallsDirty = true;
 let watchFluid = false;
 /** true while the wind field still needs sending after it goes still */
 let windDirty = false;
+/** the rule counts last reported, to send only what fired since */
+const lastRx = new Uint32Array(RULES.length);
 
 function respond(res: Res, transfer?: ArrayBuffer[]): void {
   ctx.postMessage(res, transfer ?? []);
@@ -105,6 +109,10 @@ function handle(e: MessageEvent<Req>): void {
         w.drawDebris(pix);
       }
       forceFull = false;
+      // chem lab: what fired since the last report. Synced every frame in every
+      // mode, so entering the lab never reports the whole history at once.
+      const rx = w.mode === 'chem' ? rxDiff(lastRx, w.rxFired) : [];
+      lastRx.set(w.rxFired);
       const st = w.stats();
       const res: Res = {
         hashes,
@@ -119,6 +127,7 @@ function handle(e: MessageEvent<Req>): void {
         budget: st.budget,
         shake: w.shake,
         events: w.takeEvents(),
+        rx: rx.length ? rx : undefined,
         parts: w.mode === 'playground' ? w.parts?.count : undefined,
         pgStats: w.mode === 'playground' ? w.parts?.takeStats() : undefined,
         result: w.challenge && w.challenge.done ? w.challenge.result : null,
