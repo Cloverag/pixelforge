@@ -6,13 +6,10 @@ import type { Voxel3D } from './render/voxel3d';
 import type { PG3D } from './render/pg3d';
 import { Sfx } from './game/audio';
 import { Juice } from './game/juice';
-import { Hud, PgTool } from './ui/hud';
+import { Hud } from './ui/hud';
 import { showMenu } from './ui/menu';
 import { hideOverlay, showResult, toast } from './ui/widgets';
 import { Mat } from './sim/materials';
-import { PG_BUMPER } from './sim/particles';
-import { PRESET_INFO } from './sim/presets';
-import { planSurprise } from './sim/surprise';
 import { MpSession, newRoomCode, roomFromUrl, roomUrl, type MpHooks } from './net/mp';
 import type { NetInput, Snapshot } from './sim/protocol';
 import { RoomPill } from './ui/roompill';
@@ -21,7 +18,7 @@ import { confirmDialog, isDialogOpen, nameDialog } from './ui/dialog';
 import { EmoteLayer } from './ui/emotes';
 import { EMOTES, PING } from './net/presence';
 import { myIdentity, saveIdentity } from './net/presence';
-import { Mode, PaintKind, Req, Res, SIM_H, SIM_W, SimEvents, Stats, PgToolMsg } from './sim/protocol';
+import { Mode, PaintKind, Req, Res, SIM_H, SIM_W, SimEvents, Stats } from './sim/protocol';
 import { CHALLENGES } from './sim/challenges';
 import { recordStars } from './game/progress';
 import { readSave, rleDecode, rleEncode, storeSave } from './game/rle';
@@ -32,6 +29,9 @@ import { initHelp, toggleHelp } from './ui/help';
 import { initImmersive, isImmersive, setImmersive, toggleImmersive } from './ui/immersive';
 import { initMusic } from './game/music';
 import { applyTheme, cycleTheme, loadTheme } from './ui/theme';
+import type { ModeController, ModeCtx } from './modes/types';
+import { SandMode } from './modes/sand';
+import { PlaygroundMode } from './modes/playground';
 
 const STEP_MS = 1000 / 60;
 
@@ -97,14 +97,32 @@ let inFlight = false;
 
 // ---- app state ----
 let screen: 'menu' | 'game' = 'menu';
-let mode: Mode = 'sand';
 let paused = false;
-let selMat: number = Mat.SAND;
 let brush = 6;
-let pgTool: PgTool = 'fountain';
 let paintKind: PaintKind = 'brush';
 let view3d: Voxel3D | null = null;
 let view3dOn = false;
+
+/** What the modes may use; they never reach into main.ts otherwise. */
+const modeCtx: ModeCtx = {
+  hud,
+  sfx,
+  post,
+  send,
+  toast,
+  brush: () => brush,
+  paintKind: () => paintKind,
+  setPaintKind,
+  nudge: () => {
+    if (paused && !inFlight) sendStep();
+  },
+};
+const sandbox = new SandMode(modeCtx);
+const playground = new PlaygroundMode(modeCtx);
+/** each world's free-play screen; a challenge is a SandMode of its own */
+const MODE_CTRL: Record<Mode, ModeController> = { sand: sandbox, playground };
+/** the screen being played (the menu keeps the last one) */
+let current: ModeController = sandbox;
 
 /**
  * three.js is ~150 kB gzipped and the 3D view is off by default, so it is
@@ -161,7 +179,7 @@ function close3d(): void {
 
 async function toggle3d(): Promise<void> {
   sfx.ui();
-  if (mode === 'playground') return togglePg3d();
+  if (current.view3d === 'scene') return togglePg3d();
   if (view3dOn) {
     view3dOn = false;
     view3d?.hide();
@@ -259,12 +277,8 @@ function restoreGrid(): void {
   const n = saved === null ? NaN : Number(saved);
   applyGrid(BLOCK_SIZES.includes(n as (typeof BLOCK_SIZES)[number]) ? n : null);
 }
-let challengeId: string | null = null;
-let pgHeld = false;
 /** steps sent, for tools that emit on a slower beat than every step */
 let frameNo = 0;
-let lastPg = { x: 240, y: 128 };
-let strokeLast: { x: number; y: number } | null = null;
 let resultOpen = false;
 let lastResultKey = '';
 
@@ -275,7 +289,7 @@ function playEvents(ev: SimEvents): void {
     const pan = (b[k] / SIM_W) * 2 - 1;
     sfx.boom(b[k + 2], pan);
     juice.boom(b[k], b[k + 1], b[k + 2]);
-    if (mode === 'playground') sfx.crackleTail(pan);
+    current.onBoom?.(pan);
     if (pgView?.visible) pgView.flash(b[k], b[k + 1]);
   }
   if (ev.fuses) sfx.fuse();
@@ -316,21 +330,13 @@ worker.onmessage = (e: MessageEvent<Res>) => {
     if (r.events) playEvents(r.events);
     if (r.parts !== undefined) hud.setParticles(r.parts);
     if (r.hashes && mp) mp.hashes(r.hashes);
-    if (mp && r.mode && r.mode !== mode && challengeId === null) {
+    if (mp && r.mode && r.mode !== current.id && current.challengeId === null) {
       // the host switched the room: rebuild this screen, the world already has
-      if (r.mode === 'playground') playgroundUI();
-      else sandboxUI();
+      showMode(MODE_CTRL[r.mode]);
       roomPill.setMode(r.mode);
-      toast(r.mode === 'playground' ? 'THE ROOM IS NOW IN THE PLAYGROUND' : 'THE ROOM IS NOW IN THE SANDBOX');
+      toast(`THE ROOM IS NOW IN THE ${current.roomName}`);
     }
-    if (r.pgGravity !== undefined && r.pgGravity !== pgGravityOn) {
-      pgGravityOn = r.pgGravity;
-      hud.setGravityLamp(pgGravityOn);
-    }
-    if (r.pgTime !== undefined && r.pgTime < 1 !== pgSlowmo) {
-      pgSlowmo = r.pgTime < 1;
-      hud.setSlowmoLamp(pgSlowmo);
-    }
+    current.onFrame?.(r);
     // the host's frame clock must track its world exactly
     if (mp?.host && r.f !== undefined && r.f !== mp.host.f && !frameWarned) {
       frameWarned = true;
@@ -392,7 +398,7 @@ function requestSnapshot(why: 'store' | 'share' | 'auto'): void {
  */
 function autosaveEligible(): boolean {
   // a guest is playing in someone else's world: never save it over theirs
-  return screen === 'game' && mode === 'sand' && challengeId === null && !mp?.guest;
+  return screen === 'game' && current.saveable && !mp?.guest;
 }
 
 function autosaveNow(): void {
@@ -535,12 +541,6 @@ function hostingCode(): string | null {
  */
 let pointerDown = false;
 let pointerButton = 0;
-/** what the player is holding, as the cursor channel spells it */
-function toolCode(): 'b' | 'e' | 'w' | 'f' {
-  if (paintKind === 'wind') return 'w';
-  if (paintKind === 'flood') return 'f';
-  return selMat === -1 || selMat === Mat.EMPTY || (pointerDown && pointerButton === 2) ? 'e' : 'b';
-}
 let lastCursorAt = 0;
 let cursorPending: { x: number; y: number; hidden: boolean } | null = null;
 function shareCursor(x: number, y: number, hidden: boolean): void {
@@ -552,13 +552,11 @@ function shareCursor(x: number, y: number, hidden: boolean): void {
   const now = performance.now();
   if (now - lastCursorAt < 50) return;
   lastCursorAt = now;
-  const pgMat = pgTool === 'wall' ? Mat.WALL : pgTool === 'bumper' ? PG_BUMPER : 0;
   mp.cursor({
     ...cursorPending,
     s: brush,
-    m: mode === 'playground' ? pgMat : selMat < 0 ? 0 : selMat,
+    ...current.cursor(pointerDown, pointerButton),
     d: pointerDown && !hidden,
-    k: mode === 'playground' ? (pgTool === 'erase' ? 'e' : 'b') : toolCode(),
   });
   cursorPending = null;
 }
@@ -609,7 +607,7 @@ async function hostRoom(reuse?: string): Promise<void> {
   history.replaceState(null, '', roomUrl(code));
   rememberHosting(code);
   roomPill.show(code, 'host');
-  roomPill.setMode(mode);
+  roomPill.setMode(current.id);
   roomPill.setRoster(me, []);
   emotes.open();
   if (reuse) toast(`ROOM ${code} REOPENED`);
@@ -633,7 +631,7 @@ async function joinRoom(code: string): Promise<void> {
     return;
   }
   roomPill.show(code, 'guest');
-  roomPill.setMode(mode);
+  roomPill.setMode(current.id);
   roomPill.setRoster(me, []);
   emotes.open();
 }
@@ -663,7 +661,7 @@ roomPill.onCopy = () => mp && copyRoomLink(mp.code);
 /** The host takes the whole room to the other mode (the world starts empty). */
 roomPill.onSwitchMode = async () => {
   if (!mp?.host) return;
-  const next = mode === 'sand' ? 'playground' : 'sand';
+  const next = current.id === 'sand' ? 'playground' : 'sand';
   const ok = await confirmDialog({
     title: next === 'playground' ? 'TO THE PLAYGROUND?' : 'BACK TO THE SANDBOX?',
     body: `Everyone in the room goes with you, and the ${next === 'playground' ? 'playground' : 'sandbox'} starts empty.`,
@@ -694,18 +692,7 @@ function loop(now: number): void {
       sendStep();
       acc -= STEP_MS;
       guard++;
-      if (mode === 'playground' && pgHeld && HELD_TOOLS.has(pgTool)) {
-        // fireflies trickle out; the jets fire every step
-        const kind = pgTool as 'fountain' | 'sparkler' | 'hose' | 'fireflies';
-        if (kind !== 'fireflies' || frameNo % 8 === 0) {
-          const tool: PgToolMsg = { kind, x: lastPg.x, y: lastPg.y, phase: 'move' };
-          if (kind === 'hose') {
-            tool.dx = hoseDir.x;
-            tool.dy = hoseDir.y;
-          }
-          send({ k: 'pg', tool });
-        }
-      }
+      current.tick?.(frameNo);
       frameNo++;
     }
   } else {
@@ -728,47 +715,6 @@ function loop(now: number): void {
 
 // ---- helpers ----
 
-function linePts(
-  x0: number,
-  y0: number,
-  x1: number,
-  y1: number,
-): number[] {
-  const pts: number[] = [];
-  const dx = x1 - x0;
-  const dy = y1 - y0;
-  const dist = Math.max(Math.abs(dx), Math.abs(dy));
-  const steps = Math.max(1, Math.floor(dist / Math.max(1, brush >> 2)));
-  for (let i = 1; i <= steps; i++) {
-    pts.push(Math.round(x0 + (dx * i) / steps), Math.round(y0 + (dy * i) / steps));
-  }
-  return pts;
-}
-
-function paintAt(e: PointerEvt, forcedMat?: number): void {
-  if (e.phase === 'up') {
-    strokeLast = null;
-    return;
-  }
-  const mat =
-    forcedMat !== undefined
-      ? forcedMat
-      : e.button === 2 || selMat === -1
-        ? Mat.EMPTY
-        : selMat;
-  let pts: number[];
-  if (strokeLast && e.phase === 'move') {
-    pts = linePts(strokeLast.x, strokeLast.y, e.x, e.y);
-  } else {
-    pts = [e.x, e.y];
-  }
-  if (pts.length === 0) return;
-  strokeLast = { x: e.x, y: e.y };
-  send({ k: 'paint', pts, mat, size: brush, kind: paintKind });
-  sfx.place();
-  if (paused && !inFlight) sendStep(); // visual feedback while paused
-}
-
 /**
  * A player action: in a room it is an input, applied at the same frame for
  * everyone; alone it goes straight to the worker - the same input either way.
@@ -778,183 +724,58 @@ function send(inp: NetInput): void {
   else post({ t: 'input', inp });
 }
 
-/** the hose's spray direction, worked out here: the simulation is shared */
-let hoseFrom = { x: 0, y: 0 };
-let hoseDir = { x: 0, y: -1 };
-
-/** Tools that keep emitting while the button is held, even standing still. */
-const HELD_TOOLS = new Set<PgTool>(['fountain', 'sparkler', 'hose', 'fireflies']);
-
-let pgSlowmo = false;
-
-function setPgGravity(on: boolean, quiet = false): void {
-  pgGravityOn = on;
-  send({ k: 'pgGravity', on });
-  hud.setGravityLamp(on);
-  if (quiet) return;
-  sfx.ui();
-  toast(`GRAVITY ${on ? 'ON' : 'OFF'}`);
-}
-
-/**
- * SURPRISE ME: a brand-new generated scene. The seed goes to the worker,
- * which builds the same plan; main reads the plan only for name and gravity.
- */
-function surprise(): void {
-  const seed = (Math.random() * 0x7fffffff) | 0;
-  const plan = planSurprise(seed);
-  send({ k: 'pgSurprise', seed });
-  setPgGravity(plan.gravity, true);
-  sfx.ui();
-  toast(`SURPRISE: ${plan.name}`);
-}
-
-/** Replace the playground with a demo scene; it sets its own gravity. */
-function loadPgPreset(id: string): void {
-  const p = PRESET_INFO.find((q) => q.id === id);
-  if (!p) return;
-  send({ k: 'pgPreset', id });
-  setPgGravity(p.gravity, true);
-  sfx.ui();
-  toast(`SCENE: ${p.label}`);
-}
-
-function setPgSlowmo(on: boolean): void {
-  pgSlowmo = on;
-  send({ k: 'pgTime', scale: on ? 0.33 : 1 });
-  hud.setSlowmoLamp(on);
-  sfx.slowmo(on);
-}
-
-function clearPlayground(): void {
-  send({ k: 'pgClear' });
-  sfx.ui();
-}
-
-function pgAt(e: PointerEvt, forced?: PgTool): void {
-  const tool: PgTool = forced ?? (e.button === 2 ? 'erase' : pgTool);
-  if (e.phase === 'up') {
-    pgHeld = false;
-    return;
-  }
-  lastPg = { x: e.x, y: e.y };
-  if (tool === 'wall' || tool === 'bumper') {
-    paintAt(e, tool === 'bumper' ? PG_BUMPER : Mat.WALL);
-    return;
-  }
-  const kind =
-    tool === 'attract' ? 'attractor' : tool === 'repel' ? 'repulsor' : tool;
-  pgHeld = HELD_TOOLS.has(tool);
-  const msg: PgToolMsg = { kind, x: e.x, y: e.y, phase: e.phase };
-  if (kind === 'hose') {
-    // the spray follows the drag; held still, it keeps its last direction
-    if (e.phase === 'down') hoseFrom = { x: e.x, y: e.y };
-    const dx = e.x - hoseFrom.x;
-    const dy = e.y - hoseFrom.y;
-    const d = Math.hypot(dx, dy);
-    if (d > 2) {
-      hoseDir = { x: dx / d, y: dy / d };
-      hoseFrom = { x: e.x, y: e.y };
-    }
-    msg.dx = hoseDir.x;
-    msg.dy = hoseDir.y;
-  }
-  send({ k: 'pg', tool: msg });
-  if (tool === 'firework' && e.phase === 'down') sfx.fireworkLaunch();
-  if (paused && !inFlight) sendStep();
-}
-
 function onPointer(e: PointerEvt): void {
   sfx.ensure();
   if (screen !== 'game') return;
-  if (mode === 'sand') paintAt(e);
-  else pgAt(e);
+  current.onPointer(e);
 }
 
 // ---- game flow ----
 
-function enterGame(label: string): void {
+function enterGame(): void {
   screen = 'game';
   paused = false;
   resultOpen = false;
   hud.setPaused(false);
   hud.showBars(true);
-  hud.setModeLabel(label);
-  hud.setSaveVisible(mode === 'sand' && challengeId === null);
+  hud.setModeLabel(current.label);
+  hud.setSaveVisible(current.saveable);
   hideOverlay();
   renderer.resize();
   acc = 0;
 }
 
-function startSandbox(): void {
-  post({ t: 'toSandbox' });
-  sandboxUI();
+/** Give the worker this mode's fresh world, then show its screen. */
+function startMode(m: ModeController): void {
+  m.start();
+  showMode(m);
 }
 
-/** The sandbox's screen, without touching the world (a room switch). */
-function sandboxUI(): void {
+/** A mode's screen, without touching the world (a room switch). */
+function showMode(m: ModeController): void {
   close3d();
-  renderer.setCinematic?.(false);
-  mode = 'sand';
-  challengeId = null;
+  renderer.setCinematic?.(m.cinematic);
+  // a mode switch would otherwise leave the last composite ghosting
   renderer.reset();
-  hud.buildSandPalette(null, Mat.SAND, brush, {
-    onSelect: (m) => {
-      selMat = m;
-      sfx.ui();
-    },
-  });
-  enterGame('SANDBOX');
+  current = m;
+  m.buildUI();
+  enterGame();
+}
+
+function startSandbox(): void {
+  startMode(sandbox);
 }
 
 function startPlayground(): void {
   leaveRoom('YOU LEFT THE ROOM');
-  post({ t: 'input', inp: { k: 'mode', m: 'playground' } });
-  playgroundUI();
-}
-
-/** The playground's screen, without touching the world (a room switch). */
-function playgroundUI(): void {
-  close3d();
-  renderer.setCinematic?.(true);
-  mode = 'playground';
-  challengeId = null;
-  pgTool = 'fountain';
-  hud.buildPgPalette('fountain', brush, {
-    onTool: (t) => {
-      pgTool = t;
-      sfx.ui();
-    },
-    onGravity: () => setPgGravity(!pgGravityOn),
-    onSlowmo: () => setPgSlowmo(!pgSlowmo),
-    onClear: clearPlayground,
-    presets: PRESET_INFO.map((p) => [p.id, p.label, p.tip]),
-    onPreset: loadPgPreset,
-    onSurprise: surprise,
-  });
-  hud.setGravityLamp(pgGravityOn);
-  hud.setSlowmoLamp(pgSlowmo);
-  enterGame('PARTICLE PLAYGROUND');
+  startMode(playground);
 }
 
 function startChallenge(id: string): void {
   leaveRoom('YOU LEFT THE ROOM');
-  close3d();
-  renderer.setCinematic?.(false);
-  renderer.reset();
   const def = CHALLENGES.find((c) => c.id === id);
   if (!def) return;
-  mode = 'sand';
-  challengeId = id;
-  post({ t: 'loadChallenge', id });
-  hud.buildSandPalette(def.allowed, def.allowed[0], brush, {
-    onSelect: (m) => {
-      selMat = m;
-      sfx.ui();
-    },
-  });
-  enterGame(`CHALLENGE: ${def.name}`);
-  toast(def.hint);
+  startMode(new SandMode(modeCtx, def));
 }
 
 /** ESC / MENU: in a room, make sure first - leaving takes you out of it. */
@@ -979,8 +800,7 @@ function openMenu(): void {
   leaveRoom('YOU LEFT THE ROOM');
   sfx.playground(null); // no frames in the menu, so nothing else would fade it
   screen = 'menu';
-  strokeLast = null;
-  pgHeld = false;
+  current.leave();
   hud.showBars(false);
   showMenu({
     onSandbox: () => {
@@ -996,7 +816,7 @@ function openMenu(): void {
     onSurprise: () => {
       sfx.ensure();
       startPlayground();
-      surprise();
+      playground.surprise();
     },
     onPlayTogether: () => {
       sfx.ensure();
@@ -1195,7 +1015,7 @@ new Input(
       if (k === 'r') {
         sfx.ensure();
         startPlayground();
-        surprise();
+        playground.surprise();
         return;
       }
       if (k === 'o') {
@@ -1248,33 +1068,9 @@ new Input(
       case 's':
         if (screen === 'game') toggleSoft();
         break;
-      case 'f':
-        if (screen === 'game' && mode === 'sand')
-          setPaintKind(paintKind === 'flood' ? 'brush' : 'flood');
-        break;
-      case 'w':
-        if (screen === 'game' && mode === 'sand')
-          setPaintKind(paintKind === 'wind' ? 'brush' : 'wind');
-        break;
-      case 'g':
-        if (mode === 'playground' && screen === 'game') setPgGravity(!pgGravityOn);
-        break;
-      case 'q':
-        if (mode === 'playground' && screen === 'game') setPgSlowmo(!pgSlowmo);
-        break;
-      case 'x':
-        if (mode === 'playground' && screen === 'game') clearPlayground();
-        break;
-      case 'r':
-        if (mode === 'playground' && screen === 'game') surprise();
-        break;
       default:
-        if (/^[1-9]$/.test(k) && screen === 'game' && mode === 'sand') {
-          const idx = Number(k) - 1;
-          const swatches = document.querySelectorAll('#palette .swatch');
-          const el = swatches[idx] as HTMLElement | undefined;
-          if (el) el.click();
-        }
+        // the rest belong to the mode being played
+        if (screen === 'game') current.keys[k]?.();
         break;
     }
   },
@@ -1290,8 +1086,6 @@ window.addEventListener('pf-tool', (e) => {
 window.addEventListener('pf-star', (e) => {
   sfx.star((e as CustomEvent<number>).detail);
 });
-
-let pgGravityOn = true;
 
 // ---- boot ----
 overlay.classList.add('hidden');
