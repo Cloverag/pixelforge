@@ -129,15 +129,18 @@ void main() {
  * The material id arrives in the red channel as a byte; the emission table is
  * a 1D lookup so the CPU decides what each material emits.
  */
+/** Emission table width: one texel per possible material id (cells are bytes). */
+export const EMIT_LUT = 256;
+
 const EMIT = `${HEAD}
 uniform sampler2D uMat;        // material id per cell, R8
-uniform sampler2D uEmitLut;    // per-material rgb + strength, 64x1 RGBA
+uniform sampler2D uEmitLut;    // per-material rgb + strength, one texel per id
 uniform sampler2D uDye;
 uniform float uDt;
 uniform float uGain;
 void main() {
   float id = texture(uMat, vUv).r * 255.0;
-  vec4 e = texture(uEmitLut, vec2((id + 0.5) / 64.0, 0.5));
+  vec4 e = texture(uEmitLut, vec2((id + 0.5) / ${EMIT_LUT}.0, 0.5));
   vec3 add = e.rgb * e.a * uDt * uGain;
   frag = vec4(texture(uDye, vUv).rgb + add, 1.0);
 }`;
@@ -150,7 +153,7 @@ uniform float uDt;
 uniform float uBuoyancy;
 void main() {
   float id = texture(uMat, vUv).r * 255.0;
-  vec4 e = texture(uEmitLut, vec2((id + 0.5) / 64.0, 0.5));
+  vec4 e = texture(uEmitLut, vec2((id + 0.5) / ${EMIT_LUT}.0, 0.5));
   vec2 v = texture(uVel, vUv).xy;
   // hot cells push their own dye upward; +y is up in texture space
   v.y += e.a * uBuoyancy * uDt;
@@ -260,14 +263,14 @@ export class Fluid {
 
   /**
    * Per-material emission: rgb is the dye colour, alpha the strength. Uploaded
-   * once as a 64x1 RGBA texture indexed by material id.
+   * once as an EMIT_LUT x 1 RGBA texture indexed by material id.
    */
   setEmissionTable(rgba: Uint8Array): void {
     const gl = this.gl;
     gl.bindTexture(gl.TEXTURE_2D, this.lutTex);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 64, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, rgba);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, EMIT_LUT, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, rgba);
   }
 
   /** Uploads the downsampled material map for this frame. */

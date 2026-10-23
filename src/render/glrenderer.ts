@@ -1,7 +1,7 @@
 import { MATS, Mat, NMATS, Cat } from '../sim/materials';
 import { CHUNKS_X, CHUNKS_Y, SIM_H, SIM_W } from '../sim/protocol';
 import { Blockifier, fitSize } from './blocks';
-import { Fluid } from './fluid';
+import { EMIT_LUT, Fluid } from './fluid';
 import { Cinematic } from './cinematic';
 import { bindDummyVao, blit, Program } from './glutil';
 import type { SimRenderer } from './renderer';
@@ -139,7 +139,7 @@ const GLOW = 0.95;
  * solid emits nothing, so a wall does not fog up the screen.
  */
 function emissionTable(): Uint8Array {
-  const lut = new Uint8Array(64 * 4);
+  const lut = new Uint8Array(EMIT_LUT * 4);
   const put = (id: number, hex: number, strength: number) => {
     lut[id * 4] = (hex >> 16) & 255;
     lut[id * 4 + 1] = (hex >> 8) & 255;
