@@ -74,11 +74,13 @@ export const RULES: Rule[] = [
   r(M.F, M.NA, M.SALT, M.EMPTY, 0.3, 'burns sodium into salt', { fx: 'flash', spark: M.FLAME_YELLOW }),
   r(M.F, M.WOOD, M.EMPTY, M.FIRE, 0.2, 'sets wood alight', { fx: 'ignite' }),
   r(M.F, M.PLANT, KEEP, M.ASH, 0.1, 'withers plants to ash'),
+  r(M.F, M.FLORA, KEEP, M.ASH, 0.1, 'withers flowers to ash'),
   // bromine, the liquid halogen: slower than chlorine on plants, hard on metals
   r(M.AL, M.BR, M.SALT, M.EMPTY, 0.3, 'aluminium sparks in bromine', { fx: 'flash' }),
   r(M.K, M.BR, M.SALT, M.EMPTY, 0.2, 'burns in bromine into salt', { fx: 'flash', spark: M.FLAME_LILAC }),
   r(M.NA, M.BR, M.SALT, M.EMPTY, 0.05, 'slowly turns to salt in bromine'),
   r(M.BR, M.PLANT, KEEP, M.ASH, 0.03, 'bleaches plants'),
+  r(M.BR, M.FLORA, KEEP, M.ASH, 0.03, 'bleaches flowers'),
   // ---- fire and oxygen ----
   r(M.H, M.O, M.STEAM, M.STEAM, 0.7, 'explodes with oxygen near heat, making water', { needs: 'heat', fx: 'boom' }),
   r(M.C, M.O, M.FIRE, M.SMOKE, 0.3, 'burns hot in oxygen', { needs: 'heat', fx: 'ignite' }),

@@ -108,6 +108,19 @@ describe('chem lab reactions', { timeout: 120_000 }, () => {
     expect(hot.grid.counts[Mat.SI]).toBeLessThan(si0);
   });
 
+  it('fluorine and bromine turn flowers to ash and are not used up', () => {
+    // the generic test only proves a rule fires; pin what it makes
+    for (const gas of [Mat.F, Mat.BR]) {
+      const w = bench(4, gas, Mat.FLORA);
+      const flora0 = w.grid.counts[Mat.FLORA];
+      const gas0 = w.grid.counts[gas];
+      run(w, 600);
+      expect([MATS[gas].name, w.grid.counts[Mat.ASH] > 0]).toEqual([MATS[gas].name, true]);
+      expect([MATS[gas].name, w.grid.counts[Mat.FLORA] < flora0]).toEqual([MATS[gas].name, true]);
+      expect([MATS[gas].name, w.grid.counts[gas]]).toEqual([MATS[gas].name, gas0]);
+    }
+  });
+
   it('mercury turns sulfur into cinnabar', () => {
     const w = bench(4, Mat.HG, Mat.S);
     const s0 = w.grid.counts[Mat.S];

@@ -52,7 +52,7 @@ get their own layout.
 | **SANDBOX** | Paint any material with the brush, flood-fill (`F`) or blow wind (`W`); right-drag erases. Your world autosaves and comes back on reload; SAVE / LOAD / SHARE a link to it. |
 | **PLAY TOGETHER (beta)** | A room for friends: open one, send the link, and everyone builds in the same world - the sandbox or the playground. See [Playing together](#playing-together). |
 | **PARTICLE PLAYGROUND** | Light shows instead of materials: emitters, forces, bumpers that play notes, portals - with a film-look renderer, a full 3D view and sound design. See [The playground](#the-playground). |
-| **CHEM LAB** | Pick elements off a periodic table and drop them into water, acid, fire or each other: 30 elements, 68 reactions, 3 ready-made experiments. See [The chem lab](#the-chem-lab). |
+| **CHEM LAB** | Pick elements off a periodic table and drop them into water, acid, fire or each other: 30 elements, 70 reactions, 3 ready-made experiments. See [The chem lab](#the-chem-lab). |
 | **SURPRISE ME** | A brand-new generated playground scene every click (`R`). |
 | **CHALLENGES** | 7 goal-based puzzles with material budgets, time limits, win/lose checks and a 3-star rating. Levels unlock in order; stars persist in `localStorage`. |
 
@@ -172,7 +172,7 @@ lava, plants, glass and wall.
   reaction it takes part in here.
 - **Reactions are a table** (`src/sim/reactions.ts`): when two cells touch, a
   rule says what each becomes, the chance per tick, and an optional condition
-  (heat, or a helper such as water) and effect. Some of the 68:
+  (heat, or a helper such as water) and effect. Some of the 70:
 
 | Pair | What happens |
 |------|--------------|
