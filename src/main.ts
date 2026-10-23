@@ -33,7 +33,7 @@ import { applyTheme, cycleTheme, loadTheme } from './ui/theme';
 import type { ModeController, ModeCtx } from './modes/types';
 import { SandMode } from './modes/sand';
 import { PlaygroundMode } from './modes/playground';
-import { ChemMode } from './modes/chem';
+import { ChemMode, LAB_ELEMENTS } from './modes/chem';
 
 const STEP_MS = 1000 / 60;
 
@@ -839,6 +839,9 @@ function openMenu(): void {
     onHelp: () => toggleHelp(),
     onToggle3d: () => void toggle3d(),
     onPreview: previewAttract,
+    tagline:
+      `Paint with ${PLACEABLE} materials and ${LAB_ELEMENTS.size} real elements that burn, flow, grow and explode - ` +
+      'build light shows, run chemistry, or play with friends in one world.',
     onCycleTheme: nextTheme,
     theme: loadTheme(),
   });
@@ -903,12 +906,14 @@ function previewAttract(kind: 'pg' | 'chem'): void {
 if (import.meta.env.DEV)
   (window as unknown as { __attract: () => unknown }).__attract = () => ({ screen, attract, live: lastLive });
 
+/** counted, not typed: the menu once said 20 while the palette held 25 */
+const PLACEABLE = MATS.filter((m) => m?.placeable).length;
+
 /** The menu's PLAY column; each card's hotkey works on the menu too. */
 const MENU: MenuEntry[] = [
   {
     name: 'SANDBOX',
-    // counted, not typed: the menu once said 20 while the palette held 25
-    sub: `Paint ${MATS.filter((m) => m?.placeable).length} materials. No rules, no timer.`,
+    sub: `Paint ${PLACEABLE} materials. No rules, no timer.`,
     key: 'ENTER',
     hotkey: 'enter',
     primary: true,

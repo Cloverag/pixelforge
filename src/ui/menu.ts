@@ -27,6 +27,8 @@ export interface MenuCallbacks {
   onPreview(kind: 'pg' | 'chem'): void;
   onHelp(): void;
   onToggle3d(): void;
+  /** one sentence saying what the game is */
+  tagline: string;
   onCycleTheme(): string;
   theme: string;
 }
@@ -104,7 +106,7 @@ export function showMenu(cbs: MenuCallbacks): void {
   const head = h('header', 'menu-head');
   const brand = h('div', 'menu-brand');
   brand.appendChild(h('h1', 'game-title', 'PIXELFORGE'));
-  brand.appendChild(h('p', 'tagline', 'A falling-sand forge: powders, liquids, fire and wire.'));
+  brand.appendChild(h('p', 'tagline', cbs.tagline));
   head.appendChild(brand);
 
   const settings = h('div', 'menu-settings');
