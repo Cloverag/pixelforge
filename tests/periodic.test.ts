@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import ELEMENTS from '../src/data/elements.json';
 import { placeOf } from '../src/ui/periodic';
-import { LAB_ELEMENTS } from '../src/modes/chem';
+import { LAB_ELEMENTS, LAB_Z } from '../src/modes/chem';
 import { MATS } from '../src/sim/materials';
 import { CHEM } from '../src/sim/reactions';
 
@@ -35,5 +35,12 @@ describe('periodic table', () => {
       expect([sym, CHEM[m]]).toEqual([sym, 1]);
       expect(MATS[m]).toBeDefined();
     }
+  });
+
+  it('the rail tiles carry the right atomic number for every lab element', () => {
+    // chem.ts writes the numbers out (it must not import the JSON), so check them here
+    const z = new Map((ELEMENTS as { sym: string; z: number }[]).map((e) => [e.sym, e.z]));
+    expect(LAB_Z.size).toBe(LAB_ELEMENTS.size);
+    for (const [sym, m] of LAB_ELEMENTS) expect([sym, LAB_Z.get(m)]).toEqual([sym, z.get(sym)]);
   });
 });

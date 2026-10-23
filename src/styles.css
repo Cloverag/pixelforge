@@ -601,6 +601,50 @@ body.sim-paused .sb-lamp {
   padding: 1px 4px;
   border-radius: 2px;
 }
+/* the CHEM LAB's elements: small periodic-table tiles, five to a row.
+   number top left, symbol centred, the material's own colours as a stripe */
+.gswatches.tiles { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.swatch.tile {
+  flex-direction: column;
+  justify-content: center;
+  gap: 0;
+  height: auto;
+  aspect-ratio: 1 / 1;
+  padding: 0;
+  overflow: hidden;
+}
+.swatch.tile .tz {
+  position: absolute;
+  top: 3px;
+  left: 4px;
+  font-family: var(--font-read);
+  font-size: 8px;
+  line-height: 1;
+  color: var(--ink-faint);
+}
+.swatch.tile .tsym {
+  font-family: var(--font-read);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--ink);
+}
+.swatch.tile .tstripe {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+}
+/* the name is for the tooltips and screen readers, not the eye (clip-path,
+   not a 1px box, so it never reads as a truncated name) */
+.swatch.tile .nm {
+  position: absolute;
+  white-space: nowrap;
+  clip-path: inset(50%);
+  pointer-events: none;
+}
+.swatch.tile.sel .tsym { color: var(--accent-hi); }
 .swatch.exhausted { opacity: 0.3; pointer-events: none; filter: grayscale(1); }
 .swatch.locked { opacity: 0.22; pointer-events: none; }
 
@@ -1039,6 +1083,9 @@ kbd, .mode-key {
   .gswatches { grid-template-columns: none; grid-template-rows: 1fr 1fr; grid-auto-flow: column; }
   .swatch:has(.budget) { grid-column: auto; }
   .swatch { width: 96px; }
+  /* element tiles: a strip of fixed squares, two rows high */
+  .gswatches.tiles { grid-template-columns: none; grid-template-rows: repeat(2, 44px); grid-auto-columns: 44px; grid-auto-flow: column; }
+  .swatch.tile { width: auto; }
   .toolcol { margin-top: 0; min-width: 190px; }
   .sb-note, .sb-cells { display: none; }
 }
@@ -1119,6 +1166,8 @@ kbd, .mode-key {
   #palette { flex-direction: column; flex: 0 0 auto; overflow: visible; padding-right: 0; }
   .gswatches { grid-template-columns: repeat(3, 1fr); grid-template-rows: none; grid-auto-flow: row; }
   .swatch { width: auto; min-height: 44px; }
+  .gswatches.tiles { grid-template-columns: repeat(6, minmax(0, 1fr)); grid-template-rows: none; grid-auto-flow: row; grid-auto-columns: auto; }
+  .swatch.tile { min-height: 0; }
   .toolcol { order: -1; min-width: 0; margin: 0 0 12px; }
   .scenebtns .px,
   .toolbtns .px { min-height: 40px; }
@@ -1139,6 +1188,8 @@ kbd, .mode-key {
   #palette { flex-direction: column; flex: 0 0 auto; overflow: visible; padding-right: 0; }
   .gswatches { grid-template-columns: 1fr 1fr; grid-template-rows: none; grid-auto-flow: row; }
   .swatch { width: auto; min-height: 38px; }
+  .gswatches.tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: none; grid-auto-flow: row; grid-auto-columns: auto; }
+  .swatch.tile { min-height: 0; }
   .toolcol { order: -1; min-width: 0; margin: 0 0 10px; }
   #statusbar { display: none; }
   #stage { padding: 4px; }

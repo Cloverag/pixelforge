@@ -78,6 +78,9 @@ export interface Swatch {
   title: string;
   /** the status bar when picked: name, kind, note, chip */
   info: [string, string, string, string];
+  /** symbol and atomic number: shown on a periodic-table tile (see `tiles`) */
+  sym?: string;
+  z?: number;
 }
 
 /** A button in the rail that acts at once rather than being held. */
@@ -92,7 +95,9 @@ export interface RailButton {
 }
 
 export type PaletteSection =
-  | { label: string; swatches: Swatch[] }
+  // `tiles`: swatches with a `sym` draw as small periodic-table tiles, five
+  // to a row, instead of a chip and a name
+  | { label: string; swatches: Swatch[]; tiles?: boolean }
   | { label: string; buttons: RailButton[]; cls: string };
 
 /** Everything a mode puts in the left rail. */
@@ -402,18 +407,29 @@ export class Hud {
       const group = h('div', 'matgroup');
       group.appendChild(h('span', 'glabel', sec.label));
       if ('swatches' in sec) {
-        const grid = h('div', 'gswatches');
+        const grid = h('div', sec.tiles ? 'gswatches tiles' : 'gswatches');
         for (const sw of sec.swatches) {
-          const el = h('div', 'swatch');
-          const chip = h('div', 'chip');
-          if (sw.dashed) {
-            chip.style.background = sw.chip;
-            chip.style.border = '1px dashed var(--danger)';
+          const tile = sec.tiles && sw.sym !== undefined;
+          const el = h('div', tile ? 'swatch tile' : 'swatch');
+          if (tile) {
+            el.appendChild(h('span', 'tz', String(sw.z ?? '')));
+            el.appendChild(h('span', 'tsym', sw.sym));
+            const stripe = h('div', 'tstripe');
+            stripe.style.backgroundImage = sw.chip;
+            el.appendChild(stripe);
+            // the name stays in the DOM, unseen: the tooltips look the material up by it
+            el.appendChild(h('span', 'nm', sw.label));
           } else {
-            chip.style.backgroundImage = sw.chip;
+            const chip = h('div', 'chip');
+            if (sw.dashed) {
+              chip.style.background = sw.chip;
+              chip.style.border = '1px dashed var(--danger)';
+            } else {
+              chip.style.backgroundImage = sw.chip;
+            }
+            el.appendChild(chip);
+            el.appendChild(h('span', 'nm', sw.label));
           }
-          el.appendChild(chip);
-          el.appendChild(h('span', 'nm', sw.label));
           el.title = sw.title;
           el.onclick = () => this.pick(sw.id);
           grid.appendChild(el);

@@ -16,6 +16,15 @@ export const LAB_ELEMENTS = new Map<string, number>([
   ['Ag', Mat.AG], ['Sn', Mat.SN], ['Cs', Mat.CS], ['Au', Mat.AU], ['Hg', Mat.HG],
 ]);
 const SYMBOL = new Map([...LAB_ELEMENTS].map(([sym, m]) => [m, sym]));
+/** material -> atomic number, for the rail's tiles. Written out (from
+ *  data/elements.json) rather than imported: that file loads with the periodic
+ *  table, not with the game. tests/periodic.test.ts checks it against the JSON. */
+export const LAB_Z = new Map<number, number>([
+  [Mat.H, 1], [Mat.HE, 2], [Mat.LI, 3], [Mat.B, 5], [Mat.C, 6], [Mat.N, 7], [Mat.O, 8], [Mat.F, 9],
+  [Mat.NE, 10], [Mat.NA, 11], [Mat.MG, 12], [Mat.AL, 13], [Mat.SI, 14], [Mat.P, 15], [Mat.S, 16],
+  [Mat.CL, 17], [Mat.K, 19], [Mat.CA, 20], [Mat.FE, 26], [Mat.CU, 29], [Mat.ZN, 30], [Mat.BR, 35],
+  [Mat.SR, 38], [Mat.AG, 47], [Mat.SN, 50], [Mat.I, 53], [Mat.CS, 55], [Mat.BA, 56], [Mat.AU, 79], [Mat.HG, 80],
+]);
 
 const GASES = [Mat.H, Mat.O, Mat.N, Mat.CL, Mat.NE, Mat.HE, Mat.F];
 const METALS = [Mat.LI, Mat.NA, Mat.K, Mat.CS, Mat.MG, Mat.CA, Mat.SR, Mat.BA, Mat.AL, Mat.FE, Mat.CU, Mat.ZN, Mat.AG, Mat.SN, Mat.AU];
@@ -75,7 +84,8 @@ export class ChemMode implements ModeController {
       const chip = rampGradient(d.ramp);
       const kind = sym ? `element ${sym}` : ['', 'powder', 'liquid', 'gas', 'solid'][d.cat];
       const lines = CHEM_NOTE[m] ?? reactionLines(m).slice(0, 2).join('; ');
-      return { id: String(m), label: d.name, chip, title: sym ? `${d.name} (${sym})` : d.name, info: [d.name, kind, lines, chip] };
+      const name = d.name[0] + d.name.slice(1).toLowerCase();
+      return { id: String(m), label: d.name, chip, title: sym ? `${name} (${sym})` : d.name, info: [d.name, kind, lines, chip], sym, z: LAB_Z.get(m) };
     };
     const sections: PaletteSection[] = [
       { label: 'TABLE', cls: 'toolbtns', buttons: [{ label: 'PERIODIC TABLE', title: 'Every element; the lit ones are in the lab (E)', onClick: () => void this.toggleTable() }] },
@@ -84,10 +94,10 @@ export class ChemMode implements ModeController {
         cls: 'scenebtns',
         buttons: CHEM_SCENES.map((s) => ({ label: s.label, title: s.tip, onClick: () => this.loadScene(s.id, s.label) })),
       },
-      { label: 'GASES', swatches: GASES.map(swatch) },
-      { label: 'METALS', swatches: METALS.map(swatch) },
-      { label: 'NON-METALS', swatches: NONMETALS.map(swatch) },
-      { label: 'LIQUIDS', swatches: LIQUIDS.map(swatch) },
+      { label: 'GASES', swatches: GASES.map(swatch), tiles: true },
+      { label: 'METALS', swatches: METALS.map(swatch), tiles: true },
+      { label: 'NON-METALS', swatches: NONMETALS.map(swatch), tiles: true },
+      { label: 'LIQUIDS', swatches: LIQUIDS.map(swatch), tiles: true },
       { label: 'BENCH', swatches: BENCH.map(swatch) },
       {
         label: 'TOOLS',
