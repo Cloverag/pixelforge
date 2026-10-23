@@ -835,6 +835,7 @@ function openMenu(): void {
     onToggleMute: toggleMute,
     onToggleCrt: toggleCrt,
     onToggleBg: cycleWallpaper,
+    backdrop: WALLPAPER_NAMES[bgIndex],
     onToggleMusic: toggleMusic,
     onHelp: () => toggleHelp(),
     onToggle3d: () => void toggle3d(),
@@ -1066,10 +1067,11 @@ function toggleMusic(): void {
 
 let bgIndex = loadBgIndex();
 
-function cycleWallpaper(): void {
+function cycleWallpaper(): string {
   bgIndex = (bgIndex + 1) % WALLPAPER_NAMES.length;
   applyWallpaper(bgIndex);
-  toast(`BG: ${WALLPAPER_NAMES[bgIndex]}`);
+  toast(`BACKDROP: ${WALLPAPER_NAMES[bgIndex]}`);
+  return WALLPAPER_NAMES[bgIndex];
 }
 
 function setPaintKind(k: PaintKind): void {

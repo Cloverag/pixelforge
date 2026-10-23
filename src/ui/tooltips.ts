@@ -30,7 +30,7 @@ const BTN_NOTES: Record<string, string> = {
   SFX: 'Mute / unmute sound effects. (M)',
   MUSIC: 'Toggle the background music loop.',
   CRT: 'Toggle the CRT scanline filter. (C)',
-  BG: 'Cycle the background wallpaper.',
+  BG: 'Backdrop: cycle the picture around the game screen (grid, neon, nebula, ember).',
   AUTO: 'Theme follows your system light/dark setting. Click to cycle. (T)',
   LIGHT: 'Light theme. Click to cycle. (T)',
   DARK: 'Dark theme. Click to cycle. (T)',

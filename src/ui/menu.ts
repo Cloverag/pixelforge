@@ -22,7 +22,10 @@ export interface MenuCallbacks {
   onChallenge(id: string): void;
   onToggleMute(): void;
   onToggleCrt(): void;
-  onToggleBg(): void;
+  /** cycles the backdrop; returns the new one's name */
+  onToggleBg(): string;
+  /** the backdrop now showing */
+  backdrop: string;
   onToggleMusic(): void;
   onPreview(kind: 'pg' | 'chem'): void;
   onHelp(): void;
@@ -118,9 +121,10 @@ export function showMenu(cbs: MenuCallbacks): void {
     cbs.onToggleCrt();
     b.classList.toggle('toggled', document.body.classList.contains('crt-on'));
   }));
-  const bg = h('button', 'px', 'WALLPAPER') as HTMLButtonElement;
+  const bg = h('button', 'px', `BACKDROP: ${cbs.backdrop}`) as HTMLButtonElement;
   bg.type = 'button';
-  bg.onclick = () => cbs.onToggleBg();
+  bg.title = 'The picture around the game screen';
+  bg.onclick = () => { bg.textContent = `BACKDROP: ${cbs.onToggleBg()}`; };
   const help = h('button', 'px', '? HELP') as HTMLButtonElement;
   help.type = 'button';
   help.onclick = () => cbs.onHelp();

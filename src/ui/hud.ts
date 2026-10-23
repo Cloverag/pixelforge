@@ -223,7 +223,7 @@ export class Hud {
     this.gridBtn = this.mkBtn('GRID', cbs.onToggleGrid, 'Chunky block view - cycles size (B)', true);
     this.view3dBtn = this.mkBtn('3D', cbs.onToggle3d, 'Toggle 3D voxel view (3)', true);
     this.immersiveBtn = this.mkBtn('IMMERSE', cbs.onToggleImmersive, 'Fill the window, hide the panels (I)', true);
-    const bgBtn = this.mkBtn('BG', cbs.onToggleBg, 'Cycle wallpaper');
+    const bgBtn = this.mkBtn('BG', cbs.onToggleBg, 'Backdrop: the picture around the game screen');
     this.themeBtn = this.mkBtn('THEME', cbs.onCycleTheme, 'Light / dark / follow system (T)');
     this.muteBtn = this.mkBtn('SFX', cbs.onToggleMute, 'Mute sound effects (M)', true);
     this.musicBtn = this.mkBtn('MUSIC', cbs.onToggleMusic, 'Toggle chiptune loop', true);
