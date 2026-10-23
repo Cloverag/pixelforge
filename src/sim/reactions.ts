@@ -48,6 +48,8 @@ export const RULES: Rule[] = [
   r(M.CA, M.WATER, M.H, M.LYE, 0.008, 'bubbles in water', { fx: 'fizz' }),
   r(M.SR, M.WATER, M.H, M.LYE, 0.006, 'bubbles in water', { fx: 'fizz' }),
   r(M.BA, M.WATER, M.H, M.LYE, 0.01, 'bubbles in water', { fx: 'fizz' }),
+  // the heaviest alkali metal: a boom, not a fizz
+  r(M.CS, M.WATER, M.H, M.LYE, 0.5, 'explodes in water', { fx: 'boom', spark: M.FLAME_BLUE }),
   // ---- metals in acid: hydrogen ----
   r(M.MG, M.ACID, M.H, M.WATER, 0.05, 'dissolves in acid, giving off hydrogen', { fx: 'fizz' }),
   r(M.ZN, M.ACID, M.H, M.WATER, 0.03, 'dissolves in acid, giving off hydrogen', { fx: 'fizz' }),
@@ -113,6 +115,8 @@ export const RULES: Rule[] = [
   r(M.CU, M.FIRE, KEEP, M.FLAME_GREEN, 0.4, 'flame test: blue-green'),
   r(M.BA, M.FIRE, KEEP, M.FLAME_APPLE, 0.4, 'flame test: apple green'),
   r(M.CA, M.FIRE, KEEP, M.FLAME_ORANGE, 0.4, 'flame test: orange-red'),
+  r(M.B, M.FIRE, KEEP, M.FLAME_GREEN, 0.4, 'flame test: bright green'),
+  r(M.CS, M.FIRE, KEEP, M.FLAME_BLUE, 0.4, 'flame test: blue-violet'),
   // ...and over a torch, a steady burner: the grain gives off its own flame
   r(M.NA, M.TORCH, KEEP, KEEP, 0.12, 'over a torch: a yellow flame', { spark: M.FLAME_YELLOW }),
   r(M.K, M.TORCH, KEEP, KEEP, 0.12, 'over a torch: a lilac flame', { spark: M.FLAME_LILAC }),
@@ -121,6 +125,8 @@ export const RULES: Rule[] = [
   r(M.CU, M.TORCH, KEEP, KEEP, 0.12, 'over a torch: a blue-green flame', { spark: M.FLAME_GREEN }),
   r(M.BA, M.TORCH, KEEP, KEEP, 0.12, 'over a torch: an apple-green flame', { spark: M.FLAME_APPLE }),
   r(M.CA, M.TORCH, KEEP, KEEP, 0.12, 'over a torch: an orange-red flame', { spark: M.FLAME_ORANGE }),
+  r(M.B, M.TORCH, KEEP, KEEP, 0.12, 'over a torch: a bright green flame', { spark: M.FLAME_GREEN }),
+  r(M.CS, M.TORCH, KEEP, KEEP, 0.12, 'over a torch: a blue-violet flame', { spark: M.FLAME_BLUE }),
 ];
 
 /** Materials the engine runs: every element and product. */

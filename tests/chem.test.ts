@@ -128,6 +128,38 @@ describe('chem lab reactions', { timeout: 120_000 }, () => {
     expect(w.grid.counts[Mat.CU]).toBe(cu0);
   });
 
+  it('boron and caesium flame tests keep the metal and tint the fire', () => {
+    for (const [m, flame] of [[Mat.B, Mat.FLAME_GREEN], [Mat.CS, Mat.FLAME_BLUE]] as const) {
+      const w = bench(9, m, Mat.FIRE);
+      const n0 = w.grid.counts[m];
+      let tint = 0;
+      for (let i = 0; i < 60; i++) {
+        w.step();
+        tint = Math.max(tint, w.grid.counts[flame]);
+      }
+      expect([MATS[m].name, tint > 0]).toEqual([MATS[m].name, true]);
+      expect([MATS[m].name, w.grid.counts[m]]).toEqual([MATS[m].name, n0]);
+    }
+  });
+
+  it('caesium in water explodes, where lithium only fizzes', () => {
+    const run = (m: number) => {
+      const w = bench(6, m, Mat.WATER);
+      let booms = 0;
+      for (let i = 0; i < 300; i++) {
+        w.step();
+        const e = w.takeEvents();
+        for (let k = 2; k < e.booms.length; k += 3) if (e.booms[k] === 4) booms++;
+      }
+      return { w, booms };
+    };
+    const cs = run(Mat.CS);
+    expect(cs.booms).toBeGreaterThan(0);
+    expect(cs.w.grid.counts[Mat.H]).toBeGreaterThan(0);
+    expect(cs.w.grid.counts[Mat.LYE]).toBeGreaterThan(0);
+    expect(run(Mat.LI).booms).toBe(0);
+  });
+
   it('two chem worlds fed the same start stay identical', () => {
     const mk = () => {
       const w = bench(21, Mat.H, Mat.O, { heat: true });
