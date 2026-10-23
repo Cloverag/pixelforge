@@ -94,6 +94,28 @@ describe('chem lab reactions', { timeout: 120_000 }, () => {
     expect(t.grid.counts[Mat.LAVA]).toBeGreaterThan(0);
   });
 
+  it('silicon burns into glass only with oxygen and heat', () => {
+    // the generic test only visits rules that declare a condition, so it cannot
+    // notice a rule that has lost one: pin this one by its outcome
+    const rule = RULES.findIndex((q) => q.a === Mat.SI && q.b === Mat.O);
+    const cold = bench(3, Mat.SI, Mat.O);
+    run(cold, 600);
+    expect([cold.rxFired[rule], cold.grid.counts[Mat.GLASS]]).toEqual([0, 0]);
+    const hot = bench(3, Mat.SI, Mat.O, { heat: true });
+    const si0 = hot.grid.counts[Mat.SI];
+    run(hot, 600);
+    expect(hot.grid.counts[Mat.GLASS]).toBeGreaterThan(0);
+    expect(hot.grid.counts[Mat.SI]).toBeLessThan(si0);
+  });
+
+  it('mercury turns sulfur into cinnabar', () => {
+    const w = bench(4, Mat.HG, Mat.S);
+    const s0 = w.grid.counts[Mat.S];
+    run(w, 600);
+    expect(w.grid.counts[Mat.SULFIDE]).toBeGreaterThan(0);
+    expect(w.grid.counts[Mat.S]).toBeLessThan(s0);
+  });
+
   it('a flame test keeps the metal and colours the fire', () => {
     const w = bench(9, Mat.CU, Mat.FIRE);
     const cu0 = w.grid.counts[Mat.CU];

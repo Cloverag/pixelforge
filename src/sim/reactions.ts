@@ -54,6 +54,8 @@ export const RULES: Rule[] = [
   r(M.AL, M.ACID, M.H, M.WATER, 0.02, 'dissolves in acid, giving off hydrogen', { fx: 'fizz' }),
   r(M.FE, M.ACID, M.H, M.WATER, 0.01, 'slowly dissolves in acid', { fx: 'fizz' }),
   r(M.CA, M.ACID, M.H, M.WATER, 0.05, 'dissolves in acid, giving off hydrogen', { fx: 'fizz' }),
+  r(M.SN, M.ACID, M.H, M.WATER, 0.008, 'slowly dissolves in acid', { fx: 'fizz' }),
+  // silver and gold have no acid rule on purpose: nothing in the lab dissolves them
   // ---- acid meets base ----
   r(M.LYE, M.ACID, M.SALT, M.WATER, 0.3, 'neutralises acid into salt water', { fx: 'fizz' }),
   // ---- halogens ----
@@ -93,6 +95,11 @@ export const RULES: Rule[] = [
   r(M.AL, M.RUST, M.LAVA, M.LAVA, 0.25, 'thermite: with heat, melts rust into molten iron', { needs: 'heat', fx: 'flash' }),
   r(M.FE, M.S, M.SULFIDE, M.EMPTY, 0.2, 'glows into iron sulfide when heated', { needs: 'heat', fx: 'ignite' }),
   r(M.ZN, M.S, M.SULFIDE, M.FLAME_GREEN, 0.4, 'flashes into zinc sulfide when heated', { needs: 'heat', fx: 'flash' }),
+  r(M.SI, M.O, M.GLASS, M.EMPTY, 0.2, 'burns into glass', { needs: 'heat' }),
+  // slow, cold chemistry: tarnish, and the spill clean-up trick
+  r(M.AG, M.S, M.SULFIDE, KEEP, 0.002, 'tarnishes black with sulfur'),
+  r(M.HG, M.S, M.SULFIDE, M.EMPTY, 0.02, 'turns sulfur into cinnabar'),
+  r(M.AL, M.HG, M.OXIDE, KEEP, 0.02, 'amalgam: aluminium crumbles to white oxide'),
   r(M.I, M.FIRE, M.IODINE_GAS, KEEP, 0.2, 'turns straight to violet vapour in a flame'),
   r(M.I, M.LAVA, M.IODINE_GAS, KEEP, 0.3, 'turns straight to violet vapour on lava'),
   // ---- light ----
