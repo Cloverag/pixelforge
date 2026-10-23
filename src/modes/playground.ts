@@ -182,13 +182,16 @@ export class PlaygroundMode implements ModeController {
    * SURPRISE ME: a brand-new generated scene. The seed goes to the worker,
    * which builds the same plan; this reads the plan only for name and gravity.
    */
-  surprise(): void {
+  surprise(quiet = false): string {
     const seed = (Math.random() * 0x7fffffff) | 0;
     const plan = planSurprise(seed);
     this.ctx.send({ k: 'pgSurprise', seed });
     this.setGravity(plan.gravity, true);
-    this.ctx.sfx.ui();
-    this.ctx.toast(`SURPRISE: ${plan.name}`);
+    if (!quiet) {
+      this.ctx.sfx.ui();
+      this.ctx.toast(`SURPRISE: ${plan.name}`);
+    }
+    return plan.name;
   }
 
   /** Replace the playground with a demo scene; it sets its own gravity. */

@@ -53,6 +53,8 @@
   --track: linear-gradient(180deg, #080706, #1f1a17);
   --ink-ghost: #564d44;
   --overlay-bg: radial-gradient(ellipse at center, rgba(14, 11, 9, 0.84), rgba(6, 5, 4, 0.95));
+  /* the menu over its running demo: see-through, no blur */
+  --overlay-attract: rgba(8, 6, 5, 0.42);
   --danger-ink: #ffb0a6;
   /* recessed rows and cards: darker than the panel in dark, lighter in light */
   --row-bg: rgba(0, 0, 0, 0.16);
@@ -775,6 +777,25 @@ input[type='range']::-moz-range-thumb {
   animation: fade-in 0.18s ease-out;
 }
 #overlay.hidden { display: none; }
+/* attract mode: the game runs behind the menu, so let it show (the panel stays opaque) */
+#overlay.attract {
+  background: var(--overlay-attract);
+  backdrop-filter: none;
+}
+.menu-live {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  padding: 5px 12px;
+  font-size: 12px;
+  letter-spacing: 2px;
+  color: var(--ink-dim);
+  background: var(--panel-deep);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  pointer-events: none;
+}
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 
 .screen {
@@ -1921,6 +1942,7 @@ kbd, .mode-key {
   --frame: linear-gradient(160deg, #5a4f46, #3a322c 60%, #4a413a);
   --track: linear-gradient(180deg, #d6cab8, #ece3d6);
   --overlay-bg: radial-gradient(ellipse at center, rgba(241, 235, 225, 0.82), rgba(214, 203, 188, 0.94));
+  --overlay-attract: rgba(241, 235, 225, 0.42);
   --row-bg: rgba(255, 255, 255, 0.5);
   color-scheme: light;
 }
@@ -1963,6 +1985,7 @@ kbd, .mode-key {
     --frame: linear-gradient(160deg, #5a4f46, #3a322c 60%, #4a413a);
     --track: linear-gradient(180deg, #d6cab8, #ece3d6);
     --overlay-bg: radial-gradient(ellipse at center, rgba(241, 235, 225, 0.82), rgba(214, 203, 188, 0.94));
+    --overlay-attract: rgba(241, 235, 225, 0.42);
     --row-bg: rgba(255, 255, 255, 0.5);
     color-scheme: light;
   }

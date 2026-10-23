@@ -7,7 +7,7 @@ import type { PG3D } from './render/pg3d';
 import { Sfx } from './game/audio';
 import { Juice } from './game/juice';
 import { Hud } from './ui/hud';
-import { showMenu, type MenuEntry } from './ui/menu';
+import { setMenuLive, showMenu, type MenuEntry } from './ui/menu';
 import { hideOverlay, showResult, toast } from './ui/widgets';
 import { Mat, MATS } from './sim/materials';
 import { MpSession, newRoomCode, roomFromUrl, roomUrl, type MpHooks } from './net/mp';
@@ -20,6 +20,7 @@ import { EMOTES, PING } from './net/presence';
 import { myIdentity, saveIdentity } from './net/presence';
 import { Mode, MODES, PaintKind, Req, Res, SIM_H, SIM_W, SimEvents, Stats } from './sim/protocol';
 import { CHALLENGES } from './sim/challenges';
+import { CHEM_SCENES } from './sim/chemscenes';
 import { recordStars } from './game/progress';
 import { readSave, rleDecode, rleEncode, storeSave } from './game/rle';
 import { decodeShare, encodeShare, shareUrl, takeUrlCode } from './game/share';
@@ -329,8 +330,10 @@ worker.onmessage = (e: MessageEvent<Res>) => {
     if (snap && view3dOn && view3d) view3d.update(snap, r.snapW!, r.snapH!);
     if (r.pg3d && pgView?.visible) pgView.update(new Float32Array(r.pg3d), r.pgN ?? 0, r.pgForces ?? []);
     if (r.pgWalls && pgView) pgView.setWalls(new Uint8Array(r.pgWalls));
-    if (r.events) playEvents(r.events);
+    // the menu's demo is silent and still: the worker clears its events itself
+    if (r.events && screen === 'game') playEvents(r.events);
     if (r.parts !== undefined) hud.setParticles(r.parts);
+    lastLive = r.parts ?? (r.counts ? r.counts.reduce((s, n) => s + n, 0) - r.counts[0] : 0);
     if (r.hashes && mp) mp.hashes(r.hashes);
     if (mp && r.mode && r.mode !== current.id && current.challengeId === null) {
       // the host switched the room: rebuild this screen, the world already has
@@ -338,15 +341,15 @@ worker.onmessage = (e: MessageEvent<Res>) => {
       roomPill.setNext(nextRoomMode().roomName);
       toast(`THE ROOM IS NOW IN THE ${current.roomName}`);
     }
-    current.onFrame?.(r);
+    if (screen === 'game') current.onFrame?.(r);
     // the host's frame clock must track its world exactly
     if (mp?.host && r.f !== undefined && r.f !== mp.host.f && !frameWarned) {
       frameWarned = true;
       console.error(`multiplayer: host clock ${mp.host.f} != world frame ${r.f}`);
     }
     // the playground's sound follows the sim; leaving it fades the voices out
-    sfx.playground(r.pgStats ?? null);
-    if (r.counts) sfx.crackle(r.counts[Mat.FIRE] + r.counts[Mat.EMBER]);
+    sfx.playground(screen === 'game' ? r.pgStats ?? null : null);
+    if (r.counts && screen === 'game') sfx.crackle(r.counts[Mat.FIRE] + r.counts[Mat.EMBER]);
     if (r.counts && r.used && r.budget) {
       hud.updateStats({
         counts: r.counts,
@@ -692,15 +695,18 @@ function loop(now: number): void {
   lastT = now;
   acc += dt;
 
-  if (screen === 'game' && !paused && !resultOpen) {
+  const playing = screen === 'game' && !paused && !resultOpen;
+  if (playing || attract) {
     let guard = 0;
     while (acc >= STEP_MS && guard < 6) {
       if (inFlight) break;
       sendStep();
       acc -= STEP_MS;
       guard++;
-      current.tick?.(frameNo);
-      frameNo++;
+      if (playing) {
+        current.tick?.(frameNo);
+        frameNo++;
+      }
     }
   } else {
     acc = 0;
@@ -740,6 +746,7 @@ function onPointer(e: PointerEvt): void {
 // ---- game flow ----
 
 function enterGame(): void {
+  stopAttract();
   screen = 'game';
   paused = false;
   resultOpen = false;
@@ -810,9 +817,13 @@ async function requestMenu(): Promise<void> {
 function openMenu(): void {
   setImmersive(false);
   leaveRoom('YOU LEFT THE ROOM');
-  sfx.playground(null); // no frames in the menu, so nothing else would fade it
+  // the demo behind the menu replaces the world: save the sandbox first
+  // (a no-op outside it), queued ahead of the demo's mode switch
+  autosaveNow();
+  sfx.playground(null); // the menu's demo is silent
   screen = 'menu';
   current.leave();
+  close3d();
   hud.showBars(false);
   showMenu({
     entries: MENU,
@@ -827,10 +838,70 @@ function openMenu(): void {
     onToggleMusic: toggleMusic,
     onHelp: () => toggleHelp(),
     onToggle3d: () => void toggle3d(),
+    onPreview: previewAttract,
     onCycleTheme: nextTheme,
     theme: loadTheme(),
   });
+  startAttract('pg');
 }
+
+// ---- attract mode: the game runs behind the menu ----
+// The world is a playground SURPRISE scene (or the chem lab's FLAME TESTS
+// while its card is hovered). Display only, through the same inputs a player
+// sends: silent and still (see the frame handler), and never in a room.
+
+const ATTRACT_MS = 25000;
+const PREVIEW_DELAY_MS = 300;
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+/** what the menu is showing behind itself; null = nothing (or reduced motion) */
+let attract: { kind: 'pg' | 'chem'; name: string } | null = null;
+let attractTimer = 0;
+let previewTimer = 0;
+/** particles (playground) or cells (chem lab) in the last frame, for dev checks */
+let lastLive = 0;
+
+function startAttract(kind: 'pg' | 'chem'): void {
+  window.clearTimeout(attractTimer);
+  if (screen !== 'menu' || reducedMotion.matches) return;
+  const m = kind === 'pg' ? playground : chemLab;
+  renderer.setCinematic?.(m.cinematic);
+  renderer.reset();
+  let name: string;
+  if (kind === 'pg') {
+    post({ t: 'input', inp: { k: 'mode', m: 'playground' } });
+    name = playground.surprise(true);
+  } else {
+    post({ t: 'input', inp: { k: 'mode', m: 'chem' } });
+    post({ t: 'input', inp: { k: 'chemScene', id: 'flames' } });
+    name = CHEM_SCENES.find((s) => s.id === 'flames')!.label;
+  }
+  attract = { kind, name };
+  overlay.classList.add('attract');
+  setMenuLive(name);
+  // a new scene every 25 s, whichever kind is showing
+  attractTimer = window.setTimeout(() => startAttract(kind), ATTRACT_MS);
+}
+
+function stopAttract(): void {
+  window.clearTimeout(attractTimer);
+  window.clearTimeout(previewTimer);
+  attract = null;
+  overlay.classList.remove('attract');
+  setMenuLive(null);
+}
+
+/** Hover or focus on a mode card: preview it, once the mouse settles. */
+function previewAttract(kind: 'pg' | 'chem'): void {
+  window.clearTimeout(previewTimer);
+  previewTimer = window.setTimeout(() => {
+    // the chem lab's scene is fixed: no need to rebuild what is already on
+    if (screen === 'menu' && !(kind === 'chem' && attract?.kind === 'chem')) startAttract(kind);
+  }, PREVIEW_DELAY_MS);
+}
+
+// dev only: lets automated checks read the menu's demo
+if (import.meta.env.DEV)
+  (window as unknown as { __attract: () => unknown }).__attract = () => ({ screen, attract, live: lastLive });
 
 /** The menu's PLAY column; each card's hotkey works on the menu too. */
 const MENU: MenuEntry[] = [
@@ -849,6 +920,7 @@ const MENU: MenuEntry[] = [
   },
   {
     name: 'PLAYGROUND',
+    preview: 'pg',
     sub: 'Fireworks, portals, black holes and musical bumpers.',
     key: 'P',
     hotkey: 'p',
@@ -860,6 +932,7 @@ const MENU: MenuEntry[] = [
   },
   {
     name: 'CHEM LAB',
+    preview: 'chem',
     sub: 'Pick elements off the periodic table and watch them react.',
     key: 'L',
     hotkey: 'l',
@@ -871,6 +944,7 @@ const MENU: MenuEntry[] = [
   },
   {
     name: 'SURPRISE ME',
+    preview: 'pg',
     sub: 'A brand-new light show, made up on the spot.',
     key: 'R',
     hotkey: 'r',

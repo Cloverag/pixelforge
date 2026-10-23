@@ -12,6 +12,8 @@ export interface MenuEntry {
   hotkey: string;
   primary?: boolean;
   cls?: string;
+  /** hovering or focusing the card previews this on the background */
+  preview?: 'pg' | 'chem';
   run(): void;
 }
 
@@ -22,6 +24,7 @@ export interface MenuCallbacks {
   onToggleCrt(): void;
   onToggleBg(): void;
   onToggleMusic(): void;
+  onPreview(kind: 'pg' | 'chem'): void;
   onHelp(): void;
   onToggle3d(): void;
   onCycleTheme(): string;
@@ -38,7 +41,7 @@ function starHtml(n: number): string {
 }
 
 /** A mode card: big label, one line of what it is, the key that starts it. */
-function modeButton(label: string, sub: string, key: string, primary: boolean, onClick: () => void): HTMLElement {
+function modeButton(label: string, sub: string, key: string, primary: boolean, onClick: () => void, onPreview?: () => void): HTMLElement {
   const b = h('button', 'px mode-btn' + (primary ? ' primary' : '')) as HTMLButtonElement;
   b.type = 'button';
   const text = h('span', 'mode-text');
@@ -47,7 +50,19 @@ function modeButton(label: string, sub: string, key: string, primary: boolean, o
   b.appendChild(text);
   b.appendChild(h('kbd', 'mode-key', key));
   b.onclick = onClick;
+  if (onPreview) {
+    b.onmouseenter = onPreview;
+    b.onfocus = onPreview;
+  }
   return b;
+}
+
+/** "LIVE: <scene>" under the panel while the game runs behind the menu; null hides it. */
+export function setMenuLive(name: string | null): void {
+  const el = document.getElementById('menu-live');
+  if (!el) return;
+  el.textContent = name ? `LIVE: ${name}` : '';
+  el.classList.toggle('hidden', !name);
 }
 
 /** A settings key with an indicator lamp, matching the in-game topbar. */
@@ -124,7 +139,8 @@ export function showMenu(cbs: MenuCallbacks): void {
   const modes = h('section', 'menu-modes');
   modes.appendChild(h('h2', 'section-title', 'PLAY'));
   for (const e of cbs.entries) {
-    const b = modeButton(e.name, e.sub, e.key, e.primary ?? false, e.run);
+    const kind = e.preview;
+    const b = modeButton(e.name, e.sub, e.key, e.primary ?? false, e.run, kind && (() => cbs.onPreview(kind)));
     if (e.cls) b.classList.add(e.cls);
     modes.appendChild(b);
   }
@@ -202,4 +218,7 @@ export function showMenu(cbs: MenuCallbacks): void {
   screen.appendChild(foot);
 
   overlay.appendChild(screen);
+  const live = h('div', 'menu-live hidden');
+  live.id = 'menu-live';
+  overlay.appendChild(live);
 }
