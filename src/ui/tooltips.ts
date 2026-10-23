@@ -57,6 +57,8 @@ function describe(target: HTMLElement): { name: string; note: string } | null {
   const btn = target.closest('button.px');
   if (btn) {
     const name = btn.textContent?.trim() ?? '';
+    // a disabled key says why, not what it would do
+    if (btn instanceof HTMLButtonElement && btn.disabled) return { name, note: btn.title };
     return { name, note: BTN_NOTES[name] ?? '' };
   }
   return null;

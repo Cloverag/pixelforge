@@ -746,7 +746,7 @@ function enterGame(): void {
   hud.setPaused(false);
   hud.showBars(true);
   hud.setModeLabel(current.label);
-  hud.setSaveVisible(current.saveable);
+  hud.setSaveEnabled(current.saveable);
   hideOverlay();
   renderer.resize();
   acc = 0;

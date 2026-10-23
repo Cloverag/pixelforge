@@ -188,7 +188,7 @@ body.has-wallpaper #app { position: relative; z-index: 1; }
   flex-direction: column;
   gap: 4px;
 }
-/* a cluster whose keys are all hidden (FILE outside the sandbox) goes too */
+/* a cluster whose keys are all hidden goes too */
 .btn-group:not(:has(button.px:not(.hidden))) { display: none; }
 .btn-group.end {
   flex-direction: row;
@@ -277,6 +277,21 @@ button.px.primary:hover {
 }
 
 button.px.danger { color: var(--danger-ink); }
+
+/* a key that is there but not for this mode: dimmed, no lift, no press */
+button.px:disabled,
+button.px:disabled:hover,
+button.px:disabled:active {
+  opacity: 0.4;
+  cursor: default;
+  color: var(--ink-dim);
+  background: linear-gradient(180deg, var(--panel-3), var(--panel-2));
+  border-color: var(--line);
+  border-bottom-color: var(--edge-dark);
+  box-shadow: inset 0 1px 0 var(--bev-hi);
+  transform: none;
+  z-index: auto;
+}
 
 /* ------------------------------------------------------ stage / screen */
 

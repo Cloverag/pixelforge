@@ -368,12 +368,21 @@ export class Hud {
     document.body.classList.toggle('sim-paused', p);
   }
 
-  setSaveVisible(v: boolean): void {
-    this.saveBtn.classList.toggle('hidden', !v);
-    this.loadBtn.classList.toggle('hidden', !v);
-    // sharing a challenge would hand someone a half-solved puzzle, so the
-    // link button lives and dies with save/load
-    this.shareBtn.classList.toggle('hidden', !v);
+  /**
+   * FILE stays on the bar in every mode, so the groups beside it sit at the
+   * same x everywhere; outside the sandbox its keys are just disabled.
+   * Sharing a challenge would hand someone a half-solved puzzle, so the link
+   * button lives and dies with save/load.
+   */
+  setSaveEnabled(v: boolean): void {
+    for (const b of [this.saveBtn, this.loadBtn, this.shareBtn]) {
+      // the enabled title is whatever mkBtn gave it: remember it, put it back
+      b.dataset.title ??= b.title;
+      const t = v ? b.dataset.title : 'Saving is for the sandbox';
+      b.disabled = !v;
+      b.title = t;
+      b.setAttribute('aria-label', t);
+    }
   }
 
   /** The SFX lamp means "sound on", like every other lamp. */
