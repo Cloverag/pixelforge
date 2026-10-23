@@ -1205,6 +1205,9 @@ kbd, .mode-key {
   .swatch { width: auto; min-height: 38px; }
   .gswatches.tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: none; grid-auto-flow: row; grid-auto-columns: auto; }
   .swatch.tile { min-height: 0; }
+  /* the 176px rail fits one scene button per row, not two (ALKALI BATH,
+     MUSIC STAIRS and PORTAL LOOP are wider than half of it) */
+  #toolbar .scenebtns { grid-template-columns: 1fr; }
   .toolcol { order: -1; min-width: 0; margin: 0 0 10px; }
   #statusbar { display: none; }
   #stage { padding: 4px; }
@@ -1648,8 +1651,18 @@ kbd, .mode-key {
 }
 .scenebtns .px {
   font-size: 9.5px;
+  /* tighter than the default 1px: MUSIC STAIRS fits its 97px button by less
+     than a pixel at 1280x720, and an ellipsis on a sub-pixel is a bug */
+  letter-spacing: 0.5px;
   padding-inline: 4px;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* the text sits in a centred flex child, so the button's own overflow cut an
+   over-wide label on BOTH sides; clip (with an ellipsis) at the label instead */
+.scenebtns .px .lbl {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
