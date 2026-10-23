@@ -904,7 +904,7 @@ body.crt-on .title-screen::after {
   max-width: min(92vw, 60em);
   margin-top: 0.4em;
   font-family: var(--font-read);
-  font-size: clamp(14px, 1.1vw, 18px);
+  font-size: clamp(14px, 1.1vw, 24px);
   line-height: 1.45;
   color: var(--ink);
 }
