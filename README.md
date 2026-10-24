@@ -3,9 +3,12 @@
 A pixel-art falling-sand forge for the browser. Paint 29 materials that burn,
 flow, grow and explode; build with friends in the same world over a link; make
 light shows with fireworks, portals, black holes and musical bumpers; pick
-elements off a periodic table and watch them react in the chem lab; or solve
-7 goal-based challenges. Everything is simulated in a Web Worker at a fixed
-60 Hz on a 640x360 grid and rendered with WebGL.
+elements off a periodic table and watch them react in the chem lab; grow a
+bouquet of flowers drawn in coloured text in the ASCII garden; or solve 7
+goal-based challenges. A sun and a moon cross the sky and cast shadows, and an
+optional path tracer bounces firelight around the world. Everything is
+simulated in a Web Worker at a fixed 60 Hz on a 640x360 grid and rendered
+with WebGL.
 
 No UI framework: TypeScript + Vite + WebGL + WebAudio. The graphics and the
 music are procedural; the only assets are 31 CC0 sound effects from Kenney.
@@ -13,15 +16,13 @@ three.js and Trystero load only when the 3D views or multiplayer are used.
 
 **▶ Play it: https://cloverag.github.io/pixelforge/**
 
-![PIXELFORGE: a sandbox pool with flowers beside a playground galaxy](public/og.jpg)
+![The title screen: hovering ASCII GARDEN plays the garden's three scenes behind the list](docs/menu-garden.gif)
 
-![The sandbox: a sand dune, a pool with flowers, and a lava fire](docs/screenshot-sandbox.jpg)
+![The sandbox at night: lava burning across a wooden beam under the moon, in the arcade cabinet](docs/screenshot-sandbox.jpg)
 
-| TNT on fuses | Flowers growing |
+| Night fire, then the ASCII lamp | The ASCII garden |
 |:---:|:---:|
-| ![Three TNT charges on fuses of different lengths go off one after another: sand is thrown out of the craters, a wooden hut is gutted, and the last blast breaks a pond wall](docs/tnt.gif) | ![Plants grow up through two shallow ponds and bloom into flowers at the surface](docs/flowers.gif) |
-
-![The main menu](docs/screenshot-menu.jpg)
+| ![Lava sets a wooden beam alight under a starry night sky; halfway through, the ASCII lamp turns the world's materials into coloured text while the sky stays as it is](docs/sandbox-night-ascii.gif) | ![Flowers planted one click at a time, then a whole bouquet, all drawn in coloured text](docs/garden-bouquet.gif) |
 
 ---
 
@@ -52,6 +53,7 @@ get their own layout.
 | **SANDBOX** | Paint any material with the brush, flood-fill (`F`) or blow wind (`W`); right-drag erases. Your world autosaves and comes back on reload; SAVE / LOAD / SHARE a link to it. |
 | **PLAY TOGETHER (beta)** | A room for friends: open one, send the link, and everyone builds in the same world - the sandbox or the playground. See [Playing together](#playing-together). |
 | **PARTICLE PLAYGROUND** | Light shows instead of materials: emitters, forces, bumpers that play notes, portals - with a film-look renderer, a full 3D view and sound design. See [The playground](#the-playground). |
+| **ASCII GARDEN** | Flowers, an eye made of words and 3D lilies, drawn as coloured text. Solo only. See [The ASCII garden](#the-ascii-garden). |
 | **CHEM LAB** | Pick elements off a periodic table and drop them into water, acid, fire or each other: 30 elements, 70 reactions, 3 ready-made experiments. See [The chem lab](#the-chem-lab). |
 | **SURPRISE ME** | A brand-new generated playground scene every click (`R`). |
 | **CHALLENGES** | 7 goal-based puzzles with material budgets, time limits, win/lose checks and a 3-star rating. Levels unlock in order; stars persist in `localStorage`. |
@@ -93,8 +95,6 @@ your world. Pasted into WhatsApp or Discord, the link shows a preview card.
 - **Leaving** asks first. A host who refreshes reopens the same room from the
   autosave and guests re-sync on their own; a host who leaves closes it.
 
-![Remote cursors: brush hovering, brush painting, wind, erase, fill](docs/screenshot-cursors.jpg)
-
 ### How it works
 
 There is no game server. [Trystero](https://github.com/dmotz/trystero) finds
@@ -129,9 +129,7 @@ rounding. It is wrapped to 32 bits now, with every sequence unchanged.
 
 ## The playground
 
-![The six demo scenes](docs/screenshot-playground-scenes.jpg)
-
-![The GALAXY scene: a four-armed spiral of light turning and shifting colour](docs/galaxy.gif)
+![The GALAXY scene: a four-armed spiral of light turning and shifting colour](docs/playground-galaxy.gif)
 
 | Group | Tools |
 |-------|-------|
@@ -202,6 +200,57 @@ lava, plants, glass and wall.
   of element-pair reactions exists. The periodic table loads on first open,
   so its data (5 kB gzip) is not in the entry bundle.
 
+## The ASCII garden
+
+A fourth mode, after the "ASCII lily bouquet" demos: vector flowers drawn on a
+canvas, then turned into coloured text by a WebGL filter. The screen is cut
+into cells; each cell takes the average colour under it (a mipmap read) and
+picks a character by brightness from ` .:-=+*#%@`. No PixiJS: the filter is
+one shader and a glyph atlas drawn once with the browser's monospace font.
+
+| Flowers | Eye of words | 3D lily |
+|:---:|:---:|:---:|
+| ![A bouquet of lilies, tulips, daisies, roses and sunflowers in coloured text](docs/garden-bouquet.gif) | ![A giant eye made of lines of text: it blinks and its iris follows the pointer](docs/garden-eye.gif) | ![A bouquet of lilies builds itself as a wireframe, then fills in with lit petals while the camera orbits](docs/garden-lily3d.gif) |
+
+- **FLOWERS:** click to plant a lily, tulip, daisy, rose or sunflower; right
+  click picks one; BOUQUET (`F`) makes a whole new arrangement; CLEAR (`X`).
+  Flowers bloom from the stem up and sway.
+- **EYE OF WORDS** (`E`): the screen is filled with short lines of text, and
+  each letter takes the colour of the part of the eye under it - white, iris,
+  pupil, lids. It blinks every few seconds, the iris follows the pointer, the
+  view breathes in and out. COLOURS cycles three palettes.
+- **3D LILY** (`L`): five lilies built from parametric petals, lit two-sided
+  with light through the petals, painter-sorted on a plain 2D canvas. It
+  draws itself as a wireframe first, then the surfaces fade in.
+- **ASCII** (`A`) switches the text off to show the drawings; GLYPH SIZE
+  cycles 6 / 8 / 11 / 15 px characters.
+
+The eye and the 3D lily are our own takes on two Python sketches
+([eye_python](https://github.com/mishratanya2311/eye_python),
+[lily-animation-python](https://github.com/mishratanya2311/lily-animation-python));
+no code was copied. On the title screen, resting the cursor on ASCII GARDEN
+plays the three scenes behind the list.
+
+The other modes have an **ASCII** lamp on the deck (`T`): the same filter over
+the world, masked by the frame's material ids, so only what is there turns to
+text and the sky shows as it is.
+
+## Light and sky
+
+- **SKY** on the deck: CYCLE (day and night turning, a full day every six
+  minutes), DAY, NIGHT, or a flat colour with no lighting. The sun and the moon
+  cross the sky, solids cast shadows toward the light, and hollows get ambient
+  occlusion. At night fire, lava, torches and neon light their surroundings.
+- **Cells are lit like blocks:** a lit top edge, a shaded underside, seams
+  between neighbours. Water is clear: you see what is behind it, the sky is
+  mirrored in its surface and the sun glints off it.
+- **RAY** (deck lamp): path-traced light. A jump-flood distance field lets each
+  texel cast 12 rays a frame, blended over time, so coloured light bounces off
+  walls and fire throws soft shadows. If the frame rate stays under 40 FPS for
+  3 seconds it switches itself off.
+- The **title screen** is always drawn in 4px blocks; in game GRID keeps
+  whatever you picked.
+
 ## Controls
 
 | Input | Action |
@@ -215,7 +264,9 @@ lava, plants, glass and wall.
 | `SPACE` / `N` | Pause / single step while paused |
 | `G` / `Q` / `X` | Gravity / slow-mo / clear (playground) |
 | `R` | SURPRISE ME (menu and playground) |
-| `L` | Chem lab (menu) |
+| `L` | Chem lab (menu); 3D LILY (garden) |
+| `G` | ASCII garden (menu) |
+| `F` / `E` / `A` / `X` | Bouquet / eye of words / text on-off / clear (garden) |
 | `E` | Periodic table (chem lab) |
 | `O` | Open a room (menu) |
 | `Z` | Ping where your cursor is (in a room) |
@@ -223,15 +274,16 @@ lava, plants, glass and wall.
 | `I` | Immersive: the canvas fills the window; push the pointer to an edge for the panels |
 | `B` | Grid view: chunky blocks, cycles 4 / 8 / 16 px then off |
 | `S` / `C` | Soft glow / CRT filter |
+| `T` | ASCII view: the world's materials as coloured text |
 | `M` | Mute everything (a toast says SOUND ON / OFF) |
 | `D` | FPS readout in the canvas corner (off by default) |
 | `ESC` | Close the periodic table, leave immersive mode, then the **pause menu** (alone it freezes the game; in a room it does not). QUIT TO TITLE asks first in a room |
 
-The SANDBOX / PLAYGROUND / CHEM LAB buttons on the marquee switch mode in one
+The SANDBOX / PLAYGROUND / CHEM LAB / GARDEN buttons on the marquee switch mode in one
 press; the sandbox comes back from its autosave. In a room only the host can
 switch, after a confirm, and everyone goes along.
 
-On a phone (portrait) the marquee keeps only the three modes and the pause
+On a phone (portrait) the marquee keeps only the modes and the pause
 button (which opens the pause menu), the screen runs full width, the materials
 panel fills the middle (brush and tools pinned on top, tiles scrolling), and the
 deck is one row that scrolls sideways. In landscape the cabinet stays as on a
@@ -245,11 +297,11 @@ no icon set, no images.
 
 - **An arcade cabinet, always dark.** The game screens match the title
   screen. Along the top runs the **marquee**: the gold logo, the three modes as
-  lit buttons, the material you hold, the cell count (and in the chem lab the
+  lit buttons (four, with the garden), the material you hold, the cell count (and in the chem lab the
   reactions per second and what is reacting most), PAUSE and MENU. The screen
   sits in a bezel. Along the bottom runs the **control deck**, which holds
-  everything you change while playing: VIEW lamps (SOFT, CRT, GRID, 3D), the
-  SKY colours, Music and Effects volume (0-10), and SAVE / LOAD / SHARE (free
+  everything you change while playing: VIEW lamps (SOFT, CRT, GRID, 3D,
+  ASCII, RAY), the SKY (CYCLE, DAY, NIGHT and flat colours), Music and Effects volume (0-10), and SAVE / LOAD / SHARE (free
   sandbox only). Every toggle reports to the deck, so the keys, the pause menu
   and the deck always agree. Fire and glow are additive light, which vanishes
   on a light field, so there is no light theme.
@@ -258,8 +310,8 @@ no icon set, no images.
   and OPTIONS submenus. Arrow keys / Enter / ESC drive it, or the mouse.
 - Explosions shake the canvas, flash and boom.
 - **SKY** (the deck, VIEW in the pause menu, OPTIONS on the title screen): the
-  colour of the empty world, from eight presets (NIGHT is the original
-  `#0b0b14`). It only changes how the world is drawn. It never goes into a
+  lit skies (see [Light and sky](#light-and-sky)) or the flat colour of the
+  empty world, from eight presets. It only changes how the world is drawn. It never goes into a
   snapshot, a hash or a room, so each player in a room sees their own, and the
   browser remembers it. The worker draws the frame, so it gets the colour in a
   presentation message, and a paused world is redrawn at once.
@@ -331,7 +383,15 @@ src/
     sand.ts                the sandbox, and each challenge
     playground.ts          the particle playground
     chem.ts                the chem lab
+    garden.ts              the ASCII garden: scenes, planting, the panel
     stroke.ts              brush strokes, shared by every mode
+  garden/
+    flowers.ts             flower kinds, planting, the bouquet generator (seeded)
+    draw.ts                vector flowers on a 2D canvas
+    eye.ts                 EYE OF WORDS: the text mask and the eye's colours
+    lily3d.ts              3D LILY: parametric petals, projection, painter's sort
+    ascii.ts               the WebGL text filter (also the ASCII lamp in other modes)
+    view.ts                the garden's own canvas over the world's; the title preview
   core/
     input.ts               pointer + keyboard -> simulation coords
     rng.ts                 seeded PRNG (32-bit state)
@@ -355,7 +415,8 @@ src/
     pack.ts                snapshot packing + gzip
     presence.ts            names, colours, cursor and reaction messages
   render/
-    glrenderer.ts          WebGL composite: glow, fluid, water, film look
+    glrenderer.ts          WebGL composite: glow, fluid, water, film look, sun/moon light, path tracer
+    daylight.ts            the day-night cycle as keyframes (pure)
     cinematic.ts           playground HDR bloom + filmic tone mapping
     fluid.ts               GPU stable-fluids smoke/glow
     pg3d.ts                3D playground (three.js, lazy)
@@ -398,7 +459,7 @@ tests/                     vitest: world rules, TNT debris, rendering, playgroun
 
 ### Testing
 
-305 tests. Beyond the material rules: two worlds fed the same inputs must
+322 tests. Beyond the material rules: two worlds fed the same inputs must
 match for 1200 frames; a world restored mid-game into a different seed must
 stay identical; host and two guests over a simulated network with random
 delays, reordering and a late joiner must agree at every frame; a corrupted
