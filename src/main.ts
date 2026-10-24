@@ -1006,6 +1006,14 @@ let previewTimer = 0;
 /** particles (playground) or cells (chem lab) in the last frame, for dev checks */
 let lastLive = 0;
 
+/** how many scenes each mode has shown behind the title screen: every hover, and every timed change, moves on to the next */
+const sceneTurns: Partial<Record<PreviewKind, number>> = {};
+function nextScene(kind: PreviewKind, count: number): number {
+  const i = sceneTurns[kind] ?? 0;
+  sceneTurns[kind] = i + 1;
+  return i % count;
+}
+
 function startAttract(kind: PreviewKind): void {
   window.clearTimeout(attractTimer);
   if (screen !== 'menu' || reducedMotion.matches) return;
@@ -1014,7 +1022,7 @@ function startAttract(kind: PreviewKind): void {
     if (!gardenPreview.mounted()) gardenPreview.mount();
     // drawings and 3D graphs taking turns: butterfly, rose, rosette, ripple...
     const all = DRAWINGS.flatMap((d, k) => (SURFACES[k] ? [d, SURFACES[k]] : [d]));
-    const i = attract?.kind === 'math' ? (all.findIndex((d) => d.name === attract!.name) + 1) % all.length : 2;
+    const i = nextScene('math', all.length);
     const d = all[i];
     gardenPreview.ascii = false;
     gardenPreview.mathWidth = 1;
@@ -1030,7 +1038,7 @@ function startAttract(kind: PreviewKind): void {
     // its own canvas over the demo; a new scene each time round
     if (!gardenPreview.mounted()) gardenPreview.mount();
     const scenes = ['flowers', 'lily3d', 'bloom', 'eye'] as const;
-    const i = attract?.kind === 'garden' ? (scenes.indexOf(gardenPreview.scene as (typeof scenes)[number]) + 1) % scenes.length : 0;
+    const i = nextScene('garden', scenes.length);
     gardenPreview.flowers = [];
     gardenPreview.ascii = true;
     gardenPreview.setScene(scenes[i], (Math.random() * 1e6) | 0);
@@ -1050,14 +1058,14 @@ function startAttract(kind: PreviewKind): void {
     name = playground.surprise(true);
   } else if (kind === 'sand') {
     // a world of ordinary brush strokes; the sandbox's own rules do the rest
-    const i = attract?.kind === 'sand' ? (SAND_DEMOS.findIndex((d) => d.name === attract!.name) + 1) % SAND_DEMOS.length : 0;
+    const i = nextScene('sand', SAND_DEMOS.length);
     post({ t: 'input', inp: { k: 'mode', m: 'sand' } });
     for (const s of SAND_DEMOS[i].strokes) post({ t: 'input', inp: { k: 'paint', pts: s.pts, mat: s.mat, size: s.size, kind: 'brush' } });
     name = SAND_DEMOS[i].name;
   } else {
     // each experiment in turn, flame tests first
     const order = [...CHEM_SCENES].sort((p, q) => Number(q.id === 'flames') - Number(p.id === 'flames'));
-    const i = attract?.kind === 'chem' ? (order.findIndex((c) => c.label === attract!.name) + 1) % order.length : 0;
+    const i = nextScene('chem', order.length);
     post({ t: 'input', inp: { k: 'mode', m: 'chem' } });
     post({ t: 'input', inp: { k: 'chemScene', id: order[i].id } });
     name = order[i].label;
