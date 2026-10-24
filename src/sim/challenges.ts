@@ -228,8 +228,10 @@ export function starsFor(def: ChallengeDef, w: World, frame: number, used: Int32
       return 1;
     }
     case 'containment': {
-      if (frame < 3600) return 3;
-      if (frame < 4800) return 2;
+      // the win comes at a fixed time, so stars go to a tidy patch
+      const stone = used[Mat.STONE];
+      if (stone <= 300) return 3;
+      if (stone <= 700) return 2;
       return 1;
     }
     case 'gardener':
@@ -250,7 +252,7 @@ CHALLENGES.push(
     id: 'containment',
     name: 'CONTAINMENT',
     desc: 'The volcano is venting into the reservoir. Patch the crack before lava reaches the reactor.',
-    hint: 'Stone walls hold. The crack leaks sideways - plug it high.',
+    hint: 'Stone walls hold. The crack is low in the right wall - plug it before the lava finds it.',
     allowed: [Mat.STONE],
     budget: { [Mat.STONE]: 2400 },
     timeLimit: 7200,
@@ -264,21 +266,18 @@ CHALLENGES.push(
       fillRect(w, 157, 211, 161, 345, Mat.STONE);
       fillRect(w, 397, 211, 401, 345, Mat.STONE);
       fillRect(w, 157, 341, 401, 345, Mat.STONE);
-      // the crack (player must patch)
-      fillRect(w, 397, 288, 401, 300, Mat.EMPTY);
-      // reactor housing on the right
-      fillRect(w, 573, 281, 639, 345, Mat.WALL);
-      fillRect(w, 581, 292, 629, 334, Mat.GLASS);
+      // the crack (player must patch): low in the wall, where the lava pushes hardest
+      fillRect(w, 397, 300, 401, 338, Mat.EMPTY);
+      // reactor housing just beyond: lava leaking out creeps along the floor to it
+      fillRect(w, 470, 281, 560, 345, Mat.WALL);
+      fillRect(w, 478, 292, 552, 334, Mat.GLASS);
     },
     check(w, frame) {
-      const danger = countIn(w, 506, 334, 639, 345, Mat.LAVA);
-      if (danger >= 220) return 'lose';
-      if (
-        frame > 2600 &&
-        danger === 0 &&
-        w.grid.counts[Mat.LAVA] >= 950
-      )
-        return 'win';
+      // lava piling against the reactor's wall
+      const danger = countIn(w, 440, 320, 469, 345, Mat.LAVA);
+      if (danger >= 60) return 'lose';
+      // held until the vent has stopped (frame 2400) and a leak has had time to arrive
+      if (frame > 5400 && danger === 0 && w.grid.counts[Mat.LAVA] >= 950) return 'win';
       return 'running';
     },
   },

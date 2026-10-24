@@ -127,3 +127,19 @@ describe('the eraser in a challenge', () => {
   });
 });
 
+describe('CONTAINMENT', { timeout: 300_000 }, () => {
+  it('is lost if nothing is done: the crack leaks lava to the reactor (issue #2)', () => {
+    expect(play('containment', idle)).toMatchObject({ status: 'lose', reason: 'Lava reached the reactor!' });
+  });
+
+  it('is won by patching the crack with stone - a tidy patch earns 3 stars', () => {
+    const r = play('containment', (w, f) => {
+      if (f !== 0) return;
+      const pts: number[] = [];
+      for (let y = 298; y <= 340; y += 2) pts.push(399, y);
+      w.paint(pts, Mat.STONE, 6);
+    });
+    expect(r).toMatchObject({ status: 'win', stars: 3 });
+  });
+});
+
