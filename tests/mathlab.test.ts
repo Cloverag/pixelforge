@@ -83,6 +83,6 @@ describe('MATH LAB design links', () => {
     expect(decodeDesign(encodeDesign('nope', {}), DRAWINGS)).toBeNull();
     const wild = decodeDesign(encodeDesign('sunflower', { n: 1e9, angle: -5 }), DRAWINGS)!;
     expect(wild.params).toEqual({ n: 2000, angle: 130, size: 2.5 }); // clamped, and the missing one at its start
-    expect(decodeDesign(encodeDesign('yours', {}, 'x'.repeat(5000)), DRAWINGS)!.formula!.length).toBe(200);
+    expect(decodeDesign(encodeDesign('yours', {}, 'x'.repeat(9000)), DRAWINGS)!.formula!.length).toBe(4000);
   });
 });

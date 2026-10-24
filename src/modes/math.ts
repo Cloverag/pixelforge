@@ -4,6 +4,9 @@ import { MathRun } from '../mathlab/run';
 import { decodeDesign, encodeDesign } from '../mathlab/link';
 import { copyText, shareUrl } from '../game/share';
 import { SURFACES, SurfaceRun, type Surface } from '../mathlab/surface';
+import { PY_EXAMPLES, PYTHON } from '../mathlab/pyexamples';
+import { PyRunner } from '../mathlab/python';
+import type { Stroke } from '../mathlab/drawings';
 import type { PointerEvt } from '../core/input';
 import type { PaletteSection, Swatch } from '../ui/hud';
 import { h } from '../ui/widgets';
@@ -24,11 +27,12 @@ const CHIPS: Record<string, string> = {
   maurer: 'linear-gradient(135deg,#ff4a6a 0 50%,#52c8ff 50% 100%)',
   spiro: 'linear-gradient(135deg,#7ad8ff 0 50%,#ff7ad8 50% 100%)',
   yours: 'linear-gradient(135deg,#ffd23f 0 50%,#ff4fa3 50% 100%)',
+  python: 'linear-gradient(135deg,#3776ab 0 50%,#ffd43b 50% 100%)',
 };
 
 /** Everything on the rail: drawings drawn stroke by stroke, and 3D graphs. */
-type Item = Drawing | Surface;
-const ITEMS: Item[] = [...DRAWINGS, ...MATH_FLOWERS, YOURS, ...SURFACES];
+type Item = Drawing | Surface | typeof PYTHON;
+const ITEMS: Item[] = [...DRAWINGS, ...MATH_FLOWERS, YOURS, PYTHON, ...SURFACES];
 
 /**
  * MATH LAB: maths you can watch. Pick a drawing - a parametric heart, a
@@ -54,6 +58,12 @@ export class MathMode implements ModeController {
     '3': () => this.toggle3d(),
     x: () => this.clear(),
   };
+  /** PYTHON: the player's code, what it last drew, and the worker that runs it */
+  private pyCode = PY_EXAMPLES[0].code;
+  private pyStrokes: Stroke[] | null = null;
+  private pyEditing = true;
+  private py = new PyRunner();
+  private pyBusy = false;
   /** drawings lifted into 3D (the 3D graphs always are) */
   private lift3d = false;
   private view = new GardenView('math-on');
@@ -76,7 +86,7 @@ export class MathMode implements ModeController {
   buildUI(): void {
     const swatch = (d: Item): Swatch => ({ id: d.id, label: d.name, chip: CHIPS[d.id], title: d.idea, info: [d.name, '', d.idea, CHIPS[d.id]] });
     const sections: PaletteSection[] = [
-      { label: 'YOUR OWN', swatches: [swatch(YOURS)] },
+      { label: 'YOUR OWN', swatches: [swatch(YOURS), swatch(PYTHON)] },
       { label: 'MATH FLOWERS', swatches: MATH_FLOWERS.map(swatch) },
       { label: 'DRAWINGS', swatches: DRAWINGS.map(swatch) },
       { label: '3D GRAPHS', swatches: SURFACES.map(swatch) },
@@ -133,6 +143,10 @@ export class MathMode implements ModeController {
     const d = this.drawing;
     p.replaceChildren(h('div', 'math-title', d.name), h('p', 'math-idea', d.idea));
     this.formulaError = null;
+    if (d === PYTHON) {
+      this.pythonPanel(p);
+      return;
+    }
     if ('formula' in d && d.formula) p.append(this.formulaBox(d.formula));
     const code = h('ol', 'math-lines');
     this.lines = this.codeText().map((t) => {
@@ -209,21 +223,126 @@ export class MathMode implements ModeController {
     if (!got) return false;
     this.drawing = got.item;
     this.params = got.params;
-    if (got.formula !== undefined) this.formula = got.formula;
+    if (got.formula !== undefined) {
+      if (got.item === PYTHON) this.pyCode = got.formula;
+      else this.formula = got.formula;
+    }
     return true;
   }
 
   private async share(): Promise<void> {
     const d = this.drawing;
-    const code = encodeDesign(d.id, this.params, d === YOURS ? this.formula : undefined);
+    const code = encodeDesign(d.id, this.params, d === YOURS ? this.formula : d === PYTHON ? this.pyCode : undefined);
     const ok = await copyText(shareUrl(code, 'm'));
     this.ctx.sfx.ui();
     this.ctx.toast(ok ? 'DESIGN LINK COPIED' : 'COPY FAILED - THE BROWSER BLOCKED THE CLIPBOARD', !ok);
   }
 
+  /** PYTHON's panel: examples, the editor (or, after a run, the code lighting up), RUN, what it printed. */
+  private pythonPanel(p: HTMLElement): void {
+    const ideas = h('div', 'math-ideas');
+    for (const ex of PY_EXAMPLES) {
+      const b = h('button', 'math-idea-btn', ex.name) as HTMLButtonElement;
+      b.type = 'button';
+      b.addEventListener('click', () => {
+        this.pyCode = ex.code;
+        this.pyEditing = true;
+        this.buildPanel();
+        void this.runPython();
+      });
+      ideas.append(b);
+    }
+    p.append(ideas);
+    if (this.pyEditing) {
+      const ta = document.createElement('textarea');
+      ta.className = 'math-py';
+      ta.value = this.pyCode;
+      ta.spellcheck = false;
+      ta.setAttribute('aria-label', 'Your Python code');
+      ta.rows = Math.min(22, Math.max(10, this.pyCode.split('\n').length + 1));
+      ta.addEventListener('input', () => (this.pyCode = ta.value));
+      ta.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') return ta.blur();
+        e.stopPropagation(); // the game's keys stay out of the editor
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+          e.preventDefault();
+          void this.runPython();
+        } else if (e.key === 'Tab') {
+          // a tab is four spaces, as Python likes
+          e.preventDefault();
+          ta.setRangeText('    ', ta.selectionStart, ta.selectionEnd, 'end');
+          this.pyCode = ta.value;
+        }
+      });
+      p.append(ta);
+      this.lines = [];
+    } else {
+      const code = h('ol', 'math-lines');
+      this.lines = this.pyCode.split('\n').map((t) => {
+        const li = h('li');
+        li.append(h('code', '', t));
+        code.append(li);
+        return li;
+      });
+      p.append(code);
+    }
+    const row = h('div', 'math-py-row');
+    const run = h('button', 'math-idea-btn math-run', this.pyBusy ? 'RUNNING...' : 'RUN (CTRL+ENTER)') as HTMLButtonElement;
+    run.type = 'button';
+    run.disabled = this.pyBusy;
+    run.addEventListener('click', () => void this.runPython());
+    row.append(run);
+    if (!this.pyEditing) {
+      const edit = h('button', 'math-idea-btn', 'EDIT') as HTMLButtonElement;
+      edit.type = 'button';
+      edit.addEventListener('click', () => {
+        this.pyEditing = true;
+        this.buildPanel();
+      });
+      row.append(edit);
+    }
+    const status = h('span', 'math-py-status', this.pyStatus);
+    row.append(status);
+    p.append(row);
+    if (this.pyOutput) p.append(h('pre', 'math-py-out' + (this.pyFailed ? ' bad' : ''), this.pyOutput));
+  }
+
+  private pyStatus = '';
+  private pyOutput = '';
+  private pyFailed = false;
+
+  /** Run the player's Python; on success show the code lighting up while it draws. */
+  private async runPython(): Promise<void> {
+    if (this.pyBusy) return;
+    this.pyBusy = true;
+    this.pyStatus = 'loading Python...';
+    this.buildPanel();
+    const r = await this.py.run(this.pyCode, (text) => {
+      this.pyStatus = text;
+      const el = this.panel?.querySelector('.math-py-status');
+      if (el) el.textContent = text;
+    });
+    this.pyBusy = false;
+    this.pyFailed = !!r.error;
+    this.pyOutput = [...r.prints, ...(r.error ? [r.error] : [])].join('\n');
+    if (r.error) {
+      this.pyStatus = 'stopped';
+      this.pyEditing = true;
+    } else {
+      this.pyStatus = `${r.strokes.length.toLocaleString()} lines`;
+      this.pyStrokes = r.strokes;
+      this.pyEditing = false;
+    }
+    if (this.drawing !== PYTHON) return; // the player moved on while it ran
+    this.buildPanel();
+    if (!r.error) this.redraw();
+  }
+
   private codeText(): string[] {
     const d = this.drawing;
-    return 'strokes' in d ? d.code(this.params, this.formula) : d.code(this.params);
+    if ('strokes' in d) return d.code(this.params, this.formula);
+    if ('mesh' in d) return d.code(this.params);
+    return this.pyCode.split('\n');
   }
 
   private showCode(): void {
@@ -232,7 +351,17 @@ export class MathMode implements ModeController {
 
   private redraw(): void {
     const d = this.drawing;
-    if ('strokes' in d) {
+    if (d === PYTHON) {
+      // AGAIN redraws the last run; a first visit runs the example
+      if (!this.pyStrokes) {
+        void this.runPython();
+        return;
+      }
+      const run = new MathRun(this.pyStrokes, 6);
+      run.view3d = this.lift3d;
+      this.view.math = run;
+      this.ctx.hud.setParticles(run.strokes.length);
+    } else if ('strokes' in d) {
       let strokes;
       try {
         strokes = d.strokes(this.params, this.formula);
@@ -247,7 +376,7 @@ export class MathMode implements ModeController {
       run.view3d = this.lift3d;
       this.view.math = run;
       this.ctx.hud.setParticles(run.strokes.length);
-    } else {
+    } else if ('mesh' in d) {
       this.view.math = new SurfaceRun(d, this.params);
       this.ctx.hud.setParticles(0);
     }

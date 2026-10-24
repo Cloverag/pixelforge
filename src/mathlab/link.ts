@@ -18,7 +18,8 @@ export interface Design<T extends Designable> {
   formula?: string;
 }
 
-const MAX_FORMULA = 200;
+/** a formula, or a PYTHON program: long enough for real code, short enough for a link */
+const MAX_FORMULA = 4000;
 
 const b64url = (s: string) => btoa(unescape(encodeURIComponent(s))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 const unb64url = (s: string) => decodeURIComponent(escape(atob(s.replace(/-/g, '+').replace(/_/g, '/'))));

@@ -273,6 +273,17 @@ spokes), MAURER ROSE (the rose curve walked in jumps of d degrees) and
 SPIROGRAPH (a wheel in a ring). COPY LINK puts any design - drawing, numbers,
 formula - in a `#m=` link.
 
+**PYTHON** is real Python (Pyodide, CPython compiled to WebAssembly) in its
+own worker, loaded from the CDN on the first RUN. A small stand-in for
+`turtle` (`Screen`, `Turtle`, `forward`, `circle`, `pencolor`, `goto`, ...)
+records each line it would draw together with the line of *your* code that
+drew it, so the code lights up while the drawing appears. Paste turtle code
+from anywhere; `print()` shows under the code, errors arrive as Python's own
+message with the line, and a run that never ends is stopped after 15 s.
+Examples: circles, square spiral, tree, heart, star. COPY LINK carries the
+code too. Any drawing can also be seen in **3D** (key `3`): each stroke as
+high as it is late in the drawing.
+
 **3D GRAPHS** sit under the drawings: surfaces sampled on a grid and drawn as
 shaded quads back to front, with x/y/z axes and the mesh lines, building row
 by row while they turn; drag to turn them by hand.
