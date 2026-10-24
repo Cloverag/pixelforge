@@ -4,7 +4,7 @@ import { planSurprise } from './surprise';
 import { buildChemScene } from './chemscenes';
 import { Grid } from './grid';
 import {
-  Cat, GRAINY, LIT, Lit, MATS, Mat, NMATS, OPEN, SHADED, Shade, WIND_SUSC,
+  Cat, GRAINY, LIT, Lit, MATS, Mat, NMATS, OPEN, SHADED, Shade, WIND_SUSC, withMat,
   Flora, applyShade, colorAt, offRamp, petal, rampIndexAt, SPARK_LIFE, FLAMES,
 } from './materials';
 import { CHEM, COMPILED, DECAY, HOT, KEEP, RULES, RX, type Compiled } from './reactions';
@@ -2276,7 +2276,7 @@ export class World {
     const v = this.shadeOf(i, x, y, m, cells, W);
     const meta = g.meta[i];
     // energized wire and lit TNT leave the ramp, so they are not in the table
-    if (offRamp(m, meta)) return applyShade(colorAt(m, x, y, this.f, meta), v);
+    if (offRamp(m, meta)) return withMat(applyShade(colorAt(m, x, y, this.f, meta), v), m);
     const r = GRAINY[m] ? g.shade[i] & 3 : rampIndexAt(m, x, y, this.f, meta);
     return SHADED[(((m << 2) | r) << 3) | v];
   }

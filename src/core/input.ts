@@ -1,3 +1,4 @@
+import { SIM_H, SIM_W } from '../sim/protocol';
 export interface PointerEvt {
   x: number;
   y: number;
@@ -32,8 +33,9 @@ export class Input {
 
   private toSim(e: PointerEvent): { x: number; y: number } {
     const r = this.canvas.getBoundingClientRect();
-    const x = ((e.clientX - r.left) / r.width) * this.canvas.width;
-    const y = ((e.clientY - r.top) / r.height) * this.canvas.height;
+    // in cells: the canvas may draw at the screen's resolution, the world is SIM_W x SIM_H
+    const x = ((e.clientX - r.left) / r.width) * SIM_W;
+    const y = ((e.clientY - r.top) / r.height) * SIM_H;
     return { x: Math.floor(x), y: Math.floor(y) };
   }
 

@@ -4,7 +4,7 @@ import { CHUNKS_X, CHUNKS_Y, SIM_H, SIM_W } from '../sim/protocol';
 import { Blockifier, fitSize } from './blocks';
 import { EMIT_LUT, Fluid } from './fluid';
 import { Cinematic } from './cinematic';
-import { bindDummyVao, blit, Program } from './glutil';
+import { bindDummyVao, blit, makeTarget, Program, type Target } from './glutil';
 import type { SimRenderer } from './renderer';
 
 /**
@@ -35,12 +35,26 @@ uniform vec3 uBgLift;
 // cinematic (playground) mode: write HDR, and light walls from last frame's bloom
 uniform float uCine;
 uniform sampler2D uLight;
+// the world in cells, and how many screen pixels one cell spans
+uniform vec2 uSim;
+uniform float uCellPx;
+// what each material is (materialInfo): r = liquid
+uniform sampler2D uMatInfo;
+uniform float uCrt;
+// what glows: each light source's colour, nothing else (EMIT pass)
+uniform sampler2D uEmit;
 
-// The rasterizer marks liquid pixels with alpha 250 (LIQUID_ALPHA); every
-// other pixel is 255. Read with texelFetch so linear filtering cannot blur
-// the flag, at 1:1 because the canvas is exactly SIM_W x SIM_H.
+// A frame pixel's alpha is its cell's material id (materials.ts withMat), 255
+// where there is no cell. Read with texelFetch so filtering cannot blend ids.
+int idAt(ivec2 p) {
+  p = clamp(p, ivec2(0), ivec2(uSim) - 1);
+  return int(texelFetch(uFrame, p, 0).a * 255.0 + 0.5);
+}
+vec4 infoOf(int id) {
+  return id < 128 ? texelFetch(uMatInfo, ivec2(id, 0), 0) : vec4(0.0);
+}
 bool liquidAt(ivec2 p) {
-  return texelFetch(uFrame, p, 0).a < 0.99;
+  return infoOf(idAt(p)).r > 0.5;
 }
 
 vec3 waterFx(vec3 c, ivec2 p) {
@@ -71,23 +85,29 @@ vec3 waterFx(vec3 c, ivec2 p) {
 }
 
 void main() {
-  vec3 c = texture(uFrame, vUv).rgb;
-  ivec2 p = ivec2(gl_FragCoord.xy);
+  // Every screen pixel shows its cell's colour exactly: cells are crisp
+  // squares at any size. Light (glow, dye) is sampled smoothly on top.
+  vec2 cf = vUv * uSim;
+  ivec2 p = clamp(ivec2(floor(cf)), ivec2(0), ivec2(uSim) - 1);
+  vec4 px = texelFetch(uFrame, p, 0);
+  // nearest, on purpose: at 2-3 screen pixels a cell, any edge blending is
+  // half the picture and reads as blur; a cell one pixel wider is not visible
+  vec3 c = px.rgb;
   if (liquidAt(p)) c = waterFx(c, p);
 
   if (uSoft > 0.5) {
-    // eight taps on two rings: enough of a bloom for embers and lava to bleed
-    // into their neighbours, far cheaper than a separate blur pass
+    // eight taps on two rings of the emission map: only light sources bleed
+    // light (fire, lava, embers, flames, sparks), never sand or snow
     vec3 g = vec3(0.0);
     vec2 t = uTexel;
-    g += texture(uFrame, vUv + vec2( t.x,  0.0) * 1.5).rgb;
-    g += texture(uFrame, vUv + vec2(-t.x,  0.0) * 1.5).rgb;
-    g += texture(uFrame, vUv + vec2( 0.0,  t.y) * 1.5).rgb;
-    g += texture(uFrame, vUv + vec2( 0.0, -t.y) * 1.5).rgb;
-    g += texture(uFrame, vUv + vec2( t.x,  t.y) * 3.0).rgb;
-    g += texture(uFrame, vUv + vec2(-t.x,  t.y) * 3.0).rgb;
-    g += texture(uFrame, vUv + vec2( t.x, -t.y) * 3.0).rgb;
-    g += texture(uFrame, vUv + vec2(-t.x, -t.y) * 3.0).rgb;
+    g += texture(uEmit, vUv + vec2( t.x,  0.0) * 1.5).rgb;
+    g += texture(uEmit, vUv + vec2(-t.x,  0.0) * 1.5).rgb;
+    g += texture(uEmit, vUv + vec2( 0.0,  t.y) * 1.5).rgb;
+    g += texture(uEmit, vUv + vec2( 0.0, -t.y) * 1.5).rgb;
+    g += texture(uEmit, vUv + vec2( t.x,  t.y) * 3.0).rgb;
+    g += texture(uEmit, vUv + vec2(-t.x,  t.y) * 3.0).rgb;
+    g += texture(uEmit, vUv + vec2( t.x, -t.y) * 3.0).rgb;
+    g += texture(uEmit, vUv + vec2(-t.x, -t.y) * 3.0).rgb;
     g *= 0.125;
     // only what is already bright is allowed to bleed, so the dark tube stays
     // dark instead of turning into grey fog
@@ -100,7 +120,7 @@ void main() {
   if (uCine > 0.5) {
     // into linear light, for the tone mapper downstream
     c = pow(max(c, 0.0), vec3(2.2));
-    float a = texelFetch(uFrame, p, 0).a;
+    float a = px.a;
     if (abs(a - 253.0 / 255.0) < 0.002) {
       // A wall: dim on its own, lit by whatever glows nearby - but kept below
       // the bloom threshold. Lit by last frame's bloom and allowed to bloom
@@ -114,8 +134,51 @@ void main() {
       c *= 1.0 + 3.0 * l;
     }
   }
+  // CRT: one dark line along the foot of every row of cells, so the lines
+  // follow the pixel art instead of striping through it
+  // (only where a cell is 3+ pixels tall: on a smaller one the lines would be half the picture)
+  if (uCrt > 0.5 && uCellPx >= 3.0 && fract(cf.y) < 1.0 / uCellPx) c *= 0.8;
   frag = vec4(c, 1.0);
 }`;
+
+/**
+ * The emission map: each cell's colour times how much it is a light source,
+ * at cell resolution. The composite samples it smoothly for the glow, so
+ * light is soft while the cells stay crisp.
+ */
+const EMIT = `#version 300 es
+precision highp float;
+precision highp sampler2D;
+in vec2 vUv;
+out vec4 frag;
+uniform sampler2D uFrame;
+uniform sampler2D uMatInfo;
+uniform vec2 uSim;
+void main() {
+  ivec2 p = ivec2(floor(vUv * uSim));
+  vec4 px = texelFetch(uFrame, p, 0);
+  int id = int(px.a * 255.0 + 0.5);
+  // 255 is not a cell: the background (dark, below the bloom threshold) and
+  // flying debris, whose sparks should glow
+  float e = id < 128 ? texelFetch(uMatInfo, ivec2(id, 0), 0).g : 1.0;
+  frag = vec4(px.rgb * e, 1.0);
+}`;
+
+/** Materials that give off light: their glow bleeds into the cells around them. */
+const LIGHTS = new Set<number>([Mat.FIRE, Mat.EMBER, Mat.LAVA, Mat.TORCH, Mat.NEON_GLOW, Mat.IODINE_GAS, ...FLAMES]);
+
+/** What the composite needs to know about each material, by id: r = liquid, g = light source. */
+export function materialInfo(): Uint8Array {
+  const lut = new Uint8Array(128 * 4);
+  for (let m = 0; m < NMATS; m++) {
+    const d = MATS[m];
+    if (!d) continue;
+    // lava is a light source, not a pool: it keeps its own look
+    if (d.cat === Cat.LIQUID && m !== Mat.LAVA) lut[m * 4] = 255;
+    if (LIGHTS.has(m)) lut[m * 4 + 1] = 255;
+  }
+  return lut;
+}
 
 /**
  * Fluid tuning, all per-frame (see Fluid.step on why that matters).
@@ -189,7 +252,10 @@ export class GLRenderer implements SimRenderer {
   private frame: HTMLElement | null;
 
   private frameTex: WebGLTexture;
+  private matInfo: WebGLTexture;
   private composite: Program;
+  private emitP: Program;
+  private emit: Target;
   private fluid: Fluid;
   private blocks = new Blockifier();
 
@@ -242,7 +308,20 @@ export class GLRenderer implements SimRenderer {
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, SIM_W, SIM_H, 0, gl.RGBA,
       gl.UNSIGNED_BYTE, null);
 
+    this.matInfo = gl.createTexture()!;
+    gl.bindTexture(gl.TEXTURE_2D, this.matInfo);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 128, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, materialInfo());
+    // the frame (and the fluid's inputs) upload flipped, as before
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    // the CSS CRT layer keeps only its vignette: the scanlines are drawn per cell row here
+    document.body.classList.add('gl-render');
+
     this.composite = new Program(gl, COMPOSITE);
+    this.emitP = new Program(gl, EMIT);
+    this.emit = makeTarget(gl, SIM_W, SIM_H, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE);
     this.fluid = new Fluid(gl, SIM_W, SIM_H);
     this.fluid.setEmissionTable(emissionTable());
 
@@ -277,6 +356,11 @@ export class GLRenderer implements SimRenderer {
     const { w, h } = fitSize(this.stage, this.frame);
     this.canvas.style.width = `${w}px`;
     this.canvas.style.height = `${h}px`;
+    // draw at the screen's own resolution, so every cell is a crisp square
+    // (capped at 2x: past that the art has nothing more to show)
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    this.canvas.width = Math.max(SIM_W, Math.round(w * dpr));
+    this.canvas.height = Math.max(SIM_H, Math.round(h * dpr));
   }
 
   /** Clears the fluid, e.g. on world clear or a level load. */
@@ -329,18 +413,31 @@ export class GLRenderer implements SimRenderer {
       });
     }
 
+    if (this.soft) {
+      this.emitP.use();
+      this.emitP.tex('uFrame', this.frameTex, 0).tex('uMatInfo', this.matInfo, 1).v2('uSim', SIM_W, SIM_H);
+      blit(gl, this.emit);
+    }
+
     this.composite.use();
     this.composite
       .tex('uFrame', this.frameTex, 0)
+      .tex('uEmit', this.emit.tex, 4)
       .tex('uDye', this.fluid.dyeTexture, 1)
       .v2('uTexel', 1 / SIM_W, 1 / SIM_H)
       .f('uGlow', GLOW)
       .f('uDyeGain', this.soft ? DYE_GAIN : 0)
       .f('uSoft', this.soft ? 1 : 0)
-      .f('uTime', (performance.now() - this.t0) / 1000);
+      .f('uTime', (performance.now() - this.t0) / 1000)
+      .tex('uMatInfo', this.matInfo, 3)
+      .v2('uSim', SIM_W, SIM_H);
+    const cine = this.cineOn ? this.cine : null;
+    // the cinematic pipeline composites at cell resolution, then scales up itself
+    this.composite
+      .f('uCellPx', cine ? 1 : this.canvas.width / SIM_W)
+      .f('uCrt', document.body.classList.contains('crt-on') ? 1 : 0);
     const lift = bgLift();
     this.composite.v3('uBgLift', lift[0], lift[1], lift[2]);
-    const cine = this.cineOn ? this.cine : null;
     this.composite
       .f('uCine', cine ? 1 : 0)
       .tex('uLight', cine ? cine.light : this.fluid.dyeTexture, 2);
@@ -352,7 +449,11 @@ export class GLRenderer implements SimRenderer {
     this.cine?.dispose();
     this.fluid.dispose();
     this.composite.dispose();
+    this.emitP.dispose();
+    this.gl.deleteFramebuffer(this.emit.fbo);
+    this.gl.deleteTexture(this.emit.tex);
     this.gl.deleteTexture(this.frameTex);
+    this.gl.deleteTexture(this.matInfo);
   }
 }
 

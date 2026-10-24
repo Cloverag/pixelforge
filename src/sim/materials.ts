@@ -577,19 +577,20 @@ export function applyShade(c: number, v: number): number {
 export const SHADED = new Uint32Array(NMATS * 4 * 8);
 
 /**
- * Alpha byte that marks a pixel as liquid surface-or-body for the GL
- * composite (depth, caustics, surface glints). Every other pixel is 255.
- * 250/255 is invisible to the 2D fallback, which just draws it.
+ * A frame pixel's alpha byte says which material the cell is: alpha = the
+ * material id for every cell drawn from it, and 255 for everything that is
+ * not a cell (the background, wind specks, flying debris, the playground's
+ * particles; 253 is the playground's wall tag). The GL composite reads it
+ * with texelFetch to shade, light and shadow each cell by what it is; the 2D
+ * fallback forces alpha back to 255 before drawing. Ids stay below 128
+ * (NMATS), so they never collide with 253 or 255.
  */
-export const LIQUID_ALPHA = 250;
+export function withMat(c: number, m: number): number {
+  return ((c & 0x00ffffff) | (m << 24)) >>> 0;
+}
 
 for (let m = 0; m < NMATS; m++) {
   if (!MATS[m]) continue;
-  // lava is a light source, not a pool: it keeps its own look
-  const tag = MATS[m].cat === Cat.LIQUID && m !== Mat.LAVA;
   for (let r = 0; r < 4; r++)
-    for (let v = 0; v < 8; v++) {
-      const c = applyShade(MATS[m].ramp[r], v);
-      SHADED[(((m << 2) | r) << 3) | v] = tag ? ((c & 0x00ffffff) | (LIQUID_ALPHA << 24)) >>> 0 : c;
-    }
+    for (let v = 0; v < 8; v++) SHADED[(((m << 2) | r) << 3) | v] = withMat(applyShade(MATS[m].ramp[r], v), m);
 }

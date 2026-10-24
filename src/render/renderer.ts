@@ -149,10 +149,26 @@ export class Renderer implements SimRenderer {
   }
 
   present(buf: ArrayBuffer): void {
-    const img = this.block
-      ? this.blocks.apply(buf, this.block)
-      : new ImageData(new Uint8ClampedArray(buf), SIM_W, SIM_H);
+    // GRID tiles carry the material ids too; the blockifier's image is its own, so it is fixed in place
+    const img = this.block ? this.opaque(this.blocks.apply(buf, this.block).data.buffer as ArrayBuffer) : this.opaque(buf);
     if (this.soft) this.composite(img);
     else this.ctx.putImageData(img, 0, 0);
+  }
+
+  private flat: ImageData | null = null;
+
+  /**
+   * The frame's alpha byte carries each cell's material id for the GL
+   * composite (materials.ts withMat); a 2D canvas would draw that as
+   * transparency, so this path copies the frame with alpha forced to 255. A
+   * copy, not in place: the worker reuses the buffer and only repaints dirty
+   * chunks, so the ids must survive the trip back.
+   */
+  private opaque(buf: ArrayBuffer): ImageData {
+    this.flat ??= new ImageData(SIM_W, SIM_H);
+    const src = new Uint32Array(buf);
+    const dst = new Uint32Array(this.flat.data.buffer);
+    for (let i = 0; i < src.length; i++) dst[i] = src[i] | 0xff000000;
+    return this.flat;
   }
 }
