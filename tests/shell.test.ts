@@ -103,3 +103,27 @@ describe('tools are always reachable', () => {
     expect(hud).toMatch(/col\.appendChild\(pinned\)/);
   });
 });
+
+describe('type: read for sentences and names, display for buttons and headings', () => {
+  const rule = (sel: string): string => {
+    const i = css.indexOf(`\n${sel} {`);
+    return i < 0 ? '' : css.slice(i, css.indexOf('}', i));
+  };
+
+  it('the page default is read type (Silkscreen is only the title screen footers)', () => {
+    expect(rule('html, body')).toMatch(/font-family: var\(--font-read\)/);
+    const silk = [...css.matchAll(/font-family: var\(--font\)/g)].length;
+    expect(silk).toBe(2); // .ts-foot and .menu-live
+  });
+
+  it('every heading is display type', () => {
+    expect(css).toMatch(/\nh2 \{ font-family: var\(--font-display\);/);
+  });
+
+  it('the room badge is read type on one line, with 14px buttons', () => {
+    const pill = rule('.room-pill');
+    expect(pill).toMatch(/font-family: var\(--font-read\)/);
+    expect(pill).toMatch(/white-space: nowrap/);
+    expect(pill).toMatch(/font-size: 14px/);
+  });
+});

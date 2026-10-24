@@ -53,10 +53,15 @@ html, body {
   overflow: hidden;
   background: var(--bg);
   color: var(--ink);
-  font-family: var(--font);
+  /* names and sentences are read type; display type is only for buttons and headings */
+  font-family: var(--font-read);
   font-size: 14px;
   -webkit-font-smoothing: antialiased;
 }
+
+/* every heading in a panel: display type, 16px or more */
+h2 { font-family: var(--font-display); font-weight: 400; }
+.share-box h2 { font-size: 18px; }
 
 /* Keyboard users get a visible ring; mouse users never see it. */
 :focus-visible {
@@ -911,11 +916,6 @@ body.crt-on .title-screen::after {
 @media (max-width: 720px) {
   button.px { padding: 8px 10px; }
   .screen { padding: 22px 18px; }
-  /* the room badge: just the essentials */
-  .room-pill { top: 6px; gap: 6px; padding: 4px 6px 4px 8px; }
-  .room-pill .room-role,
-  .room-pill .room-people { display: none; }
-  .room-pill .px { padding: 4px 6px; }
 }
 
 /* ==== PHONES ====
@@ -966,10 +966,6 @@ body.crt-on .title-screen::after {
   #workspace .react-btn { width: 44px; height: 44px; font-size: 20px; }
   #stage { padding: 4px 8px 8px 4px; }
   .sb-seg { padding: 0 8px; }
-  .room-pill { top: 6px; gap: 6px; padding: 4px 6px 4px 8px; }
-  .room-pill .room-role,
-  .room-pill .room-people { display: none; }
-  .room-pill .px { padding: 4px 6px; }
 }
 
 /* Motion is decoration here; none of it carries information on its own. */
@@ -1070,14 +1066,16 @@ body.crt-on .title-screen::after {
   align-items: center;
   gap: 10px;
   padding: 6px 8px 6px 12px;
+  font-family: var(--font-read);
   font-size: 14px;
+  white-space: nowrap;
   color: var(--ink);
   background: var(--panel);
   border: var(--frame-line);
   box-shadow: var(--frame-shadow);
 }
 .room-pill[hidden] { display: none; }
-.room-pill .px { padding: 4px 8px; box-shadow: none; }
+.room-pill .px { padding: 6px 10px; box-shadow: none; }
 .room-code { color: var(--accent); font-weight: 700; }
 .room-role { color: var(--ink-faint); }
 .room-people { color: var(--ink-dim); min-width: 8ch; }
@@ -1116,6 +1114,14 @@ body.crt-on .title-screen::after {
 }
 .room-pill.waiting .room-dot { background: var(--danger); animation: blink 1s steps(2) infinite; }
 .room-pill.waiting .room-role { color: var(--danger); }
+/* a phone: the code and two buttons (the avatars go), wrapping only on a narrower screen than 390 */
+@media (max-width: 720px), (max-height: 520px) and (orientation: landscape) {
+  .room-pill { top: 6px; gap: 6px; padding: 4px 6px 4px 8px; flex-wrap: wrap; justify-content: center; width: max-content; max-width: calc(100% - 16px); white-space: normal; }
+  .room-pill .room-role,
+  .room-pill .room-people,
+  .room-pill .room-dots { display: none; }
+  .room-pill .px { padding: 6px 8px; min-height: 44px; }
+}
 @keyframes blink { 50% { opacity: 0.3; } }
 
 /* other players' cursors (ui/cursors.ts): arrow, tool mark, name tag */
@@ -1452,6 +1458,7 @@ body.crt-on .title-screen::after {
   padding-right: 6px;
 }
 .pf-help-heading {
+  font-family: var(--font-display);
   font-size: 14px;
   color: var(--accent-2);
   border-bottom: 2px solid var(--line);
@@ -1492,7 +1499,7 @@ body.crt-on .title-screen::after {
 .pf-el-txt { font-family: ui-monospace, 'Courier New', monospace; font-size: 14.5px; color: var(--ink-dim); }
 .pf-el-txt b { color: var(--ink); }
 .pf-chal { margin-bottom: 10px; }
-.pf-chal-name { font-size: 14px; color: var(--ink); margin-bottom: 3px; }
+.pf-chal-name { font-size: 14px; font-weight: 700; color: var(--ink); margin-bottom: 3px; }
 .pf-chal-desc { font-family: ui-monospace, 'Courier New', monospace; font-size: 14.5px; color: var(--ink-dim); line-height: 1.45; }
 .pf-chal-hint { font-family: ui-monospace, 'Courier New', monospace; font-size: 14.5px; color: var(--accent); opacity: 0.85; margin-top: 2px; }
 .pf-help-blurb {
