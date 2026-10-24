@@ -58,6 +58,8 @@ function keys(onOk: () => void, onCancel: () => void): () => void {
 }
 
 export function confirmDialog(o: { title: string; body: string; ok: string; cancel: string }): Promise<boolean> {
+  // one question at a time: a second click while one is open is a no, not a second dialog
+  if (open > 0) return Promise.resolve(false);
   return new Promise((resolve) => {
     const { box, root, close } = shell(o.title);
     const p = document.createElement('p');

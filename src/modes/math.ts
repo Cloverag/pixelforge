@@ -52,6 +52,7 @@ export class MathMode implements ModeController {
     a: () => this.toggleAscii(),
     f: () => this.view.math?.finish(),
     '3': () => this.toggle3d(),
+    x: () => this.clear(),
   };
   /** drawings lifted into 3D (the 3D graphs always are) */
   private lift3d = false;
@@ -286,6 +287,14 @@ export class MathMode implements ModeController {
       run.turn((e.x - this.drag.x) * 0.012, (e.y - this.drag.y) * 0.012);
       this.drag = { x: e.x, y: e.y };
     }
+  }
+
+  /** CLEAR: a blank canvas (AGAIN draws the drawing back). */
+  clear(): void {
+    this.view.math = new MathRun([]);
+    this.view.setScene('math');
+    this.ctx.hud.setParticles(0);
+    this.ctx.sfx.ui();
   }
 
   onPause(p: boolean): void {

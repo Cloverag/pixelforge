@@ -147,6 +147,7 @@ export interface DeckCallbacks {
   onSave(): void;
   onLoad(): void;
   onShare(): void;
+  onClear(): void;
 }
 
 /** What the deck shows; main.ts sends it whenever any of it may have changed. */
@@ -157,6 +158,8 @@ export interface DeckState {
   sfx: number;
   /** SAVE / LOAD / SHARE: only the free sandbox has a world worth keeping */
   canSave: boolean;
+  /** CLEAR: every mode but a challenge (it would wipe the level) */
+  canClear: boolean;
 }
 
 /** One pickable thing in the rail: a material, a tool, an element. */
@@ -275,6 +278,7 @@ export class Hud {
     skies: Map<string, HTMLButtonElement>;
     vols: Map<'music' | 'sfx', HTMLButtonElement[]>;
     file: HTMLButtonElement[];
+    clear: HTMLButtonElement;
   } | null = null;
   /** the playground counts particles, not cells */
   private particleMode = false;
@@ -458,8 +462,9 @@ export class Hud {
       this.mkBtn('SHARE', cbs.onShare, 'A link that opens this world'),
     ];
     fileBtns[2].classList.add('primary');
-    file.append(...fileBtns);
-    this.deck = { lamps, skies, vols, file: fileBtns };
+    const clear = this.mkBtn('CLEAR', cbs.onClear, 'Clear everything you made in this mode (X)');
+    file.append(...fileBtns, clear);
+    this.deck = { lamps, skies, vols, file: fileBtns, clear };
   }
 
   /** Show the deck's state: which lamps are lit, the sky, the volumes, whether this world can be saved. */
@@ -480,6 +485,7 @@ export class Hud {
       cells.forEach((c, i) => c.classList.toggle('on', i < v));
     }
     for (const b of d.file) b.disabled = !st.canSave;
+    d.clear.disabled = !st.canClear;
   }
 
   private renderTool(): void {

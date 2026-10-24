@@ -58,6 +58,8 @@ export interface ModeController {
   tick?(frameNo: number): void;
   /** every frame from the worker */
   onFrame?(r: Res): void;
+  /** CLEAR: wipe what the player made (the deck's CLEAR, the X key); absent in a challenge */
+  clear?(): void;
   /** the game was paused or resumed: modes that animate on their own canvas freeze with it */
   onPause?(paused: boolean): void;
   /** ESC in game: true if the mode used it (closed a panel of its own) */

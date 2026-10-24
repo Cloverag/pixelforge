@@ -7,6 +7,7 @@ import { RxWindow, readoutNote } from './rxwindow';
 import { rampGradient, type PaletteSection, type Swatch } from '../ui/hud';
 import { Stroke } from './stroke';
 import type { CursorLook, ModeController, ModeCtx } from './types';
+import { confirmDialog } from '../ui/dialog';
 
 /** symbol -> material, for the elements the lab simulates */
 export const LAB_ELEMENTS = new Map<string, number>([
@@ -65,9 +66,22 @@ export class ChemMode implements ModeController {
   constructor(private ctx: ModeCtx) {
     this.stroke = new Stroke(ctx);
     const toggle = (k: 'flood' | 'wind') => () => ctx.setPaintKind(ctx.paintKind() === k ? 'brush' : k);
-    this.keys = { f: toggle('flood'), w: toggle('wind'), e: () => void this.toggleTable() };
+    this.keys = { f: toggle('flood'), w: toggle('wind'), e: () => void this.toggleTable(), x: () => void this.clear() };
     for (let n = 1; n <= 9; n++)
       this.keys[String(n)] = () => document.querySelectorAll<HTMLElement>('#palette .swatch')[n - 1]?.click();
+  }
+
+  /** CLEAR: an empty world, after asking - a sandbox can hold hours of building. */
+  async clear(): Promise<void> {
+    const ok = await confirmDialog({
+      title: 'CLEAR THE WORLD?',
+      body: 'Everything here goes - in a room, for everyone. Save first if you want to keep it.',
+      ok: 'CLEAR',
+      cancel: 'KEEP IT',
+    });
+    if (!ok) return;
+    this.ctx.send({ k: 'clear' });
+    this.ctx.sfx.ui();
   }
 
   start(): void {

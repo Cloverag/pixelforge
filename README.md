@@ -331,6 +331,7 @@ what to light. They are our own versions of classic Python-turtle sketches.
 | `B` | Grid view: chunky blocks, cycles 4 / 8 / 16 px then off |
 | `S` / `C` | Soft glow / CRT filter |
 | `T` | ASCII view: the world's materials as coloured text |
+| `X` / deck CLEAR | Clear what you made: the world (sandbox and chem lab ask first), the playground, the flower bed, the math canvas. Off in challenges |
 | `M` | Mute everything (a toast says SOUND ON / OFF) |
 | `D` | FPS readout in the canvas corner (off by default) |
 | `ESC` | Close the periodic table, leave immersive mode, then the **pause menu** (alone it freezes the game; in a room it does not). QUIT TO TITLE asks first in a room |
@@ -526,7 +527,7 @@ tests/                     vitest: world rules, TNT debris, rendering, playgroun
 
 ### Testing
 
-342 tests. Beyond the material rules: two worlds fed the same inputs must
+346 tests. Beyond the material rules: two worlds fed the same inputs must
 match for 1200 frames; a world restored mid-game into a different seed must
 stay identical; host and two guests over a simulated network with random
 delays, reordering and a late joiner must agree at every frame; a corrupted

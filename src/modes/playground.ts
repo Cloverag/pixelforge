@@ -222,7 +222,7 @@ export class PlaygroundMode implements ModeController {
     this.ctx.sfx.slowmo(on);
   }
 
-  private clear(): void {
+  clear(): void {
     this.ctx.send({ k: 'pgClear' });
     this.ctx.sfx.ui();
   }

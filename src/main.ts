@@ -1434,6 +1434,7 @@ function syncDeck(): void {
     music: v.mute.master || v.mute.music ? 0 : v.music,
     sfx: v.mute.master || v.mute.sfx ? 0 : v.sfx,
     canSave: current.saveable && !mp,
+    canClear: !!current.clear && !current.challengeId,
   });
 }
 
@@ -1604,6 +1605,9 @@ hud.initDeck({
   onSave: () => requestSnapshot('store'),
   onLoad: loadSaved,
   onShare: () => requestSnapshot('share'),
+  onClear: () => {
+    if (screen === 'game' && !current.challengeId) void current.clear?.();
+  },
 });
 
 // the saved block size and soft setting, now that the HUD exists

@@ -174,7 +174,7 @@ export class GardenMode implements ModeController {
     this.ctx.toast(ok ? 'GARDEN LINK COPIED' : 'COPY FAILED - THE BROWSER BLOCKED THE CLIPBOARD', !ok);
   }
 
-  private clear(): void {
+  clear(): void {
     this.view.setScene('flowers');
     // an empty bed, on purpose (setScene refills an empty one with a bouquet)
     this.view.flowers = [];

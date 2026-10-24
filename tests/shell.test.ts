@@ -157,3 +157,13 @@ describe('type: read for sentences and names, display for buttons and headings',
     expect(pill).toMatch(/font-size: 14px/);
   });
 });
+
+describe('CLEAR is in every mode', () => {
+  it('each mode has a clear(), and the deck offers it everywhere but a challenge', () => {
+    for (const m of ['sand', 'playground', 'chem', 'garden', 'math'])
+      expect(readFileSync(join(root, 'src', 'modes', `${m}.ts`), 'utf8'), m).toMatch(/^\s+(async )?clear\(\): (void|Promise<void>) \{/m);
+    expect(main).toMatch(/canClear: !!current\.clear && !current\.challengeId/);
+    expect(hud).toMatch(/d\.clear\.disabled = !st\.canClear/);
+  });
+});
+

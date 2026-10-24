@@ -4,6 +4,7 @@ import { Mat } from '../sim/materials';
 import { materialSections } from '../ui/hud';
 import { Stroke } from './stroke';
 import type { CursorLook, ModeController, ModeCtx } from './types';
+import { confirmDialog } from '../ui/dialog';
 
 /**
  * The sandbox, and each challenge: paint materials into the cellular world.
@@ -31,10 +32,24 @@ export class SandMode implements ModeController {
     this.challengeId = challenge?.id ?? null;
     this.stroke = new Stroke(ctx);
     const toggle = (k: 'flood' | 'wind') => () => ctx.setPaintKind(ctx.paintKind() === k ? 'brush' : k);
-    this.keys = { f: toggle('flood'), w: toggle('wind') };
+    this.keys = { f: toggle('flood'), w: toggle('wind'), x: () => void this.clear() };
     // 1-9 pick a palette swatch (3 never gets here: it is the 3D view)
     for (let n = 1; n <= 9; n++)
       this.keys[String(n)] = () => document.querySelectorAll<HTMLElement>('#palette .swatch')[n - 1]?.click();
+  }
+
+  /** CLEAR: an empty world, after asking - a sandbox can hold hours of building. */
+  async clear(): Promise<void> {
+    if (this.challengeId) return;
+    const ok = await confirmDialog({
+      title: 'CLEAR THE WORLD?',
+      body: 'Everything here goes - in a room, for everyone. Save first if you want to keep it.',
+      ok: 'CLEAR',
+      cancel: 'KEEP IT',
+    });
+    if (!ok) return;
+    this.ctx.send({ k: 'clear' });
+    this.ctx.sfx.ui();
   }
 
   start(): void {
