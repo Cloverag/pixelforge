@@ -815,6 +815,7 @@ function onPointer(e: PointerEvt): void {
 function enterGame(): void {
   stopAttract();
   screen = 'game';
+  restoreGrid(); // the player's own block size; the menu always shows 4px
   paused = false;
   resultOpen = false;
   hud.setPaused(false);
@@ -938,6 +939,9 @@ function openMenu(firstVisit = false): void {
   autosaveNow();
   sfx.playground(null); // the menu's demo is silent
   screen = 'menu';
+  // the title screen is always drawn in 4px blocks, the retro look, whatever
+  // grid the player picked in game (that one is restored on the way back in)
+  applyGrid(4);
   music.setScreen('title');
   current.leave();
   close3d();
