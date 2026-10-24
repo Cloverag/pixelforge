@@ -186,6 +186,8 @@ export interface Res {
   /** playground activity this frame, for the sound design */
   pgStats?: import('./particles').PgStats;
   result?: ChallengeResult | null;
+  /** a running challenge: frames left before its time limit */
+  chLeft?: number;
   save?: SaveData | null;
   /** downsampled material map for the 3D view and the fluid (transferable) */
   snap?: ArrayBuffer;

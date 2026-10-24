@@ -29,7 +29,8 @@ function play(id: string, plan: (w: World, f: number) => void) {
   const w = new World(1);
   w.loadChallenge(id);
   const ch = w.challenge!;
-  for (let f = 0; f < def.timeLimit && !ch.done; f++) {
+  // one past the limit: the time limit itself is part of how a level ends
+  for (let f = 0; f <= def.timeLimit && !ch.done; f++) {
     plan(w, ch.frame);
     w.step();
   }
@@ -50,7 +51,7 @@ describe('SPARK THE BEACON', () => {
   });
 
   it('is not won without the bridges', () => {
-    expect(play('beacon', idle)).toBeNull();
+    expect(play('beacon', idle)?.status).toBe('lose'); // out of time
   });
 });
 
@@ -85,3 +86,19 @@ describe('FIRE WATCH', () => {
     expect(play('firefighter', splash(330))?.status).toBe('lose');
   });
 });
+
+describe('time limits', () => {
+  it('an idle challenge is lost exactly when its time runs out, not a frame before', () => {
+    for (const id of ['beacon', 'gardener']) {
+      const def = CHALLENGES.find((c) => c.id === id)!;
+      const w = new World(1);
+      w.loadChallenge(id);
+      const ch = w.challenge!;
+      while (ch.frame < def.timeLimit - 1) w.step();
+      expect(ch.done, id).toBe(false);
+      w.step();
+      expect(ch.result, id).toMatchObject({ status: 'lose', reason: def.loseReason, timeFrames: def.timeLimit });
+    }
+  });
+});
+

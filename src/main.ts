@@ -389,6 +389,7 @@ worker.onmessage = (e: MessageEvent<Res>) => {
       } as Stats);
     }
     maybeShowResult(r.result ?? null);
+    hud.setTimeLeft(screen === 'game' && r.chLeft !== undefined ? r.chLeft / 60 : null);
     fpsFrames++;
     if (redrawWanted) sendRedraw();
     return;

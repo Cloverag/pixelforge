@@ -1706,3 +1706,5 @@ body.math-on #screen { opacity: 0; }
 .math-py-status { color: #b9b0de; font-family: var(--font-read); }
 .math-py-out { margin: 0; padding: 8px 10px; background: #07060f; border-radius: 6px; color: #cfc8ef; white-space: pre-wrap; max-height: 9em; overflow: auto; font-family: 'IBM Plex Mono', ui-monospace, monospace; }
 .math-py-out.bad { color: #ff8a80; }
+/* a challenge's clock: its last ten seconds in red */
+.sb-time.urgent .sb-val { color: #ff6a6a; }

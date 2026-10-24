@@ -102,7 +102,7 @@ function handle(e: MessageEvent<Req>): void {
       forceFull = false;
       const st = w.stats();
       respond(
-        { t: 'frame', buf: msg.buf, f: w.f, mode: w.mode, counts: st.counts, used: st.used, budget: st.budget, result: w.challenge && w.challenge.done ? w.challenge.result : null },
+        { t: 'frame', buf: msg.buf, f: w.f, mode: w.mode, counts: st.counts, used: st.used, budget: st.budget, result: w.challenge && w.challenge.done ? w.challenge.result : null, chLeft: w.challenge && !w.challenge.done ? w.challenge.left() : undefined },
         [msg.buf],
       );
       break;
@@ -161,7 +161,7 @@ function handle(e: MessageEvent<Req>): void {
         rx: rx.length ? rx : undefined,
         parts: w.mode === 'playground' ? w.parts?.count : undefined,
         pgStats: w.mode === 'playground' ? w.parts?.takeStats() : undefined,
-        result: w.challenge && w.challenge.done ? w.challenge.result : null,
+        result: w.challenge && w.challenge.done ? w.challenge.result : null, chLeft: w.challenge && !w.challenge.done ? w.challenge.left() : undefined,
       };
       const transfer = [msg.buf];
       if (watch3d && w.mode === 'playground' && w.parts) {

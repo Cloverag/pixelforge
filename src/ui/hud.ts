@@ -269,6 +269,8 @@ export class Hud {
     cellsKey: HTMLElement;
     /** the CHEM LAB's live readout: rate and the busiest rule (hidden elsewhere) */
     rxSeg: HTMLElement;
+    timeSeg: HTMLElement;
+    timeVal: HTMLElement;
     rxVal: HTMLElement;
     nowSeg: HTMLElement;
     nowVal: HTMLElement;
@@ -352,6 +354,10 @@ export class Hud {
     const rxSeg = seg('sb-rx hidden');
     const rxVal = h('span', 'sb-val num', '0');
     rxSeg.append(rxVal, h('span', 'sb-unit', 'reactions/s'));
+    // a challenge's clock (setTimeLeft)
+    const timeSeg = seg('sb-time hidden');
+    const timeVal = h('span', 'sb-val num', '');
+    timeSeg.append(timeVal, h('span', 'sb-unit', 'left'));
     const nowSeg = seg('sb-now hidden');
     const nowVal = h('span', 'sb-note', '');
     nowSeg.append(nowVal);
@@ -368,7 +374,7 @@ export class Hud {
     this.pauseBtn.appendChild(ico);
     const menuBtn = this.mkBtn('MENU', cbs.onMenu, 'Pause menu (ESC)');
     btns.append(this.pauseBtn, menuBtn);
-    this.status = { chip, name, note, cells, cellsKey, rxSeg, rxVal, nowSeg, nowVal };
+    this.status = { chip, name, note, cells, cellsKey, rxSeg, rxVal, nowSeg, nowVal, timeSeg, timeVal };
   }
 
   /** Light the current mode's button; a challenge (`challenge` set) shows its name instead. */
@@ -530,6 +536,17 @@ export class Hud {
     s.nowSeg.classList.toggle('hidden', rate === null || !note);
     if (rate !== null) s.rxVal.textContent = rate.toLocaleString('en-US');
     if (note) s.nowVal.textContent = note;
+  }
+
+  /** A challenge's time left, in seconds (null: no clock). The last ten seconds turn red. */
+  setTimeLeft(sec: number | null): void {
+    const s = this.status;
+    if (!s) return;
+    s.timeSeg.classList.toggle('hidden', sec === null);
+    if (sec === null) return;
+    const t = Math.ceil(sec);
+    s.timeVal.textContent = `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
+    s.timeSeg.classList.toggle('urgent', t <= 10);
   }
 
   setPaused(p: boolean): void {

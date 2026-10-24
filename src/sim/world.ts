@@ -112,18 +112,28 @@ class ActiveChallenge {
     }
   }
 
+  /** frames left before the time limit (0 once it is up) */
+  left(): number {
+    return Math.max(0, this.def.timeLimit - this.frame);
+  }
+
   check(): void {
     if (this.done) return;
-    const status = this.def.check(this.w, this.frame, this.used);
+    let status = this.def.check(this.w, this.frame, this.used);
+    // the time limit: still running when it is up is a loss
+    const timedOut = status === 'running' && this.frame >= this.def.timeLimit;
+    if (timedOut) status = 'lose';
     if (status === 'running') return;
     this.done = true;
     const stars =
       status === 'win' ? starsFor(this.def, this.w, this.frame, this.used) : 0;
+    // a level whose own loss is not about time ('The valley flooded') says so plainly
+    const lose = timedOut && !this.def.loseReason?.startsWith('Out of time') ? 'Out of time' : this.def.loseReason ?? 'Failed';
     this.result = {
       id: this.def.id,
       status,
       reason:
-        status === 'win' ? 'Objective complete!' : this.def.loseReason ?? 'Failed',
+        status === 'win' ? 'Objective complete!' : lose,
       stars,
       timeFrames: this.frame,
     };
