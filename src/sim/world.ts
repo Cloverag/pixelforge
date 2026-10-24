@@ -402,6 +402,7 @@ export class World {
           const y = cy + dy;
           if (x < 0 || y < 0 || x >= SIM_W || y >= SIM_H) continue;
           const i = this.grid.idx(x, y);
+          if (mat === Mat.EMPTY && !this.erasable(this.grid.cells[i])) continue;
           if (mat !== Mat.EMPTY && this.grid.cells[i] === mat) continue;
           if (mat !== Mat.EMPTY && this.grid.cells[i] !== Mat.EMPTY && MATS[this.grid.cells[i]].cat === Cat.SOLID && mat !== Mat.EMPTY && !ERASES_SOLID.has(mat)) {
             // painting over solids only allowed by eraser or wall-like materials
@@ -448,12 +449,22 @@ export class World {
   }
 
   /** Flood fill: replace the connected region under the start cell. */
+  /**
+   * What the eraser may remove: anything, except in a challenge - there only
+   * what the player could have placed (its allowed materials), never the
+   * level itself (erasing the glacier or the tower would be an instant win).
+   */
+  private erasable(m: number): boolean {
+    return !this.challenge || this.challenge.def.allowed.includes(m);
+  }
+
   private floodFill(sx: number, sy: number, mat: number): void {
     if (sx < 0 || sy < 0 || sx >= SIM_W || sy >= SIM_H) return;
     const g = this.grid;
     const ch = this.challenge;
     const target = g.get(sx, sy);
     if (target === mat || target === 1) return; // walls are irreplaceable
+    if (mat === Mat.EMPTY && !this.erasable(target)) return;
     const stack: number[] = [sy * SIM_W + sx];
     const seen = new Uint8Array(SIM_W * SIM_H);
     let placed = 0;

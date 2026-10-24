@@ -102,3 +102,28 @@ describe('time limits', () => {
   });
 });
 
+describe('the eraser in a challenge', () => {
+  it('cannot remove the level, only what the player could place', () => {
+    const w = new World(1);
+    w.loadChallenge('icebreaker');
+    const ice0 = w.grid.counts[Mat.ICE];
+    // brush and bucket over the glacier: nothing goes
+    for (let y = 130; y < 340; y += 6) w.paint([320, y], -1, 12);
+    w.paint([320, 200], -1, 4, 'flood');
+    expect(w.grid.counts[Mat.ICE]).toBe(ice0);
+    // the player's own lava does go
+    w.paint([100, 100], Mat.LAVA, 6);
+    const lava = w.grid.counts[Mat.LAVA];
+    expect(lava).toBeGreaterThan(0);
+    w.paint([100, 100], -1, 8);
+    expect(w.grid.counts[Mat.LAVA]).toBe(0);
+  });
+
+  it('erases anything in the free sandbox', () => {
+    const w = new World(1);
+    w.paint([100, 100], Mat.STONE, 6);
+    w.paint([100, 100], -1, 8);
+    expect(w.grid.counts[Mat.STONE]).toBe(0);
+  });
+});
+
