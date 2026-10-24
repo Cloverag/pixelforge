@@ -131,3 +131,66 @@ export function openness(f: Flower, now: number): number {
   const t = Math.min(1, Math.max(0, now - f.born));
   return 1 - (1 - t) * (1 - t) * (1 - t);
 }
+
+/**
+ * A garden as a link code (base64url): a version byte, then 12 bytes a
+ * flower - kind and colour, bloom x y, stem x y, size, turn, sway phase.
+ * Positions are whole cells, turns 1/256ths: invisible at this size.
+ */
+const CODE_VERSION = 1;
+const BYTES = 12;
+const TURN = Math.PI * 2;
+
+export function encodeGarden(flowers: Flower[]): string {
+  const b = new Uint8Array(1 + flowers.length * BYTES);
+  const v = new DataView(b.buffer);
+  b[0] = CODE_VERSION;
+  flowers.forEach((f, i) => {
+    const o = 1 + i * BYTES;
+    const pal = Math.max(0, COLORS[f.kind].findIndex(([p]) => p === f.petal));
+    b[o] = FLOWER_KINDS.indexOf(f.kind) * 16 + pal;
+    v.setInt16(o + 1, Math.round(f.x));
+    v.setInt16(o + 3, Math.round(f.y));
+    v.setInt16(o + 5, Math.round(f.sx));
+    v.setInt16(o + 7, Math.round(f.sy));
+    b[o + 9] = Math.max(1, Math.min(255, Math.round(f.r)));
+    b[o + 10] = Math.round((((f.rot % TURN) + TURN) % TURN / TURN) * 256) & 255;
+    b[o + 11] = Math.round((((f.phase % TURN) + TURN) % TURN / TURN) * 256) & 255;
+  });
+  let s = '';
+  for (const x of b) s += String.fromCharCode(x);
+  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+/** The flowers back, opening one after another from `now`; null for a code that is not a garden. */
+export function decodeGarden(code: string, now: number): Flower[] | null {
+  let s: string;
+  try {
+    s = atob(code.replace(/-/g, '+').replace(/_/g, '/'));
+  } catch {
+    return null;
+  }
+  const b = Uint8Array.from(s, (c) => c.charCodeAt(0));
+  if (b[0] !== CODE_VERSION || (b.length - 1) % BYTES !== 0) return null;
+  const v = new DataView(b.buffer);
+  const out: Flower[] = [];
+  for (let o = 1; o < b.length; o += BYTES) {
+    const kind = FLOWER_KINDS[b[o] >> 4];
+    const pal = kind && COLORS[kind][b[o] & 15];
+    if (!pal) return null;
+    out.push({
+      kind,
+      x: v.getInt16(o + 1),
+      y: v.getInt16(o + 3),
+      sx: v.getInt16(o + 5),
+      sy: v.getInt16(o + 7),
+      r: b[o + 9],
+      rot: (b[o + 10] / 256) * TURN,
+      petal: pal[0],
+      tip: pal[1],
+      born: now + out.length * 0.12,
+      phase: (b[o + 11] / 256) * TURN,
+    });
+  }
+  return out;
+}

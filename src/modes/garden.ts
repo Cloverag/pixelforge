@@ -1,6 +1,7 @@
 import type { PointerEvt } from '../core/input';
 import { EYE_PALETTES } from '../garden/eye';
-import { bouquet, plantAt, type FlowerKind } from '../garden/flowers';
+import { bouquet, decodeGarden, encodeGarden, plantAt, type FlowerKind } from '../garden/flowers';
+import { copyText, shareUrl } from '../game/share';
 import { GardenView } from '../garden/view';
 import type { PaletteSection, Swatch } from '../ui/hud';
 import type { CursorLook, ModeController, ModeCtx } from './types';
@@ -75,6 +76,11 @@ export class GardenMode implements ModeController {
           { label: 'CLEAR', title: 'Pick every flower (X)', onClick: () => this.clear() },
         ],
       },
+      {
+        label: 'SHARE',
+        cls: 'toolbtns',
+        buttons: [{ label: 'COPY LINK', title: 'A link that opens this garden, flower for flower', onClick: () => void this.share() }],
+      },
     ];
     this.ctx.hud.buildPalette(
       {
@@ -143,6 +149,26 @@ export class GardenMode implements ModeController {
     this.view.setScene('flowers');
     this.count();
     this.ctx.sfx.ui();
+  }
+
+  /** A garden from a link: shown when the mode starts. False if the code is not one. */
+  adopt(code: string): boolean {
+    const fl = decodeGarden(code, this.view.now());
+    if (!fl) return false;
+    this.view.flowers = fl;
+    this.view.setScene('flowers');
+    return true;
+  }
+
+  private async share(): Promise<void> {
+    const fl = this.view.flowers;
+    if (this.view.scene !== 'flowers' || fl.length === 0) {
+      this.ctx.toast('PLANT SOME FLOWERS FIRST', true);
+      return;
+    }
+    const ok = await copyText(shareUrl(encodeGarden(fl), 'g'));
+    this.ctx.sfx.ui();
+    this.ctx.toast(ok ? 'GARDEN LINK COPIED' : 'COPY FAILED - THE BROWSER BLOCKED THE CLIPBOARD', !ok);
   }
 
   private clear(): void {

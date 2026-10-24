@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bouquet, FLOWER_KINDS, openness, plantAt } from '../src/garden/flowers';
+import { bouquet, decodeGarden, encodeGarden, FLOWER_KINDS, openness, plantAt } from '../src/garden/flowers';
 import { RAMP } from '../src/garden/ascii';
 
 describe('the ASCII garden', () => {
@@ -74,5 +74,33 @@ describe('the eye of words and the 3D lilies', () => {
     for (const q of a.quads) for (const p of q.p) for (const c of p) expect(Number.isFinite(c)).toBe(true);
     expect(lilyBuildTime(a)).toBeGreaterThan(3);
     expect(lilyBuildTime(a)).toBeLessThan(8);
+  });
+
+  it('a garden link brings back every flower: kind, colours, place, size and turn', () => {
+    const fl = [...bouquet(7, 0), ...FLOWER_KINDS.map((k, i) => plantAt(k, 60 + i * 110, 200, 20 + i, 0, 99 + i))];
+    const back = decodeGarden(encodeGarden(fl), 5)!;
+    expect(back).toHaveLength(fl.length);
+    const turn = (a: number, b: number) => Math.min(Math.abs(a - b), Math.PI * 2 - Math.abs(a - b));
+    back.forEach((g, i) => {
+      const f = fl[i];
+      expect([g.kind, g.petal, g.tip]).toEqual([f.kind, f.petal, f.tip]);
+      for (const k of ['x', 'y', 'sx', 'sy', 'r'] as const) expect(Math.abs(g[k] - f[k])).toBeLessThanOrEqual(0.5);
+      expect(turn(g.rot, ((f.rot % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2))).toBeLessThan(0.03);
+      expect(turn(g.phase, f.phase)).toBeLessThan(0.03);
+      // they open one after another from when the link is opened
+      expect(g.born).toBeCloseTo(5 + i * 0.12);
+    });
+  });
+
+  it('a link that is not a garden is refused, not half-read', () => {
+    const good = encodeGarden(bouquet(3, 0));
+    expect(decodeGarden(good.slice(0, -5), 0)).toBeNull(); // cut short
+    expect(decodeGarden('!!!', 0)).toBeNull(); // not base64
+    expect(decodeGarden('Ag', 0)).toBeNull(); // another version
+    // a kind that does not exist (the top four bits past the last kind)
+    const b = Uint8Array.from(atob(good.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
+    b[1] = 0xf0;
+    const bad = btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    expect(decodeGarden(bad, 0)).toBeNull();
   });
 });

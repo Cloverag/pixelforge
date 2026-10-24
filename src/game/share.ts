@@ -94,14 +94,14 @@ export async function decodeShare(
 }
 
 /** The full link a player pastes to someone else. */
-export function shareUrl(code: string): string {
+export function shareUrl(code: string, key: 'w' | 'g' = 'w'): string {
   const { origin, pathname } = window.location;
-  return `${origin}${pathname}#w=${code}`;
+  return `${origin}${pathname}#${key}=${code}`;
 }
 
-/** Reads a code out of the current URL, and clears it so reloads start fresh. */
-export function takeUrlCode(): string | null {
-  const m = /[#&]w=([A-Za-z0-9\-_]+)/.exec(window.location.hash);
+/** Reads a code out of the current URL (`#w=` a world, `#g=` a garden), and clears it so reloads start fresh. */
+export function takeUrlCode(key: 'w' | 'g' = 'w'): string | null {
+  const m = new RegExp(`[#&]${key}=([A-Za-z0-9\\-_]+)`).exec(window.location.hash);
   if (!m) return null;
   history.replaceState(null, '', window.location.pathname + window.location.search);
   return m[1];
