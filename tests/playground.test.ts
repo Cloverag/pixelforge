@@ -17,6 +17,15 @@ function playground(): World {
 }
 
 describe('particle playground', () => {
+  it('CLEAR removes walls as well as particles (issue #1)', () => {
+    const w = new World(3);
+    w.applyInput({ k: 'mode', m: 'playground' });
+    w.applyInput({ k: 'paint', pts: [100, 100, 101, 100, 102, 100], mat: Mat.WALL, size: 8, kind: 'brush' });
+    expect(w.grid.counts[Mat.WALL]).toBeGreaterThan(0);
+    w.applyInput({ k: 'pgClear' });
+    expect(w.grid.counts[Mat.WALL]).toBe(0);
+  });
+
   /**
    * Trails used to fade by scaling toward black, so wherever particles had
    * passed ended up darker than the background - a black wedge under every
