@@ -39,7 +39,7 @@ uniform sampler2D uLight;
 // the world in cells, and how many screen pixels one cell spans
 uniform vec2 uSim;
 uniform float uCellPx;
-// what each material is (materialInfo): r = liquid, g = light source, b = solid body
+// what each material is (materialInfo): r = liquid, g = light source, b = solid body, a = clear water
 uniform sampler2D uMatInfo;
 // edge light and shadow on every cell (off in GRID view and in the playground)
 uniform float uShade;
@@ -58,6 +58,11 @@ uniform vec3 uBgCol;
 
 float hash(vec2 p) {
   return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
+
+// The sky's own colour at a height (no sun, moon or stars): what is seen through water.
+vec3 skyTint(float h) {
+  return mix(uSkyHor, uSkyTop, smoothstep(0.0, 0.85, h));
 }
 
 // The sky behind the world, drawn in cells so the sun, the moon and the
@@ -144,6 +149,28 @@ vec3 waterFx(vec3 c, ivec2 p) {
   return c;
 }
 
+// Clear water under an open sky: see-through where shallow (the sky behind it,
+// tinted), its own deep colour further down, the sky mirrored on the surface,
+// and the sun's (or the moon's) glint dancing along the top row.
+vec3 clearWater(vec3 c, ivec2 p, vec2 cf) {
+  float d = 0.0;
+  for (int k = 1; k <= 24; k++) {
+    if (!liquidAt(p + ivec2(0, k))) break;
+    d += 1.0;
+  }
+  float deep = smoothstep(0.0, 20.0, d);
+  vec3 behind = skyTint((float(p.y) + 0.5) / uSim.y) * vec3(0.5, 0.72, 0.95);
+  c = mix(behind, c, 0.45 + 0.5 * deep);
+  if (d < 3.0) c = mix(c, uSkyHor, 0.22 * (1.0 - d / 3.0));
+  if (d < 1.0) {
+    bool sunUp = uSunPos.y >= 0.0;
+    float lx = (sunUp ? uSunPos.x : uMoonPos.x) * uSim.x;
+    float g = exp(-pow((cf.x - lx) / 46.0, 2.0)) * step(0.35, sin(floor(cf.x) * 0.9 + uTime * 3.0));
+    c += g * (sunUp ? vec3(1.0, 0.95, 0.8) : vec3(0.55, 0.65, 0.85));
+  }
+  return c;
+}
+
 void main() {
   // Every screen pixel shows its cell's colour exactly: cells are crisp
   // squares at any size. Light (glow, dye) is sampled smoothly on top.
@@ -171,6 +198,7 @@ void main() {
       vec3 fire = textureLod(uEmit, vUv, 3.0).rgb * 1.5 + textureLod(uEmit, vUv, 4.5).rgb * 3.5 + textureLod(uEmit, vUv, 6.0).rgb * 5.0;
       c *= L + fire * (0.3 + uNight);
     }
+    if (info.a > 0.5) c = clearWater(c, p, cf);
   }
 
   if (uSoft > 0.5) {
@@ -292,7 +320,7 @@ void main() {
 /** Materials that give off light: their glow bleeds into the cells around them. */
 const LIGHTS = new Set<number>([Mat.FIRE, Mat.EMBER, Mat.LAVA, Mat.TORCH, Mat.NEON_GLOW, Mat.IODINE_GAS, ...FLAMES]);
 
-/** What the composite needs to know about each material, by id: r = liquid, g = light source, b = solid body. */
+/** What the composite needs to know about each material, by id: r = liquid, g = light source, b = solid body, a = clear water. */
 export function materialInfo(): Uint8Array {
   const lut = new Uint8Array(128 * 4);
   for (let m = 0; m < NMATS; m++) {
@@ -302,6 +330,8 @@ export function materialInfo(): Uint8Array {
     if (d.cat === Cat.LIQUID && m !== Mat.LAVA) lut[m * 4] = 255;
     if (LIGHTS.has(m)) lut[m * 4 + 1] = 255;
     if (d.cat !== Cat.GAS && d.cat !== Cat.EMPTY) lut[m * 4 + 2] = 255;
+    // clear enough to see the sky through
+    if (m === Mat.WATER) lut[m * 4 + 3] = 255;
   }
   return lut;
 }
@@ -371,6 +401,9 @@ function emissionTable(): Uint8Array {
   }
   return lut;
 }
+
+/** The shader sources, for the defined-before-use check in tests/framefmt.test.ts. */
+export const SHADERS = { COMPOSITE, EMIT, LIGHT };
 
 export class GLRenderer implements SimRenderer {
   private gl: WebGL2RenderingContext;

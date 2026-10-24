@@ -35,3 +35,17 @@ describe('the frame format: alpha is the material id', () => {
     for (let m = 0; m < NMATS; m++) if (MATS[m]?.cat === Cat.LIQUID && m !== Mat.LAVA) expect(lut[m * 4], MATS[m].name).toBe(255);
   });
 });
+
+describe('the shaders', () => {
+  it('define every function before they use it (else WebGL refuses them and the game drops to 2D)', async () => {
+    const { SHADERS } = await import('../src/render/glrenderer');
+    for (const [name, src] of Object.entries(SHADERS)) {
+      const defs = [...src.matchAll(/\n(?:vec[234]|float|int|bool|void) (\w+)\(/g)].map((m) => ({ fn: m[1], at: m.index! }));
+      for (const { fn, at } of defs) {
+        if (fn === 'main') continue;
+        const first = src.search(new RegExp(`\\b${fn}\\(`));
+        expect(first, `${name}: ${fn} used before it is defined`).toBeGreaterThanOrEqual(at);
+      }
+    }
+  });
+});
