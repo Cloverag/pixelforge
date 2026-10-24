@@ -1133,6 +1133,15 @@ export class PSys {
       let r = (base & 255) + ((255 - (base & 255)) * hot);
       let gr = ((base >>> 8) & 255) + ((255 - ((base >>> 8) & 255)) * hot);
       let b = ((base >>> 16) & 255) + ((255 - ((base >>> 16) & 255)) * hot);
+      // falling into a black hole, light is stretched toward red (gravitational redshift)
+      for (const h of this.holes) {
+        const d = Math.hypot(this.px[i] - h.x, this.py[i] - h.y);
+        if (d < 30) {
+          const t = Math.max(0, (d - 6) / 24);
+          gr *= 0.35 + 0.65 * t;
+          b *= t * t;
+        }
+      }
       r = BG.r + (r - BG.r) * fade;
       gr = BG.g + (gr - BG.g) * fade;
       b = BG.b + (b - BG.b) * fade;
@@ -1216,17 +1225,9 @@ export class PSys {
       const iy = y | 0;
       if (ix >= 0 && iy >= 0 && ix < SIM_W && iy < SIM_H) pix[iy * SIM_W + ix] = col;
     };
-    const mHole = u32('#ffb36b');
     for (const f of this.forces) {
       if (f.kind === 'hole') {
-        // a black core inside a turning ring of hot matter
-        for (let dy = -3; dy <= 3; dy++)
-          for (let dx = -3; dx <= 3; dx++) if (dx * dx + dy * dy <= 9) dot(f.x + dx, f.y + dy, 0xff000000);
-        for (let k = 0; k < 28; k++) {
-          const a = frame * 0.12 + (k / 28) * Math.PI * 2;
-          const rr = 5 + (k & 1);
-          dot(f.x + Math.cos(a) * rr, f.y + Math.sin(a) * rr * 0.55, k % 4 === 0 ? 0xffe8f6ff : mHole);
-        }
+        drawBlackHole(pix, f.x, f.y, frame);
         continue;
       }
       const col = f.kind === 'attract' ? mA : f.kind === 'repel' ? mR : mV;
@@ -1250,4 +1251,109 @@ export class PSys {
 
     void frame;
   }
+}
+
+/** brightest a cell of the hole's light gets (of 255): the playground blooms what is bright */
+const BH_PEAK = 220;
+/** shadow radius (where matter is swallowed), the photon ring, and the disc's inner and outer edge, in cells */
+const BH_SHADOW = 7;
+const BH_PHOTON = 8.5;
+const BH_IN = 10;
+const BH_OUT = 36;
+/** the disc seen nearly edge-on: its height over its width */
+const BH_TILT = 0.26;
+
+/** The disc's colour by temperature, 0 (cool, outside) to 1 (hot, inside): deep red, orange, yellow-white, blue-white. */
+function discColour(t: number): [number, number, number] {
+  const stops: [number, number, number][] = [[150, 30, 10], [255, 120, 40], [255, 225, 170], [235, 240, 255]];
+  const x = Math.min(0.999, Math.max(0, t)) * (stops.length - 1);
+  const i = Math.floor(x);
+  const k = x - i;
+  return [0, 1, 2].map((c) => stops[i][c] + (stops[i + 1][c] - stops[i][c]) * k) as [number, number, number];
+}
+
+/** The light of the disc at radius r, angle phi (0..1 per channel), or null off the disc. */
+function discLight(r: number, phi: number, frame: number): [number, number, number] | null {
+  if (r < BH_IN || r > BH_OUT) return null;
+  // Kepler: the inner disc turns faster (angular speed ~ r^-1.5); streaks wound into spirals
+  const a = phi - frame * 0.09 * Math.pow(BH_IN / r, 1.5);
+  const streak = 0.6 + 0.4 * Math.sin(a * 5 + r * 0.8) * Math.sin(a * 2 - r * 0.33);
+  const temp = Math.pow(BH_IN / r, 0.9);
+  // Doppler: the disc turns anticlockwise, so its left side comes toward us -
+  // brighter and bluer; the right side going away, dimmer and redder (about 3 to 1,
+  // as in the Event Horizon Telescope's images)
+  const dop = 1 - 0.3 * Math.cos(phi);
+  const beam = (dop * dop * streak * (0.3 + 0.7 * temp)) / 1.69;
+  const [tr, tg, tb] = discColour(temp + (dop - 1) * 0.5);
+  // the edges of the disc fade
+  const edge = Math.min(1, (r - BH_IN) / 2, (BH_OUT - r) / 6);
+  const k = (beam * edge) / 255;
+  return [tr * k, tg * k, tb * k];
+}
+
+/** Light a cell, keeping whatever is brighter already (a star, a particle). */
+function lightPix(pix: Uint32Array, x: number, y: number, c: [number, number, number], w: number): void {
+  if (x < 0 || y < 0 || x >= SIM_W || y >= SIM_H) return;
+  const i = y * SIM_W + x;
+  const o = pix[i];
+  const r = Math.max(o & 255, Math.round(c[0] * w * BH_PEAK));
+  const g = Math.max((o >>> 8) & 255, Math.round(c[1] * w * BH_PEAK));
+  const b = Math.max((o >>> 16) & 255, Math.round(c[2] * w * BH_PEAK));
+  pix[i] = ((255 << 24) | (Math.min(255, b) << 16) | (Math.min(255, g) << 8) | Math.min(255, r)) >>> 0;
+}
+
+/**
+ * A black hole as the telescopes and the films show one: a hot accretion
+ * disc seen nearly edge-on, its streaks orbiting faster close in (Kepler);
+ * the side coming toward us brighter and bluer, the side going away dimmer
+ * and redder (Doppler beaming); the far side of the disc bent up over the top
+ * of the hole and faintly under it (gravitational lensing); a black shadow
+ * edged by a thin photon ring. Every cell near the hole works out which part
+ * of the disc (or of its lensed image) it shows, so the light is exact.
+ */
+export function drawBlackHole(pix: Uint32Array, cx: number, cy: number, frame: number): void {
+  const x0 = Math.round(cx);
+  const y0 = Math.round(cy);
+  const ARCH_OUT = BH_PHOTON + 1 + (BH_OUT - BH_IN) * 0.5;
+  // 1. the lensed images: the far half of the disc arched over the top, the near half faint underneath
+  for (let dy = -Math.ceil(ARCH_OUT); dy <= ARCH_OUT; dy++)
+    for (let dx = -Math.ceil(ARCH_OUT); dx <= ARCH_OUT; dx++) {
+      const rho = Math.hypot(dx, dy);
+      if (rho < BH_PHOTON + 1 || rho > ARCH_OUT) continue;
+      const phi = Math.atan2(dy, dx);
+      const over = dy < 0;
+      const r = BH_IN + (rho - BH_PHOTON - 1) / (over ? 0.5 : 0.3);
+      const c = discLight(r, phi, frame);
+      if (c) lightPix(pix, x0 + dx, y0 + dy, c, over ? 0.7 : 0.25);
+    }
+  // 2. the disc itself: the far half (above the middle), then the shadow, the ring, the near half
+  const H = Math.ceil(BH_OUT * BH_TILT);
+  const disc = (near: boolean) => {
+    for (let dy = near ? 1 : -H; dy <= (near ? H : 0); dy++)
+      for (let dx = -BH_OUT; dx <= BH_OUT; dx++) {
+        const yd = dy / BH_TILT;
+        const r = Math.hypot(dx, yd);
+        const c = discLight(r, Math.atan2(yd, dx), frame);
+        if (c) lightPix(pix, x0 + dx, y0 + dy, c, near ? 1 : 0.6);
+      }
+  };
+  disc(false);
+  // 3. the shadow: nothing comes back from inside
+  for (let dy = -BH_SHADOW; dy <= BH_SHADOW; dy++)
+    for (let dx = -BH_SHADOW; dx <= BH_SHADOW; dx++) {
+      if (dx * dx + dy * dy > BH_SHADOW * BH_SHADOW) continue;
+      const x = x0 + dx;
+      const y = y0 + dy;
+      if (x >= 0 && y >= 0 && x < SIM_W && y < SIM_H) pix[y * SIM_W + x] = 0xff000000;
+    }
+  // 4. the photon ring: light that has gone round the hole, a thin bright edge
+  for (let dy = -10; dy <= 10; dy++)
+    for (let dx = -10; dx <= 10; dx++) {
+      const d = Math.abs(Math.hypot(dx, dy) - BH_PHOTON);
+      if (d > 0.7) continue;
+      const dop = (1 - 0.3 * (dx / BH_PHOTON)) / 1.3; // brighter on the left, never past the cap
+      lightPix(pix, x0 + dx, y0 + dy, [1, 0.8, 0.62], dop * (1 - d));
+    }
+  // 5. the near half of the disc, across the front of the shadow
+  disc(true);
 }

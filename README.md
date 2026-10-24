@@ -144,6 +144,16 @@ rounding. It is wrapped to 32 bits now, with every sequence unchanged.
   twinkle, with the odd shooting star, so the playground is never a black
   void. Forces bend it: a black hole casts a dark shadow ringed by lensed
   stars, and vortices stir the nebula into spiral arms.
+- **The black hole** is drawn the way the telescopes and *Interstellar* show
+  one: a tilted accretion disc, hot blue-white inside and red outside, its
+  streaks orbiting faster close in (Kepler); the side coming toward us
+  brighter and bluer, the side going away dimmer (Doppler beaming, about 3
+  to 1); the far side of the disc bent up over the top of the hole by
+  lensing, with a faint image underneath; a black shadow edged by a thin
+  photon ring. Matter falling in reddens as it goes (gravitational
+  redshift). Every cell near the hole works out which part of the disc it
+  shows, and the light is capped so the playground's bloom never washes it
+  out.
 - **Film look:** particles are light - HDR bloom over five mips, ACES filmic
   tone mapping, faint lens fringing and grain; walls are lit by what glows near
   them.
@@ -551,7 +561,7 @@ tests/                     vitest: world rules, TNT debris, rendering, playgroun
 
 ### Testing
 
-349 tests. Beyond the material rules: two worlds fed the same inputs must
+353 tests. Beyond the material rules: two worlds fed the same inputs must
 match for 1200 frames; a world restored mid-game into a different seed must
 stay identical; host and two guests over a simulated network with random
 delays, reordering and a late joiner must agree at every frame; a corrupted
