@@ -294,13 +294,26 @@ function setNav(n: Nav): void {
   else paint();
 }
 
+/** Letters said one by one keep their capitals in sentence case. */
+const ACRONYMS = /\b(crt|fps|3d|sfx|tnt)\b/g;
+
+/**
+ * The pause menu is part of the app, so it speaks in sentence case
+ * ("Soft: on", "CRT: off"); the title screen keeps the arcade's capitals.
+ */
+export function say(label: string): string {
+  if (!pause) return label;
+  const s = label.toLowerCase().replace(ACRONYMS, (m) => m.toUpperCase());
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
 /** Redraw the labels of the current list in place (an OPTIONS value changed). */
 function repaintLabels(): void {
   if (!cbs) return;
   rows = buildRows(cbs);
   rows.forEach((r, i) => {
     const lbl = itemEls[i]?.querySelector('.ts-label');
-    if (lbl && typeof r.label === 'string') lbl.firstChild!.textContent = r.label;
+    if (lbl && typeof r.label === 'string') lbl.firstChild!.textContent = say(r.label);
     const bar = itemEls[i]?.querySelector('.ts-bar');
     if (bar && r.bar !== undefined) bar.textContent = r.bar;
   });
@@ -375,8 +388,8 @@ function render(): void {
   } else {
     rows = buildRows(c);
     const name = nav.screen;
-    if (name === 'pause') body.appendChild(h('h2', 'ts-heading', pause?.title ?? 'PAUSED'));
-    else if (name !== 'main') body.appendChild(h('h2', 'ts-heading', HEADINGS[name]));
+    if (name === 'pause') body.appendChild(h('h2', 'ts-heading', say(pause?.title ?? 'PAUSED')));
+    else if (name !== 'main') body.appendChild(h('h2', 'ts-heading', say(HEADINGS[name])));
     const list = h('div', `ts-list ts-${name}`);
     list.setAttribute('role', 'menu');
     list.setAttribute('aria-label', LIST_NAMES[name]);
@@ -386,7 +399,7 @@ function render(): void {
       if (r.locked) el.setAttribute('aria-disabled', 'true');
       const lbl = h('span', 'ts-label');
       if (typeof r.label === 'string') {
-        lbl.append(document.createTextNode(r.label));
+        lbl.append(document.createTextNode(say(r.label)));
         if (r.bar !== undefined) lbl.append(h('span', 'ts-bar', r.bar));
       } else {
         lbl.classList.add('ts-grid');
@@ -417,7 +430,7 @@ function render(): void {
     descEl.setAttribute('aria-live', 'polite');
     root.insertBefore(descEl, foot);
   }
-  foot.textContent = coarse() ? '' : HINTS[nav.screen];
+  foot.textContent = coarse() ? '' : say(HINTS[nav.screen]);
   paint();
 }
 

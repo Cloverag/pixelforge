@@ -1,49 +1,52 @@
 /* ===========================================================================
-   PIXELFORGE - one look, always dark
-   Soot, iron and one molten accent, the title screen's palette on every
-   screen. Every panel wears the same pixel frame: a 2px --frame border and a
-   hard 4px offset shadow. No gradients, bevels, glows or rounded corners.
+   PIXELFORGE - a toy you open and play
+   Cool slate around a big canvas; the colour comes from the materials: every
+   material is a button in its own colour, and the screen takes on the colour
+   of what you hold (--pick). Pixel type is for the game's moments only (the
+   logo, the title screen, the pause menu); everything you work with is Rubik.
    =========================================================================== */
 
 :root {
-  /* ---- ground: one warm grey family, no blue-purple ---- */
-  --bg: #0c0a09;
-  --panel: #191513;
-  --panel-2: #211c19;
-  --panel-3: #2b2420;
-  --panel-deep: #110e0c;
-  --line: #3e352f;
-  --line-soft: #2a2420;
-  --edge-dark: #070605;
+  /* ---- ground: cool slate ---- */
+  --bg: #15171e;
+  --panel: #1c1f28;
+  --panel-2: #242834;
+  --panel-3: #2e3341;
+  --panel-deep: #111319;
+  --line: #3a4050;
+  --line-soft: #282c38;
+  --edge-dark: #0b0c10;
 
   /* ---- ink ---- */
-  --ink: #f1e8da;
-  --ink-dim: #ab9f8f;
-  --ink-faint: #72675b;
+  --ink: #eef0f5;
+  --ink-dim: #a2a9ba;
+  --ink-faint: #6b7285;
 
-  /* ---- the one accent: molten metal ---- */
+  /* ---- the brand's molten orange: the logo, the title screen, primary actions ---- */
   --accent: #f59e3b;
   --accent-hi: #ffc477;
   --accent-lo: #7a4512;
   --accent-rgb: 245, 158, 59;
-  /* cool steel - information, never decoration */
   --accent-2: #9cbccb;
   --danger: #ef5f4f;
   --ok: #8fd47a;
+  /* what you hold: set by the dock when a material is picked */
+  --pick: #e8b64c;
+  --pick-ink: #15171d;
 
   --font: 'Silkscreen', 'Press Start 2P', monospace;
   --font-display: 'Press Start 2P', monospace;
-  --font-read: 'IBM Plex Mono', ui-monospace, 'Courier New', monospace;
+  --font-read: 'Rubik', system-ui, -apple-system, 'Segoe UI', sans-serif;
 
-  /* ---- the frame: every panel, button and the canvas ---- */
-  --frame: #5b4d42;
-  --frame-line: 2px solid var(--frame);
-  --frame-shadow: 4px 4px 0 var(--edge-dark);
-  --overlay-bg: rgba(8, 6, 5, 0.86);
+  --radius: 8px;
+  /* panels and dialogs: a hairline and a soft lift */
+  --frame: #3a4050;
+  --frame-line: 1px solid var(--frame);
+  --frame-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  --overlay-bg: rgba(10, 11, 15, 0.82);
   color-scheme: dark;
 
-  --rail-w: 264px;
-  --bar-h: 48px;
+  --bar-h: 56px;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -53,19 +56,17 @@ html, body {
   overflow: hidden;
   background: var(--bg);
   color: var(--ink);
-  /* names and sentences are read type; display type is only for buttons and headings */
   font-family: var(--font-read);
   font-size: 14px;
   -webkit-font-smoothing: antialiased;
 }
 
-/* every heading in a panel: display type, 16px or more */
-h2 { font-family: var(--font-display); font-weight: 400; }
-.share-box h2 { font-size: 18px; }
+h2 { font-family: var(--font-read); font-weight: 700; font-size: 20px; }
+.share-box h2 { font-size: 20px; }
 
 /* Keyboard users get a visible ring; mouse users never see it. */
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--ink);
   outline-offset: 2px;
 }
 
@@ -73,7 +74,7 @@ h2 { font-family: var(--font-display); font-weight: 400; }
 
 * { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
 *::-webkit-scrollbar { width: 8px; height: 8px; }
-*::-webkit-scrollbar-thumb { background: var(--line); }
+*::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
 *::-webkit-scrollbar-track { background: transparent; }
 
 body.has-wallpaper { background: var(--edge-dark); }
@@ -92,10 +93,11 @@ body.has-wallpaper::after {
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  background: radial-gradient(ellipse 90% 70% at 50% 45%, transparent 30%, rgba(8, 6, 5, 0.75) 100%);
+  background: radial-gradient(ellipse 90% 70% at 50% 45%, transparent 30%, rgba(10, 11, 15, 0.75) 100%);
 }
 body.has-wallpaper #app { position: relative; z-index: 1; }
 
+/* the bar on top, the canvas, the dock under it */
 #app {
   height: 100%;
   display: flex;
@@ -106,18 +108,11 @@ body.has-wallpaper #app { position: relative; z-index: 1; }
   display: flex;
   min-height: 0;
 }
-#stagecol {
-  flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
 
 .hidden { display: none !important; }
 
 /* -------------------------------------------------------------- buttons */
-/* One button: the pixel frame, display type. A toggle (.tog) shows its state
-   by fill: on = accent background and dark text; off = clear, dim text. */
+/* One button: flat, rounded, Rubik. A toggle (.tog) is lit when on. */
 
 button.px {
   position: relative;
@@ -125,41 +120,38 @@ button.px {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  font-family: var(--font-display);
+  min-height: 36px;
+  font-family: var(--font-read);
   font-size: 14px;
+  font-weight: 500;
   line-height: 1.2;
-  letter-spacing: 0;
   color: var(--ink);
-  background: var(--panel-2);
-  border: var(--frame-line);
-  border-radius: 0;
-  box-shadow: var(--frame-shadow);
-  padding: 10px 12px;
+  background: var(--panel-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  padding: 8px 14px;
   cursor: pointer;
   white-space: nowrap;
-  text-transform: uppercase;
 }
-button.px:hover { color: var(--accent-hi); border-color: var(--accent); }
-button.px:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 var(--edge-dark); }
-button.px.tog { background: transparent; color: var(--ink-dim); }
+button.px:hover { background: #383e4e; }
+button.px:active { transform: translateY(1px); }
+button.px.tog { background: transparent; border-color: var(--line); color: var(--ink-dim); }
 button.px.tog:hover { color: var(--ink); }
 button.px.tog.toggled,
-button.px.tog.toggled:hover { background: var(--accent); border-color: var(--accent); color: #1a1004; }
-button.px.toggled:not(.tog) { border-color: var(--accent); color: var(--accent-hi); }
+button.px.tog.toggled:hover { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+button.px.toggled:not(.tog) { background: var(--ink); color: var(--bg); }
 button.px.primary,
-button.px.primary:hover { background: var(--accent); border-color: var(--accent); color: #1a1004; }
+button.px.primary:hover { background: var(--accent); color: #1a1004; }
 button.px.danger { color: var(--danger); }
 
-/* a key that is there but not for this mode: dimmed, no lift, no press */
+/* a button that is there but not for this mode: dimmed, no press */
 button.px:disabled,
 button.px:disabled:hover,
 button.px:disabled:active {
   opacity: 0.4;
   cursor: default;
   color: var(--ink-dim);
-  background: var(--panel-2);
-  border-color: var(--frame);
-  box-shadow: var(--frame-shadow);
+  background: var(--panel-3);
   transform: none;
 }
 
@@ -172,30 +164,31 @@ button.px:disabled:active {
   align-items: center;
   justify-content: center;
   min-height: 0;
-  /* room for the canvas frame's 4px shadow */
-  padding: 8px 12px 12px 8px;
+  min-width: 0;
+  padding: 14px 16px;
   overflow: hidden;
   background: var(--bg);
 }
 /* under the title screen the demo is the whole backdrop: no frame, no padding */
 body:not(.in-game) #stage { padding: 0; }
-body:not(.in-game) #viewport { border: 0; box-shadow: none; }
+body:not(.in-game) #viewport { border-radius: 0; box-shadow: none; }
 body.has-wallpaper #stage { background: transparent; }
 
-/* the canvas wears the one frame; the 16:9 sim letterboxes in the dark around it */
+/* the canvas: rounded, lifted off the page; the 16:9 sim letterboxes around it */
 #viewport {
   position: relative;
   flex: none;
-  border: var(--frame-line);
-  box-shadow: var(--frame-shadow);
+  border-radius: 12px;
+  overflow: hidden;
   background: #000;
+  box-shadow: 0 0 0 1px var(--line-soft), 0 18px 48px rgba(0, 0, 0, 0.5);
 }
 
 #screen-wrap {
   position: relative;
   line-height: 0;
   overflow: hidden;
-  background: #050403;
+  background: #050506;
 }
 
 #screen {
@@ -232,17 +225,16 @@ body.has-wallpaper #stage { background: transparent; }
   left: 50%;
   bottom: 10px;
   translate: -50% 0;
-  padding: 5px 10px;
+  padding: 6px 12px;
   font-family: var(--font-read);
   font-size: 14px;
   line-height: 1.4;
   color: var(--ink);
-  background: rgba(8, 6, 5, 0.8);
-  border: var(--frame-line);
+  background: rgba(10, 11, 15, 0.8);
+  border-radius: 999px;
   pointer-events: none;
   white-space: nowrap;
 }
-#view3d canvas { border: var(--frame-line); }
 
 /* --- crt: toggleable scanlines and vignette ---
    Static on purpose: an animated layer over a 60 Hz canvas cost ~8 FPS. */
@@ -261,7 +253,7 @@ body.crt-on #crt {
     radial-gradient(ellipse at center, transparent 52%, rgba(0, 0, 0, 0.5) 100%);
 }
 
-/* --- brush ring (ui/cursor.ts) --- */
+/* --- brush ring (ui/cursor.ts): drawn in the colour you hold --- */
 #brush-ring {
   position: absolute;
   left: 0;
@@ -269,286 +261,288 @@ body.crt-on #crt {
   z-index: 7;
   pointer-events: none;
   border-radius: 50%;
-  border: 1px solid rgba(255, 244, 228, 0.9);
+  border: 1.5px solid var(--pick);
   /* a dark halo so the ring reads over snow and over the void alike */
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(0, 0, 0, 0.35);
   opacity: 0;
   transition: opacity 0.12s, width 0.08s, height 0.08s;
 }
 #brush-ring[data-mode='wind'] {
-  border: 1px dashed rgba(var(--accent-rgb), 0.9);
+  border: 1.5px dashed var(--ink);
 }
 #brush-ring[data-mode='flood'] {
-  border-radius: 2px;
-  border-color: var(--accent-hi);
+  border-radius: 3px;
   rotate: 45deg;
 }
 
-/* ------------------------------------------------------ bottom bar */
-/* One line, 48px, under the rail and the canvas: the picked material on the
-   left; the count, the chem lab's readout, PAUSE and MENU on the right. */
-
-#statusbar {
-  flex: 0 0 var(--bar-h);
-  height: var(--bar-h);
-  display: flex;
-  align-items: stretch;
-  min-width: 0;
-  background: var(--panel);
-  border-top: var(--frame-line);
-  color: var(--ink-dim);
-  z-index: 20;
-}
-.sb-seg {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0 14px;
-  white-space: nowrap;
-}
-.sb-mat { flex: 1 1 0; min-width: 0; overflow: hidden; }
-.sb-name {
-  flex: 0 0 auto;
-  font-family: var(--font-display);
-  font-size: 16px;
-  color: var(--ink);
-}
-/* the note wraps to a second line before it ever clips; segments give way whole */
-.sb-note {
-  min-width: 0;
+/* --- on the canvas: an empty world's invitation, PAUSED, FPS --- */
+#empty-hint {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  text-align: center;
   font-family: var(--font-read);
-  font-size: 15px;
-  line-height: 1.15;
-  color: var(--ink-dim);
-  white-space: normal;
+  font-size: clamp(16px, 1.5vw, 24px);
+  font-weight: 500;
+  line-height: 1.3;
+  color: rgba(238, 240, 245, 0.5);
+  pointer-events: none;
 }
-.sb-chip {
-  flex: 0 0 auto;
-  width: 20px;
-  height: 20px;
-  border: 2px solid var(--frame);
-}
-.sb-val { color: var(--ink); }
-.sb-val.num {
-  font-variant-numeric: tabular-nums;
-  font-family: var(--font-read);
-  font-size: 15px;
-}
-.sb-unit, .sb-rxlbl { font-family: var(--font-read); font-size: 14px; color: var(--ink-dim); }
-.sb-rxlbl { font-family: var(--font-display); }
-/* the CHEM LAB readout: the rate keeps its width so the bar does not twitch */
-.sb-rx .sb-val { min-width: 6ch; }
-.sb-now { flex: 0 1 auto; min-width: 0; max-width: 40ch; }
-.sb-btns { gap: 10px; padding-right: 10px; }
-.sb-cells { min-width: 11ch; }
-/* a small bar gives up its readout in steps, whole segments at a time: NOW
-   first, then the chem lab's rate, then the material's note */
-@media (max-width: 1500px) { .sb-now { display: none; } }
-@media (max-width: 1100px) { .sb-rx { display: none; } }
-@media (max-width: 900px) { .sb-note { display: none; } }
-
-#statusbar button.px { min-height: 44px; }
-button.px.sq {
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  box-shadow: none;
-}
-/* the pause glyph, drawn: two bars; resumed-from-paused shows a play triangle */
-button.px.sq .ico {
-  width: 16px;
-  height: 18px;
-  background: currentColor;
-  clip-path: polygon(0 0, 35% 0, 35% 100%, 0 100%, 0 0, 65% 0, 100% 0, 100% 100%, 65% 100%, 65% 0);
-}
-button.px.sq.toggled .ico { clip-path: polygon(0 0, 100% 50%, 0 100%); }
-
-/* the PAUSED badge on the canvas: blinks in hard steps, and keeps blinking
-   under reduced motion (it is information, not decoration) */
 #paused-badge {
   position: absolute;
   top: 14px;
   left: 50%;
   translate: -50% 0;
   z-index: 6;
-  padding: 8px 14px;
-  font-family: var(--font-display);
-  font-size: 16px;
-  line-height: 1;
-  color: var(--accent-hi);
-  background: rgba(8, 6, 5, 0.86);
-  border: var(--frame-line);
-  box-shadow: var(--frame-shadow);
-  animation: ts-blink 1s steps(1) infinite;
+  padding: 6px 14px;
+  font-family: var(--font-read);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--ink);
+  background: rgba(10, 11, 15, 0.75);
+  border-radius: 999px;
+  animation: ts-blink 1.4s steps(1) infinite;
   pointer-events: none;
 }
-/* the FPS readout (D): a small corner box, off until asked for */
+/* the pause menu says PAUSED itself */
+body:has(#overlay:not(.hidden) .title-screen) #paused-badge { display: none; }
 #fps {
   display: none;
   position: absolute;
-  left: 8px;
-  top: 8px;
+  left: 10px;
+  top: 10px;
   z-index: 6;
-  padding: 2px 6px;
+  padding: 2px 8px;
   font-family: var(--font-read);
   font-size: 14px;
-  line-height: 1.3;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
   color: var(--ink);
-  background: rgba(8, 6, 5, 0.8);
+  background: rgba(10, 11, 15, 0.75);
+  border-radius: 6px;
   pointer-events: none;
 }
 body.show-fps.in-game #fps { display: block; }
 body:not(.in-game) #paused-badge { display: none; }
 
-/* ---------------------------------------------------------- material rail */
-/* Tiles, not rows: a 56px square filled with the material's own four colours,
-   its name under it, three to a row. The list scrolls on its own (#palette);
-   the brush row stays pinned at the bottom (.toolcol). */
+/* ------------------------------------------------------------ the bar */
+/* The game's name, the three modes, what you hold, how much there is,
+   PAUSE and MENU - one line along the top. */
 
-#toolbar {
-  flex: 0 0 var(--rail-w);
-  width: var(--rail-w);
+#hudbar {
+  flex: 0 0 var(--bar-h);
+  height: var(--bar-h);
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-height: 0;
-  padding: 8px 12px 12px;
-  overflow: hidden;
-  background: var(--panel);
-  border-right: var(--frame-line);
-  z-index: 15;
-}
-
-#palette {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-  /* room for the scrollbar and for the buttons' 4px shadow */
-  padding: 4px 8px 6px 5px;
-}
-
-.matgroup {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.glabel {
-  font-family: var(--font-display);
-  font-size: 14px;
-  color: var(--ink-dim);
-}
-.gswatches {
-  display: grid;
-  /* three columns that grow to their widest name, so Fireflies is not broken
-     into Firefli / es; the rail is wide enough for the widest row */
-  grid-template-columns: repeat(3, auto);
-  justify-content: space-between;
-  gap: 8px 6px;
-}
-
-.swatch {
-  position: relative;
-  display: flex;
-  flex-direction: column;
   align-items: center;
   gap: 4px;
   min-width: 0;
+  padding: 0 12px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line-soft);
+  color: var(--ink-dim);
+  z-index: 20;
+}
+.sb-seg {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  white-space: nowrap;
+}
+.logo {
+  font-family: var(--font-display);
+  font-size: 14px;
+  color: var(--accent);
+  text-shadow: 2px 2px 0 var(--accent-lo);
+}
+/* the modes: a segmented control */
+.modetabs {
+  gap: 2px;
+  padding: 3px;
+  margin: 0 8px;
+  background: var(--panel-deep);
+  border-radius: 10px;
+}
+.tab {
+  height: 34px;
+  padding: 0 14px;
+  font-family: var(--font-read);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink-dim);
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
   cursor: pointer;
 }
-.swatch .chip {
-  position: relative;
+.tab:hover { color: var(--ink); }
+.tab.on { color: var(--ink); background: var(--panel-3); }
+.sb-challenge { font-weight: 600; color: var(--ink); }
+
+.sb-mat { flex: 1 1 0; min-width: 0; overflow: hidden; }
+.sb-chip {
   flex: 0 0 auto;
-  width: 56px;
-  height: 56px;
-  border: 2px solid var(--frame);
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.15);
 }
-/* the eraser: the world's empty colour inside a dashed red frame */
-.swatch .chip.dashed {
-  background: var(--world-bg, #0b0b14);
-  border: 2px dashed var(--danger);
+.sb-name { flex: 0 0 auto; font-size: 15px; font-weight: 600; color: var(--ink); }
+/* the note wraps to a second line before it ever clips; segments give way whole */
+.sb-note {
+  min-width: 0;
+  font-size: 14px;
+  line-height: 1.2;
+  color: var(--ink-dim);
+  white-space: normal;
 }
-.swatch .nm {
-  max-width: 100%;
+.sb-val { color: var(--ink); }
+.sb-val.num { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.sb-unit { font-size: 14px; color: var(--ink-dim); }
+.sb-rx .sb-val { min-width: 3ch; text-align: right; }
+.sb-now { flex: 0 1 auto; min-width: 0; max-width: 36ch; }
+.sb-cells { min-width: 13ch; justify-content: flex-end; }
+.sb-btns { gap: 8px; padding-right: 0; }
+/* a narrow bar gives up its readout in steps, whole segments at a time */
+@media (max-width: 1500px) { .sb-now { display: none; } }
+@media (max-width: 1200px) { .sb-rx { display: none; } .sb-note { display: none; } }
+@media (max-width: 1000px) { .sb-logo { display: none; } }
+
+button.px.sq {
+  width: 40px;
+  height: 40px;
+  min-height: 40px;
+  padding: 0;
+  background: transparent;
+  border-color: var(--line);
+}
+/* the pause glyph, drawn: two bars; paused shows a play triangle */
+button.px.sq .ico {
+  width: 12px;
+  height: 14px;
+  background: currentColor;
+  clip-path: polygon(0 0, 35% 0, 35% 100%, 0 100%, 0 0, 65% 0, 100% 0, 100% 100%, 65% 100%, 65% 0);
+}
+button.px.sq.toggled .ico { clip-path: polygon(0 0, 100% 50%, 0 100%); }
+
+/* ----------------------------------------------------------- the dock */
+/* Under the canvas: the brush and the always-there tools on the left, then
+   every material as a button filled with its own colour (--c, text --ci),
+   groups a little apart, and the mode's own buttons after them. */
+
+#toolbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  min-height: 0;
+  max-height: 36vh;
+  padding: 12px 16px 14px;
+  background: var(--panel);
+  border-top: 1px solid var(--line-soft);
+  z-index: 15;
+}
+.dock-tools {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-right: 16px;
+  border-right: 1px solid var(--line-soft);
+}
+.pinrow { display: flex; gap: 6px; }
+.brushdots { display: flex; justify-content: space-between; gap: 2px; }
+.bdot {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 36px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.bdot .d { border-radius: 50%; background: var(--ink-faint); }
+.bdot:hover .d { background: var(--ink-dim); }
+.bdot.sel { background: var(--panel-3); }
+.bdot.sel .d { background: var(--ink); }
+
+#palette {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  max-height: calc(36vh - 26px);
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 8px 18px;
+  overflow-y: auto;
+  /* room for the picked button's ring */
+  padding: 3px;
+}
+.pgroup { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.swatch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 13px;
   font-family: var(--font-read);
   font-size: 14px;
-  line-height: 1.15;
-  letter-spacing: -0.03em;
-  text-align: center;
-  color: var(--ink-dim);
-  /* a name wraps before it ever clips: Black hole, not Black h... */
-  overflow-wrap: anywhere;
+  font-weight: 500;
+  color: var(--ci, var(--ink));
+  background: var(--c, var(--panel-3));
+  border: 0;
+  border-radius: var(--radius);
+  /* a darker lip along the bottom (a key you can press), and a faint edge so
+     carbon and void still read on the dark dock */
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.22), inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+  cursor: pointer;
+  white-space: nowrap;
 }
-.swatch:hover .chip { border-color: var(--ink-dim); }
-.swatch:hover .nm { color: var(--ink); }
-.swatch:active .chip { transform: translate(1px, 1px); }
-/* picked: a 3px accent pixel outline, and the title screen's marker hanging left of the name */
-.swatch.sel .chip,
-.swatch.toggled .chip { outline: 3px solid var(--accent); outline-offset: 1px; border-color: var(--bg); }
-.swatch.sel .nm,
-.swatch.toggled .nm { color: var(--accent-hi); }
-.swatch.sel .nm::before,
-.swatch.toggled .nm::before {
-  content: '▶';
-  display: inline-block;
-  width: 0;
-  overflow: visible;
-  transform: translateX(-1.3em);
-  color: var(--accent-hi);
+.swatch:hover { filter: brightness(1.1); }
+.swatch:active { transform: translateY(1px); box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.22); }
+/* picked: a ring in the material's own colour, set off from it by the page */
+.swatch.sel,
+.swatch.toggled {
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.22), inset 0 0 0 1px rgba(255, 255, 255, 0.12), 0 0 0 2px var(--panel), 0 0 0 4px var(--c, var(--ink));
 }
-/* a challenge's budget: in the tile's top-right corner */
+/* the eraser: the world's empty colour inside a dashed red line */
+.swatch.dashed {
+  color: var(--ink);
+  background: var(--world-bg, #0b0b14);
+  box-shadow: inset 0 0 0 2px var(--danger);
+  outline: none;
+}
+.swatch.dashed.sel { box-shadow: inset 0 0 0 2px var(--danger), 0 0 0 2px var(--panel), 0 0 0 4px var(--danger); }
+/* a challenge's budget: a badge on the button's corner */
 .swatch .budget {
   position: absolute;
-  top: -3px;
-  right: calc(50% - 32px);
+  top: -8px;
+  right: -6px;
   z-index: 1;
-  padding: 0 4px;
+  min-width: 22px;
+  padding: 0 5px;
+  border-radius: 999px;
   background: var(--danger);
   color: #fff;
-  font-family: var(--font-read);
   font-size: 14px;
-  line-height: 1.25;
+  font-weight: 600;
+  line-height: 20px;
+  text-align: center;
   font-variant-numeric: tabular-nums;
 }
-/* the CHEM LAB's elements keep the periodic-table design at the same 56px:
-   number top left, symbol centred, the material's own colours as a stripe */
-.swatch.tile {
-  width: 56px;
-  height: 56px;
-  justify-self: center;
-  justify-content: center;
-  gap: 0;
-  border: 2px solid var(--frame);
-  background: var(--panel-deep);
-  overflow: hidden;
-}
-.swatch.tile .tz {
-  position: absolute;
-  top: 1px;
-  left: 3px;
-  font-family: var(--font-read);
-  font-size: 14px;
-  line-height: 1;
-  color: var(--ink-faint);
-}
-.swatch.tile .tsym {
-  margin-top: 12px;
-  font-family: var(--font-read);
-  font-size: 20px;
-  font-weight: 700;
-  line-height: 1;
-  color: var(--ink);
-}
-.swatch.tile .tstripe {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 5px;
-}
+/* the CHEM LAB's elements: the symbol on its CPK colour, the name in the tooltip and the bar */
+.swatch.tile { width: 42px; padding: 0; }
+.swatch.tile .tsym { font-size: 15px; font-weight: 700; }
 /* the name is for the tooltips and screen readers, not the eye (clip-path,
    not a 1px box, so it never reads as a truncated name) */
 .swatch.tile .nm {
@@ -557,62 +551,26 @@ body:not(.in-game) #paused-badge { display: none; }
   clip-path: inset(50%);
   pointer-events: none;
 }
-.swatch.tile:hover { border-color: var(--ink-dim); }
-.swatch.tile.sel { outline: 3px solid var(--accent); outline-offset: 1px; border-color: var(--bg); }
-.swatch.tile.sel .tsym { color: var(--accent-hi); }
 .swatch.exhausted { opacity: 0.3; pointer-events: none; filter: grayscale(1); }
 .swatch.locked { opacity: 0.22; pointer-events: none; }
-/* BUCKET and WIND: tool tiles with a drawn mark */
-.chip.ico-flood, .chip.ico-wind { display: grid; place-items: center; background: var(--panel-3); }
-.chip.ico-flood::after {
-  content: '';
-  width: 26px;
-  height: 22px;
-  background: var(--accent-2);
-  clip-path: polygon(10% 0, 90% 0, 100% 100%, 0 100%);
-}
-.chip.ico-wind::after {
-  content: '';
-  width: 30px;
-  height: 4px;
-  background: var(--accent-2);
-  box-shadow: -6px -10px 0 var(--accent-2), 6px 10px 0 var(--accent-2);
-}
+/* BUCKET and WIND: neutral buttons with a drawn mark, lit while held */
+.swatch.tooltile { background: var(--panel-3); color: var(--ink); }
+.swatch.tooltile.toggled { background: var(--ink); color: var(--bg); box-shadow: none; }
+.ico { flex: 0 0 auto; background: currentColor; }
+.ico-flood { width: 12px; height: 11px; clip-path: polygon(10% 0, 90% 0, 100% 100%, 0 100%); }
+.ico-wind { width: 14px; height: 2px; box-shadow: -3px -4px 0 currentColor, 3px 4px 0 currentColor; }
 
-/* buttons in the rail (scenes, experiments, GRAVITY, CLEAR...): the one frame,
-   full width, one per line, wrapping rather than ever truncating */
-.scenebtns, .toolbtns { display: grid; gap: 10px; padding-right: 4px; }
-#toolbar button.px { width: 100%; white-space: normal; text-align: center; }
-
-/* -------------------------------------------------- pinned tools and brush */
-/* ERASE, BUCKET and WIND sit on one row above the brush dots, under the
-   scrolling materials: the most-used tools never need a scroll */
-
-.toolcol {
-  margin-top: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 8px 0 0 5px;
-  border-top: var(--frame-line);
-}
-.pinrow { margin-bottom: 4px; padding-right: 8px; }
-/* five dots of growing size; the lit one has the accent outline */
-.brushdots { display: flex; justify-content: space-between; }
-.bdot {
-  display: grid;
-  place-items: center;
-  width: 38px;
-  height: 44px;
-  padding: 0;
+/* the mode's own buttons (scenes, experiments, GRAVITY, CLEAR...): outlined, after the colours */
+.pgroup.acts button.px {
+  min-height: 36px;
+  padding: 0 13px;
   background: transparent;
-  border: 2px solid transparent;
-  cursor: pointer;
+  border-color: var(--line);
+  color: var(--ink);
 }
-.bdot .d { border-radius: 50%; background: var(--ink-dim); }
-.bdot:hover .d { background: var(--ink); }
-.bdot.sel { border-color: var(--accent); }
-.bdot.sel .d { background: var(--accent); }
+.pgroup.acts button.px:hover { background: var(--panel-3); }
+.pgroup.acts button.px.tog.toggled { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+.pgroup.acts button.px.surprise { border-color: var(--accent); color: var(--accent-hi); }
 
 /* ------------------------------------------------------ overlay / menu */
 
@@ -785,8 +743,50 @@ body.crt-on .title-screen::after {
   text-shadow: 2px 2px 0 #0a0706, -1px -1px 0 #0a0706, 0 0 8px rgba(0, 0, 0, 0.8);
   pointer-events: none;
 }
-/* the pause menu is a game screen: its key hints keep the 14px floor */
-.title-screen[data-kind='pause'] .ts-foot { font-size: 14px; }
+/* The pause menu belongs to the app, not the arcade: one panel over the
+   dimmed game, Rubik in sentence case, the cursor row lit. The same list code
+   as the title screen drives it (ui/menu.ts). */
+#overlay:has(.title-screen[data-kind='pause']) { background: rgba(10, 11, 15, 0.7); }
+.title-screen[data-kind='pause'] { text-shadow: none; gap: 14px; justify-content: center; }
+.title-screen[data-kind='pause']::before,
+body.crt-on .title-screen[data-kind='pause']::after { display: none; }
+.title-screen[data-kind='pause'] .ts-body {
+  width: min(380px, 92vw);
+  align-items: stretch;
+  padding: 20px 14px 14px;
+  background: var(--panel);
+  border-radius: 16px;
+  box-shadow: 0 0 0 1px var(--line), var(--frame-shadow);
+}
+.title-screen[data-kind='pause'] .ts-heading {
+  padding: 0 12px;
+  margin-bottom: 10px;
+  font-family: var(--font-read);
+  font-weight: 700;
+  font-size: 22px;
+  text-align: left;
+  color: var(--ink);
+}
+.title-screen[data-kind='pause'] .ts-list { align-items: stretch; gap: 2px; }
+.title-screen[data-kind='pause'] .ts-item {
+  padding: 11px 12px;
+  font-family: var(--font-read);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.25;
+  text-align: left;
+  color: var(--ink-dim);
+  border-radius: 10px;
+}
+.title-screen[data-kind='pause'] .ts-item.sel { color: var(--ink); background: var(--panel-3); }
+.title-screen[data-kind='pause'] .ts-item.sel .ts-label { transform: none; }
+.title-screen[data-kind='pause'] .ts-item:focus-visible .ts-label { text-decoration: none; }
+.title-screen[data-kind='pause'] .ts-arrow { display: none; }
+.title-screen[data-kind='pause'] .ts-item.locked { color: var(--ink-faint); }
+.title-screen[data-kind='pause'] .ts-bar { color: var(--ink); }
+.title-screen[data-kind='pause'] .ts-desc { height: 2.9em; max-width: min(380px, 92vw); font-size: 14px; color: var(--ink-dim); }
+/* its key hints keep the 14px floor, in Rubik */
+.title-screen[data-kind='pause'] .ts-foot { position: static; font-family: var(--font-read); font-size: 14px; letter-spacing: 0; color: var(--ink-faint); }
 /* a finger needs 44px: list rows are at least that tall on touch screens and phones */
 @media (pointer: coarse), (max-width: 720px) {
   .ts-item { min-height: 44px; display: flex; align-items: center; justify-content: center; line-height: 1.25; }
@@ -808,10 +808,10 @@ body.crt-on .title-screen::after {
   max-height: 92vh;
   overflow-y: auto;
   background: var(--panel);
-  border: var(--frame-line);
-  box-shadow: var(--frame-shadow);
+  border-radius: 16px;
+  box-shadow: 0 0 0 1px var(--line), var(--frame-shadow);
   padding: 30px 32px;
-  animation: panel-in 0.2s steps(4);
+  animation: panel-in 0.18s ease-out;
 }
 @keyframes panel-in {
   from { opacity: 0; transform: translateY(10px) scale(0.985); }
@@ -822,7 +822,8 @@ body.crt-on .title-screen::after {
 
 #toast-wrap {
   position: fixed;
-  top: 14px;
+  /* under the bar, over the top of the canvas */
+  top: calc(var(--bar-h) + 14px);
   left: 50%;
   translate: -50% 0;
   z-index: 80;
@@ -833,16 +834,17 @@ body.crt-on .title-screen::after {
   pointer-events: none;
 }
 .toast {
-  background: var(--panel);
-  border: 2px solid var(--accent);
+  background: var(--panel-2);
   color: var(--ink);
   font-family: var(--font-read);
   font-size: 14px;
-  padding: 10px 14px;
-  box-shadow: var(--frame-shadow);
-  animation: toast-in 0.16s steps(3);
+  font-weight: 500;
+  padding: 10px 16px;
+  border-radius: 999px;
+  box-shadow: 0 0 0 1px var(--line), var(--frame-shadow);
+  animation: toast-in 0.16s ease-out;
 }
-.toast.bad { border-color: var(--danger); }
+.toast.bad { box-shadow: 0 0 0 1px var(--danger), var(--frame-shadow); color: #ffc9c2; }
 @keyframes toast-in {
   from { transform: translateY(-10px); opacity: 0; }
   to { transform: none; opacity: 1; }
@@ -919,53 +921,69 @@ body.crt-on .title-screen::after {
 }
 
 /* ==== PHONES ====
-   Portrait: the canvas on top, the bar at the bottom, and the rail fills
-   everything between as a vertical tile grid - as many 56px columns as fit,
-   scrolling inside its own box with ERASE, BUCKET, WIND and the brush pinned
-   at its bottom. Landscape: the desktop layout with a narrower rail. Every
-   tap target is 44px or more (the landscape brush dots are 38px wide only so
-   five fit one row). */
+   Portrait: the bar on top (just the modes, PAUSE and MENU), the canvas full
+   width under it, and the dock fills the rest: the brush and the tools on one
+   row, then the colours, scrolling inside their own box. Landscape: the
+   desktop layout, tighter. Every tap target is 44px or more. */
 
 @media (max-width: 900px) and (orientation: portrait) {
-  /* the rail comes first in the DOM: reversed, the canvas sits on top */
-  #workspace { flex-direction: column-reverse; justify-content: flex-end; }
-  body.in-game #stagecol { order: 3; flex: 0 0 auto; }
-  #workspace .react-bar { order: 2; flex-direction: row; justify-content: center; padding: 6px; border-left: 0; border-top: var(--frame-line); }
-  #workspace .react-btn.ping { margin: 0 0 0 6px; }
-  /* exactly tall enough for a full-width 16:9 canvas plus its frame */
-  body.in-game #stage { flex: 0 0 auto; height: calc((100vw - 20px) * 0.5625 + 20px); }
-  #toolbar {
-    order: 1;
-    flex: 1 1 0;
-    width: auto;
-    min-height: 0;
-    padding: 8px 10px 6px;
-    border-right: 0;
-    border-top: var(--frame-line);
-  }
-  /* as many 56px tiles as fit a row: 5 at 390 (tracking tightened so Fireflies still fits) */
-  .gswatches { grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); justify-content: stretch; gap: 8px 2px; }
-  .swatch .nm { letter-spacing: -0.07em; }
-  .gswatches .swatch { justify-self: center; }
-  .scenebtns, .toolbtns { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
-  #toolbar button.px { min-height: 44px; }
-  .pinrow { grid-template-columns: repeat(3, minmax(64px, 1fr)); }
-  .bdot { width: 44px; }
-  .sb-seg { padding: 0 8px; }
+  :root { --bar-h: 56px; }
+  #hudbar { gap: 0; padding: 0 8px; }
+  .sb-mat, .sb-cells, .sb-rx, .sb-now, .sb-logo { display: none; }
+  .modetabs { flex: 1 1 auto; margin: 0 6px 0 0; }
+  .tab { flex: 1 1 0; height: 40px; padding: 0 6px; }
   /* the pause button opens the pause menu here, so MENU would only repeat it */
-  #statusbar .sb-btns button.px:not(.sq) { display: none; }
+  .sb-btns button.px:not(.sq) { display: none; }
+  button.px.sq { width: 44px; height: 44px; }
+  /* the canvas full width, exactly as tall as 16:9 needs; a room's reactions in a row under it */
+  #workspace { flex: 0 0 auto; flex-direction: column; }
+  body.in-game #stage { flex: 0 0 auto; height: calc((100vw - 16px) * 0.5625 + 16px); padding: 8px; }
+  #workspace .react-bar { flex-direction: row; justify-content: center; padding: 6px; border-left: 0; border-top: 1px solid var(--line-soft); }
+  #workspace .react-btn.ping { margin: 0 0 0 6px; }
+  #toolbar {
+    flex: 1 1 0;
+    max-height: none;
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px 10px 12px;
+  }
+  .dock-tools {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 0 0 10px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line-soft);
+    width: 100%;
+  }
+  #palette { max-height: none; flex: 1 1 0; width: 100%; gap: 8px 14px; }
+  .swatch, #toolbar button.px { height: 44px; min-height: 44px; }
+  .swatch.tile { width: 46px; }
+  .bdot { width: 40px; height: 44px; }
 }
-@media (max-width: 560px) { .sb-cells { display: none; } }
 
 @media (max-height: 520px) and (orientation: landscape) {
-  :root { --rail-w: 212px; }
-  #toolbar { padding: 6px 8px 8px; }
-  .toolcol .glabel { display: none; }
-  .bdot { width: 38px; }
-  #statusbar .sb-btns button.px:not(.sq) { display: none; }
+  /* the canvas needs the height: the dock stands beside it, the bar stays on top */
+  :root { --bar-h: 48px; }
+  #app { display: grid; grid-template-columns: minmax(0, 1fr) min(300px, 38vw); grid-template-rows: var(--bar-h) minmax(0, 1fr); }
+  #hudbar { grid-column: 1 / -1; }
+  #workspace { grid-column: 1; min-height: 0; }
+  #toolbar { grid-column: 2; max-height: none; flex-direction: column; gap: 8px; padding: 8px 10px; border-top: 0; border-left: 1px solid var(--line-soft); overflow: hidden; }
+  .dock-tools { flex-direction: row; flex-wrap: wrap; gap: 6px; padding: 0 0 8px; border-right: 0; border-bottom: 1px solid var(--line-soft); width: 100%; }
+  #palette { max-height: none; flex: 1 1 0; width: 100%; gap: 6px 12px; }
+  .sb-mat, .sb-logo, .sb-rx, .sb-now { display: none; }
+  .sb-btns button.px:not(.sq) { display: none; }
+  .tab { height: 38px; padding: 0 10px; }
+  button.px.sq { width: 44px; height: 44px; }
   #workspace .react-btn { width: 44px; height: 44px; font-size: 20px; }
-  #stage { padding: 4px 8px 8px 4px; }
-  .sb-seg { padding: 0 8px; }
+  #stage { padding: 6px 8px; }
+  .swatch, #toolbar button.px { height: 44px; min-height: 44px; }
+  .bdot { width: 36px; height: 44px; }
+}
+/* the title screen keeps the whole window in landscape too */
+@media (max-height: 520px) and (orientation: landscape) {
+  body:not(.in-game) #app { display: flex; }
 }
 
 /* Motion is decoration here; none of it carries information on its own. */
@@ -1047,13 +1065,10 @@ body.crt-on .title-screen::after {
 }
 .share-meta.warn { color: var(--accent); }
 
-/* SURPRISE ME: spans the scene grid, accent-coloured */
-.scenebtns .px.surprise {
-  grid-column: 1 / -1;
-}
+/* SURPRISE ME: accent-coloured */
 .px.surprise {
   border-color: var(--accent);
-  color: var(--accent);
+  color: var(--accent-hi);
 }
 /* playing together: the room badge over the top of the stage */
 .room-pill {
@@ -1071,8 +1086,8 @@ body.crt-on .title-screen::after {
   white-space: nowrap;
   color: var(--ink);
   background: var(--panel);
-  border: var(--frame-line);
-  box-shadow: var(--frame-shadow);
+  border-radius: 12px;
+  box-shadow: 0 0 0 1px var(--line), var(--frame-shadow);
 }
 .room-pill[hidden] { display: none; }
 .room-pill .px { padding: 6px 10px; box-shadow: none; }
@@ -1201,12 +1216,11 @@ body.crt-on .title-screen::after {
 .pf-dialog-box {
   width: min(420px, 92vw);
   padding: 22px 24px 18px;
-  border: var(--frame-line);
-  border-color: var(--accent);
   background: var(--panel);
-  box-shadow: var(--frame-shadow);
+  border-radius: 16px;
+  box-shadow: 0 0 0 1px var(--line), var(--frame-shadow);
 }
-.pf-dialog-box h2 { margin: 0 0 12px; font-size: 16px; color: var(--accent); }
+.pf-dialog-box h2 { margin: 0 0 10px; font-size: 18px; color: var(--ink); }
 .pf-dialog-box p { margin: 0 0 14px; font-family: var(--font-read); font-size: 14px; line-height: 1.5; color: var(--ink-dim); }
 .pf-dialog-box .pf-dialog-hint { margin: 10px 0 0; font-size: 14px; color: var(--ink-faint); }
 .pf-dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
@@ -1256,11 +1270,12 @@ body.crt-on .title-screen::after {
   padding: 0;
   font-size: 22px;
   line-height: 1;
-  background: var(--panel-deep);
-  border: 2px solid var(--frame);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
   cursor: pointer;
 }
-.react-btn:hover { border-color: var(--accent); }
+.react-btn:hover { background: var(--panel-3); }
 .react-btn:active { transform: translate(2px, 2px); }
 .react-btn.ping { margin-top: 6px; border-color: var(--accent); }
 .react-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
@@ -1449,7 +1464,7 @@ body.crt-on .title-screen::after {
   justify-content: space-between;
   margin-bottom: 14px;
 }
-.pf-help-head h2 { font-size: 16px; color: var(--accent); }
+.pf-help-head h2 { font-size: 20px; color: var(--ink); }
 .pf-help-cols {
   overflow-y: auto;
   display: flex;
@@ -1458,10 +1473,11 @@ body.crt-on .title-screen::after {
   padding-right: 6px;
 }
 .pf-help-heading {
-  font-family: var(--font-display);
-  font-size: 14px;
-  color: var(--accent-2);
-  border-bottom: 2px solid var(--line);
+  font-family: var(--font-read);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+  border-bottom: 1px solid var(--line);
   padding-bottom: 6px;
   margin-bottom: 8px;
 }
@@ -1470,10 +1486,10 @@ body.crt-on .title-screen::after {
   color: var(--ink);
   font-family: var(--font-read);
   font-size: 14px;
-  background: var(--panel-2);
-  border: 2px solid var(--frame);
-  padding: 3px 5px;
-  margin-right: 8px;
+  background: var(--panel-3);
+  border-radius: 6px;
+  padding: 4px 6px;
+  margin-right: 10px;
   white-space: nowrap;
   text-align: center;
 }
@@ -1496,14 +1512,13 @@ body.crt-on .title-screen::after {
   border: 1px solid var(--line);
   transform: translateY(1px);
 }
-.pf-el-txt { font-family: ui-monospace, 'Courier New', monospace; font-size: 14.5px; color: var(--ink-dim); }
+.pf-el-txt { font-size: 14.5px; color: var(--ink-dim); }
 .pf-el-txt b { color: var(--ink); }
 .pf-chal { margin-bottom: 10px; }
 .pf-chal-name { font-size: 14px; font-weight: 700; color: var(--ink); margin-bottom: 3px; }
-.pf-chal-desc { font-family: ui-monospace, 'Courier New', monospace; font-size: 14.5px; color: var(--ink-dim); line-height: 1.45; }
-.pf-chal-hint { font-family: ui-monospace, 'Courier New', monospace; font-size: 14.5px; color: var(--accent); opacity: 0.85; margin-top: 2px; }
+.pf-chal-desc { font-size: 14.5px; color: var(--ink-dim); line-height: 1.45; }
+.pf-chal-hint { font-size: 14.5px; color: var(--accent); opacity: 0.85; margin-top: 2px; }
 .pf-help-blurb {
-  font-family: ui-monospace, 'Courier New', monospace;
   font-size: 14.5px;
   color: var(--ink-dim);
   line-height: 1.6;
@@ -1519,7 +1534,6 @@ body.crt-on .title-screen::after {
   border: 2px solid var(--accent-2);
   box-shadow: 3px 3px 0 var(--edge-dark);
   color: var(--ink-dim);
-  font-family: ui-monospace, 'Courier New', monospace;
   font-size: 14.5px;
   line-height: 1.4;
   pointer-events: none;
@@ -1547,25 +1561,27 @@ body.crt-on .title-screen::after {
 }
 
 /* ==== IMMERSIVE MODE ====
-   ui/immersive.ts: the canvas fills the window on black and the panels slide
-   off-screen; each comes back as dark glass while the pointer is at its edge
-   (body.reveal-*). */
+   ui/immersive.ts: the canvas fills the window on black and the bar and the
+   dock slide off-screen; each comes back while the pointer is at its edge
+   (body.reveal-top / reveal-bottom). */
 body.immersive #stage { padding: 0; background: #000; }
-body.immersive #viewport { border: 0; box-shadow: none; background: none; }
+body.immersive #viewport { border-radius: 0; box-shadow: none; background: none; }
 body.immersive #toolbar,
-body.immersive #statusbar {
+body.immersive #hudbar {
   position: fixed;
+  left: 0;
+  right: 0;
   z-index: 40;
   opacity: 0;
   pointer-events: none;
-  background: rgba(17, 14, 12, 0.92);
-  transition: transform 220ms steps(5), opacity 160ms steps(3);
+  background: rgba(28, 31, 40, 0.94);
+  transition: transform 180ms ease-out, opacity 140ms linear;
 }
-body.immersive #toolbar { top: 0; bottom: 0; left: 0; transform: translateX(-100%); }
-body.immersive #statusbar { left: 0; right: 0; bottom: 0; height: var(--bar-h); transform: translateY(100%); }
-body.immersive.reveal-left #toolbar,
-body.immersive.reveal-bottom #statusbar { transform: none; opacity: 1; pointer-events: auto; }
+body.immersive #hudbar { top: 0; transform: translateY(-100%); }
+body.immersive #toolbar { bottom: 0; transform: translateY(100%); }
+body.immersive.reveal-top #hudbar,
+body.immersive.reveal-bottom #toolbar { transform: none; opacity: 1; pointer-events: auto; }
 @media (prefers-reduced-motion: reduce) {
   body.immersive #toolbar,
-  body.immersive #statusbar { transition: opacity 120ms linear; }
+  body.immersive #hudbar { transition: opacity 120ms linear; }
 }

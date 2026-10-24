@@ -1,5 +1,5 @@
 import { Cat, LIFE_MATS, MATS, NMATS } from '../sim/materials';
-import type { PaintKind, Stats } from '../sim/protocol';
+import type { Mode, PaintKind, Stats } from '../sim/protocol';
 import { BrushCursor } from './cursor';
 import { ELEMENT_NOTES } from './help';
 import { h } from './widgets';
@@ -9,8 +9,11 @@ export const BRUSH_SIZES = [2, 6, 12, 18, 24] as const;
 
 /** SAND -> Sand, BLACK HOLE -> Black Hole: the rail shows names in sentence type, not shouting. */
 export function titleCase(name: string): string {
+  if (ACRONYMS.has(name)) return name;
   return name.toLowerCase().replace(/(^|\s)(\S)/g, (_, sp: string, c: string) => sp + c.toUpperCase());
 }
+/** names that are spelled out letter by letter stay in capitals */
+const ACRONYMS = new Set(['TNT']);
 
 /** The dot that stands for brush size `n`: the nearest preset. */
 export function nearestBrush(n: number): number {
@@ -33,11 +36,56 @@ function cssHex(u: number): string {
  * diagonal bands, so the palette shows what the material looks like in the
  * simulation rather than one flat approximation of it.
  */
-function rampGradient(ramp: readonly number[]): string {
+export function rampGradient(ramp: readonly number[]): string {
   const [a, b, c, d] = ramp.map(cssHex);
   return (
     `linear-gradient(135deg, ${a} 0 25%, ${b} 25% 50%, ${c} 50% 75%, ${d} 75% 100%)`
   );
+}
+
+/**
+ * A button's fill: the colour a swatch is best known by. For a ramp or a
+ * two-tone chip that is its second stop (the body colour, not the highlight).
+ */
+export function pillColor(chip: string): string | null {
+  const hexes = chip.match(/#[0-9a-f]{6}/gi);
+  if (!hexes) return null;
+  return hexes[1] ?? hexes[0];
+}
+
+/** WCAG relative luminance of `#rrggbb`. */
+function luminance(hex: string): number {
+  const n = parseInt(hex.slice(1), 16);
+  const lin = (c: number) => {
+    const v = c / 255;
+    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * lin((n >> 16) & 255) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
+}
+
+const DARK_INK = '#15171d';
+
+/** Dark or light text, whichever reads better on `hex`. */
+export function inkFor(hex: string): string {
+  // the crossover where black and white text have equal contrast
+  return luminance(hex) > 0.179 ? DARK_INK : '#ffffff';
+}
+
+/**
+ * A button's fill and text. A mid-tone (plant green) reads with neither dark
+ * nor white text at 4.5:1, so it is darkened a step at a time until white does.
+ */
+export function pillPaint(hex: string): { fill: string; ink: string } {
+  let n = parseInt(hex.slice(1), 16);
+  for (let i = 0; i < 12; i++) {
+    const fill = `#${n.toString(16).padStart(6, '0')}`;
+    const ink = inkFor(fill);
+    const [a, b] = [luminance(fill), luminance(ink)].sort((x, y) => y - x);
+    if ((a + 0.05) / (b + 0.05) >= 4.5) return { fill, ink };
+    const ch = (sh: number) => Math.round(((n >> sh) & 255) * 0.92);
+    n = (ch(16) << 16) | (ch(8) << 8) | ch(0);
+  }
+  return { fill: `#${n.toString(16).padStart(6, '0')}`, ink: '#ffffff' };
 }
 
 /** Palette section headers, in the order they appear in the toolbar. */
@@ -63,11 +111,19 @@ export type PgTool =
   | 'portal'
   | 'erase';
 
-/** The bottom bar's two buttons. */
+/** The bar's buttons: the three modes, PAUSE and MENU. */
 interface BarCallbacks {
   onPause(): void;
   onMenu(): void;
+  onMode(m: Mode): void;
 }
+
+/** The mode tabs, in the order the title screen lists them. */
+const MODE_TABS: [Mode, string][] = [
+  ['sand', 'Sandbox'],
+  ['playground', 'Playground'],
+  ['chem', 'Chem lab'],
+];
 
 /** One pickable thing in the rail: a material, a tool, an element. */
 export interface Swatch {
@@ -111,8 +167,10 @@ export interface PaletteSpec {
   onPick(id: string): void;
   /** BUCKET and WIND under the brush */
   bucket: boolean;
-  /** what the status bar counts */
+  /** what the bar counts */
   counts: 'cells' | 'particles';
+  /** said on the canvas while the world is empty */
+  hint?: string;
 }
 
 /**
@@ -159,8 +217,13 @@ export class Hud {
   private pauseBtn!: HTMLButtonElement;
   private fpsEl: HTMLElement | null = null;
   private pausedBadge: HTMLElement | null = null;
+  private emptyHint: HTMLElement | null = null;
+  private hintText = '';
   private brushDots: HTMLElement[] = [];
   private swatchEls = new Map<string, HTMLElement>();
+  private tabEls = new Map<Mode, HTMLButtonElement>();
+  private tabsEl: HTMLElement | null = null;
+  private challengeEl: HTMLElement | null = null;
   private status!: {
     chip: HTMLElement;
     name: HTMLElement;
@@ -177,9 +240,17 @@ export class Hud {
   private particleMode = false;
   private lamps = new Map<string, HTMLButtonElement>();
   private swatchInfo = new Map<string, Swatch['info']>();
+  private swatchColor = new Map<string, string>();
   private onPick: (id: string) => void = () => {};
+  private cursor = new BrushCursor();
+  private toolKind: PaintKind = 'brush';
+  private budgetEls = new Map<number, HTMLElement>();
+  private bucketBtn: HTMLElement | null = null;
+  private windBtn: HTMLElement | null = null;
 
-  /** Light or dim a rail toggle (GRAVITY, SLOW-MO...). */
+  constructor(private toolbar: HTMLElement) {}
+
+  /** Light or dim a toggle in the dock (GRAVITY, SLOW-MO...). */
   setLamp(name: string, on: boolean): void {
     this.lamps.get(name)?.classList.toggle('toggled', on);
   }
@@ -187,27 +258,19 @@ export class Hud {
   setParticles(n: number): void {
     if (!this.status) return;
     this.status.cells.textContent = n.toLocaleString('en-US');
+    this.showEmpty(n === 0);
   }
-  private cursor = new BrushCursor();
-  private toolKind: PaintKind = 'brush';
-  private budgetEls = new Map<number, HTMLElement>();
 
-  constructor(private toolbar: HTMLElement) {}
-
-  /** The bottom bar: what you hold, what is happening, PAUSE and MENU. */
+  /** The bar along the top: the game's name, the three modes, what you hold, PAUSE and MENU. */
   initBar(cbs: BarCallbacks): void {
     this.fpsEl = document.getElementById('fps');
     this.pausedBadge = document.getElementById('paused-badge');
+    this.emptyHint = document.getElementById('empty-hint');
     this.buildBar(cbs);
   }
 
-  /**
-   * The one-line bar under everything: the picked material (chip, name, its
-   * note), then on the right the live count, the chem lab's readout, PAUSE and
-   * MENU. Words that only repeat the screen are not here; keys live in CONTROLS.
-   */
   private buildBar(cbs: BarCallbacks): void {
-    const bar = document.getElementById('statusbar');
+    const bar = document.getElementById('hudbar');
     if (!bar) return;
     bar.innerHTML = '';
     const seg = (cls: string) => {
@@ -215,6 +278,26 @@ export class Hud {
       bar.appendChild(el);
       return el;
     };
+
+    seg('sb-logo').appendChild(h('span', 'logo', 'PIXELFORGE'));
+
+    // the three modes, one click apart: the screen says what the game is
+    const tabs = seg('sb-tabs modetabs');
+    tabs.setAttribute('role', 'group');
+    tabs.setAttribute('aria-label', 'Mode');
+    for (const [m, label] of MODE_TABS) {
+      const b = h('button', 'tab') as HTMLButtonElement;
+      b.type = 'button';
+      b.textContent = label;
+      b.setAttribute('aria-pressed', 'false');
+      b.onclick = () => cbs.onMode(m);
+      tabs.appendChild(b);
+      this.tabEls.set(m, b);
+    }
+    this.tabsEl = tabs;
+    // a challenge shows its name where the tabs were
+    this.challengeEl = seg('sb-challenge hidden');
+
     const matSeg = seg('sb-mat');
     const chip = h('span', 'sb-chip');
     const name = h('span', 'sb-name', '');
@@ -223,26 +306,39 @@ export class Hud {
 
     // CHEM LAB only (setReadout): how much is reacting, and what mostly is
     const rxSeg = seg('sb-rx hidden');
-    const rxVal = h('span', 'sb-val num', '0/s');
-    rxSeg.append(h('span', 'sb-rxlbl', 'REACTIONS'), rxVal);
+    const rxVal = h('span', 'sb-val num', '0');
+    rxSeg.append(rxVal, h('span', 'sb-unit', 'reactions/s'));
     const nowSeg = seg('sb-now hidden');
     const nowVal = h('span', 'sb-note', '');
-    nowSeg.append(h('span', 'sb-rxlbl', 'NOW'), nowVal);
+    nowSeg.append(nowVal);
 
     const cells = h('span', 'sb-val num', '0');
     const cellsKey = h('span', 'sb-unit', 'cells');
     seg('sb-cells').append(cells, cellsKey);
 
-    // PAUSE is a 44px square with a drawn glyph (no font has to carry it)
     const btns = seg('sb-btns');
     this.pauseBtn = this.mkBtn('', cbs.onPause, 'Pause (SPACE)', true);
     this.pauseBtn.classList.add('sq');
     const ico = h('span', 'ico');
     ico.setAttribute('aria-hidden', 'true');
     this.pauseBtn.appendChild(ico);
-    const menuBtn = this.mkBtn('MENU', cbs.onMenu, 'Pause menu (ESC)');
+    const menuBtn = this.mkBtn('Menu', cbs.onMenu, 'Pause menu (ESC)');
     btns.append(this.pauseBtn, menuBtn);
     this.status = { chip, name, note, cells, cellsKey, rxSeg, rxVal, nowSeg, nowVal };
+  }
+
+  /** Light the current mode's tab; a challenge (`challenge` set) shows its name instead. */
+  setMode(m: Mode, challenge: string | null = null): void {
+    for (const [id, b] of this.tabEls) {
+      const on = id === m && !challenge;
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-pressed', String(on));
+    }
+    this.tabsEl?.classList.toggle('hidden', !!challenge);
+    if (this.challengeEl) {
+      this.challengeEl.classList.toggle('hidden', !challenge);
+      this.challengeEl.textContent = challenge ? `Challenge: ${titleCase(challenge)}` : '';
+    }
   }
 
   private renderTool(): void {
@@ -251,15 +347,15 @@ export class Hud {
 
   private showSelection(name: string, cat: string, note: string, chipBg: string): void {
     if (!this.status) return;
-    this.status.name.textContent = name;
-    this.status.note.textContent = [cat, note].filter(Boolean).join(' - ');
+    this.status.name.textContent = titleCase(name);
+    this.status.note.textContent = note || cat;
     this.status.chip.style.background = chipBg;
   }
 
   private mkBtn(label: string, onClick: () => void, title?: string, toggle = false): HTMLButtonElement {
     const b = h('button', 'px') as HTMLButtonElement;
     b.type = 'button';
-    // a toggle shows its state by fill (CSS): on = accent, off = clear
+    // a toggle shows its state by fill (CSS)
     if (toggle) b.classList.add('tog');
     b.appendChild(h('span', 'lbl', label));
     if (title) {
@@ -285,7 +381,7 @@ export class Hud {
     if (!s) return;
     s.rxSeg.classList.toggle('hidden', rate === null);
     s.nowSeg.classList.toggle('hidden', rate === null || !note);
-    if (rate !== null) s.rxVal.textContent = `${rate.toLocaleString('en-US')}/s`;
+    if (rate !== null) s.rxVal.textContent = rate.toLocaleString('en-US');
     if (note) s.nowVal.textContent = note;
   }
 
@@ -300,72 +396,82 @@ export class Hud {
 
   showBars(v: boolean): void {
     this.toolbar.classList.toggle('hidden', !v);
-    document.getElementById('statusbar')?.classList.toggle('hidden', !v);
+    document.getElementById('hudbar')?.classList.toggle('hidden', !v);
     document.body.classList.toggle('in-game', v);
-    // the rail appearing changes the stage's width; refit the canvas
+    if (!v) this.showEmpty(false);
+    // the bars appearing change the stage's size; refit the canvas
     window.dispatchEvent(new Event('resize'));
   }
 
-  // ---------- palettes ----------
+  /** An empty world says what to do with it, until the first thing lands. */
+  private showEmpty(empty: boolean): void {
+    if (!this.emptyHint) return;
+    this.emptyHint.textContent = this.hintText;
+    this.emptyHint.classList.toggle('hidden', !empty || !this.hintText);
+  }
 
-  /** Build the left rail from a mode's sections. */
+  // ---------- the dock ----------
+
+  /**
+   * Build the dock under the canvas from a mode's sections: the brush and the
+   * always-there tools (ERASE, BUCKET, WIND) on the left, then every material
+   * as a button in its own colour, a small gap between groups, and the mode's
+   * own buttons (scenes, experiments...) after them.
+   */
   buildPalette(spec: PaletteSpec, brush: number): void {
     this.toolbar.innerHTML = '';
     this.swatchEls.clear();
     this.swatchInfo.clear();
+    this.swatchColor.clear();
     this.budgetEls.clear();
     this.lamps.clear();
     this.onPick = spec.onPick;
+    this.hintText = spec.hint ?? '';
     // every mode builds its palette on the way in, so this is what hides the
     // CHEM LAB's readout when another mode (or a room switch) takes over
     this.setReadout(null, null);
 
+    const tools = h('div', 'dock-tools');
+    const pinned = h('div', 'pinrow');
     const pal = h('div');
     pal.id = 'palette';
-    /** tools that must always be reachable: ERASE, then BUCKET and WIND */
-    const pinned = h('div', 'gswatches pinrow');
     for (const sec of spec.sections) {
       if ('swatches' in sec) {
-        const pins = sec.swatches.filter((sw) => sw.pin);
-        for (const sw of pins) pinned.appendChild(this.makeSwatch(sw, false));
+        for (const sw of sec.swatches.filter((x) => x.pin)) pinned.appendChild(this.makeSwatch(sw, false));
         const rest = sec.swatches.filter((sw) => !sw.pin);
         // a group left with nothing (the sandbox's TOOLS was only ERASE) goes with it
         if (rest.length === 0) continue;
-        const group = h('div', 'matgroup');
-        group.appendChild(h('span', 'glabel', sec.label));
-        const grid = h('div', sec.tiles ? 'gswatches tiles' : 'gswatches');
-        for (const sw of rest) grid.appendChild(this.makeSwatch(sw, !!sec.tiles && sw.sym !== undefined));
-        group.appendChild(grid);
+        const group = h('div', 'pgroup');
+        group.setAttribute('role', 'group');
+        group.setAttribute('aria-label', titleCase(sec.label));
+        for (const sw of rest) group.appendChild(this.makeSwatch(sw, !!sec.tiles && sw.sym !== undefined));
         pal.appendChild(group);
       } else {
-        const group = h('div', 'matgroup');
-        group.appendChild(h('span', 'glabel', sec.label));
-        const row = h('div', sec.cls);
+        const group = h('div', 'pgroup acts');
+        group.setAttribute('role', 'group');
+        group.setAttribute('aria-label', titleCase(sec.label));
         for (const b of sec.buttons) {
-          const btn = this.mkBtn(b.label, b.onClick, b.title, b.lamp !== undefined);
+          const btn = this.mkBtn(titleCase(b.label), b.onClick, b.title, b.lamp !== undefined);
           if (b.cls) btn.classList.add(b.cls);
           if (b.on) btn.classList.add('toggled');
           if (b.lamp) this.lamps.set(b.lamp, btn);
-          row.appendChild(btn);
+          group.appendChild(btn);
         }
-        group.appendChild(row);
         pal.appendChild(group);
       }
     }
 
-    this.toolbar.appendChild(pal);
     this.bucketBtn = null;
     this.windBtn = null;
-    // BUCKET and WIND are tools, not brush options: two tiles beside ERASE
+    // BUCKET and WIND are tools, not brush options: beside ERASE
     if (spec.bucket) this.addToolTiles(pinned);
-    this.buildBrush(brush, pinned);
+    this.buildBrush(brush, tools);
+    tools.appendChild(pinned);
+    this.toolbar.append(tools, pal);
     this.pick(spec.initial);
     this.particleMode = spec.counts === 'particles';
     if (this.status) this.status.cellsKey.textContent = this.particleMode ? 'particles' : 'cells';
   }
-
-  private bucketBtn: HTMLElement | null = null;
-  private windBtn: HTMLElement | null = null;
 
   /** BUCKET and WIND are the same one-of-three choice, so they light as one. */
   setToolKind(kind: PaintKind): void {
@@ -375,24 +481,22 @@ export class Hud {
     this.renderTool();
   }
 
-  /** One tile of the rail: a material's ramp, or an element's periodic-table design. */
+  /** One button of the dock: a material in its own colour, or an element's symbol. */
   private makeSwatch(sw: Swatch, tile: boolean): HTMLElement {
-    const el = h('div', tile ? 'swatch tile' : 'swatch');
-    if (tile) {
-      el.appendChild(h('span', 'tz', String(sw.z ?? '')));
-      el.appendChild(h('span', 'tsym', sw.sym));
-      const stripe = h('div', 'tstripe');
-      stripe.style.backgroundImage = sw.chip;
-      el.appendChild(stripe);
-      // the name stays in the DOM, unseen: the tooltips look the material up by it
-      el.appendChild(h('span', 'nm', sw.label));
-    } else {
-      const chip = h('div', 'chip');
-      if (sw.dashed) chip.classList.add('dashed');
-      else chip.style.backgroundImage = sw.chip;
-      el.appendChild(chip);
-      el.appendChild(h('span', 'nm', titleCase(sw.label)));
+    const el = h('button', tile ? 'swatch tile' : 'swatch') as HTMLButtonElement;
+    el.type = 'button';
+    const color = sw.dashed ? null : pillColor(sw.chip);
+    if (color) {
+      const { fill, ink } = pillPaint(color);
+      el.style.setProperty('--c', fill);
+      el.style.setProperty('--ci', ink);
+      // the brush ring keeps the material's true colour
+      this.swatchColor.set(sw.id, color);
     }
+    if (sw.dashed) el.classList.add('dashed');
+    if (tile) el.appendChild(h('span', 'tsym', sw.sym));
+    // a tile's name is for the tooltips and screen readers; everywhere else it is the label
+    el.appendChild(h('span', 'nm', titleCase(sw.label)));
     el.title = sw.title;
     el.onclick = () => this.pick(sw.id);
     this.swatchEls.set(sw.id, el);
@@ -400,20 +504,21 @@ export class Hud {
     return el;
   }
 
-  /** BUCKET and WIND as tiles in the TOOLS group: held like a tool, lit while on. */
-  private addToolTiles(grid: HTMLElement): void {
+  /** BUCKET and WIND beside ERASE: held like a tool, lit while on. */
+  private addToolTiles(row: HTMLElement): void {
     const make = (kind: PaintKind, name: string, title: string): HTMLElement => {
-      const el = h('div', 'swatch tooltile');
-      el.appendChild(h('div', `chip ico-${kind}`));
+      const el = h('button', 'swatch tooltile') as HTMLButtonElement;
+      el.type = 'button';
+      el.appendChild(h('span', `ico ico-${kind}`));
       el.appendChild(h('span', 'nm', titleCase(name)));
       el.title = title;
       el.onclick = () => {
-        // clicking the lit tile turns it off rather than doing nothing
+        // clicking the lit tool turns it off rather than doing nothing
         const next = el.classList.contains('toggled') ? 'brush' : kind;
         this.setToolKind(next);
         window.dispatchEvent(new CustomEvent('pf-tool', { detail: next }));
       };
-      grid.appendChild(el);
+      row.appendChild(el);
       return el;
     };
     this.bucketBtn = make('flood', 'BUCKET', 'Flood fill (F)');
@@ -422,10 +527,7 @@ export class Hud {
   }
 
   /** Five brush sizes as five dots of growing size; the wheel and [ ] move the lit one. */
-  private buildBrush(brush: number, pinned: HTMLElement): void {
-    const col = h('div', 'toolcol');
-    col.appendChild(pinned);
-    col.appendChild(h('span', 'glabel', 'BRUSH'));
+  private buildBrush(brush: number, into: HTMLElement): void {
     const row = h('div', 'brushdots');
     row.setAttribute('role', 'group');
     row.setAttribute('aria-label', 'Brush size');
@@ -434,9 +536,9 @@ export class Hud {
       b.type = 'button';
       b.title = `Brush size ${n} (wheel or [ ])`;
       b.setAttribute('aria-label', `Brush size ${i + 1} of ${BRUSH_SIZES.length}`);
-      // the dot's diameter grows with the brush, from 4px to 26px
+      // the dot's diameter grows with the brush, from 4px to 22px
       const d = h('span', 'd');
-      const px = 4 + ((n - BRUSH_SIZES[0]) / (BRUSH_SIZES[BRUSH_SIZES.length - 1] - BRUSH_SIZES[0])) * 22;
+      const px = 4 + ((n - BRUSH_SIZES[0]) / (BRUSH_SIZES[BRUSH_SIZES.length - 1] - BRUSH_SIZES[0])) * 18;
       d.style.width = d.style.height = `${Math.round(px)}px`;
       b.appendChild(d);
       b.onclick = () => {
@@ -446,8 +548,7 @@ export class Hud {
       row.appendChild(b);
       return b;
     });
-    col.appendChild(row);
-    this.toolbar.appendChild(col);
+    into.appendChild(row);
     this.setBrushDisplay(brush);
   }
 
@@ -457,9 +558,22 @@ export class Hud {
   }
 
   private pick(id: string): void {
-    for (const [k, el] of this.swatchEls) el.classList.toggle('sel', k === id);
+    for (const [k, el] of this.swatchEls) {
+      el.classList.toggle('sel', k === id);
+      el.setAttribute('aria-pressed', String(k === id));
+    }
     const info = this.swatchInfo.get(id);
     if (info) this.showSelection(...info);
+    // the screen takes on the colour of what you hold: the brush ring, the bar's chip
+    const c = this.swatchColor.get(id);
+    const root = document.documentElement.style;
+    if (c) {
+      root.setProperty('--pick', c);
+      root.setProperty('--pick-ink', inkFor(c));
+    } else {
+      root.removeProperty('--pick');
+      root.removeProperty('--pick-ink');
+    }
     this.onPick(id);
   }
 
@@ -468,6 +582,7 @@ export class Hud {
       let n = 0;
       for (let m = 1; m < NMATS; m++) n += st.counts[m];
       this.status.cells.textContent = n.toLocaleString('en-US');
+      this.showEmpty(n === 0);
     }
     for (let m = 0; m < NMATS; m++) {
       const b = st.budget[m];

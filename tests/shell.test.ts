@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-/** The in-game shell: one look, always dark. Pins what R3 removed, so it stays gone. */
+/** The in-game shell: always dark, the bar on top, the dock of colours below. Pins what was removed, so it stays gone. */
 
 const root = join(__dirname, '..');
 const css = readFileSync(join(root, 'src', 'styles.css'), 'utf8');
@@ -24,7 +24,7 @@ describe('one look, always dark', () => {
   });
 });
 
-describe('the bottom bar replaces the topbar', () => {
+describe('the bar: the three modes, PAUSE and MENU', () => {
   const gone = /#topbar|topbar|btn-group|grp-label|grp-row|topbar-groups|more-btn|more-open|\.brand\b|brand-mark|mode-label|sb-key|sb-lamp|sb-run|sb-tool|sb-fps/;
 
   it('leaves no topbar, group, MORE drop-down or old status segment in the shell', () => {
@@ -33,15 +33,16 @@ describe('the bottom bar replaces the topbar', () => {
     }
   });
 
-  it('puts only PAUSE and MENU on the bar, and FPS behind a key', () => {
+  it('puts the three modes, PAUSE and MENU on the bar, and FPS behind a key', () => {
+    expect(hud).toMatch(/\['sand', 'Sandbox'\],\n  \['playground', 'Playground'\],\n  \['chem', 'Chem lab'\],/);
     expect(hud).toMatch(/Pause \(SPACE\)/);
-    expect(hud).toMatch(/mkBtn\('MENU'/);
+    expect(hud).toMatch(/mkBtn\('Menu'/);
     expect(hud).not.toMatch(/mkBtn\('(STEP|SAVE|LOAD|SHARE|SOFT|CRT|GRID|3D|IMMERSE|BG|SFX|MUSIC)'/);
     expect(main).toMatch(/case 'd':/);
   });
 });
 
-describe('the rail is tiles and five brush dots', () => {
+describe('the dock: coloured buttons and five brush dots', () => {
   it('has no brush slider, number, preview square or hint left', () => {
     expect(css).not.toMatch(/brushrow|brush-preview|brush-dot|input\[type=.range.\]/);
     expect(hud).not.toMatch(/type = 'range'|brushrow|brush-preview|Wheel or \[ \] to resize/);
@@ -73,15 +74,15 @@ describe('phones', () => {
     expect(coverSize(390, 844).w).toBeGreaterThan(390);
   });
 
-  it('keeps the rail strip, 44px touch targets and no MORE drop-down', () => {
-    const from = css.indexOf('@media (max-width: 900px) and (orientation: portrait)');
-    const portrait = css.slice(from, css.indexOf('@media (max-width: 560px)', from));
+  it('keeps 44px touch targets on phones and no MORE drop-down', () => {
+    const portrait = css.slice(css.indexOf('@media (max-width: 900px) and (orientation: portrait)'));
     const landscape = css.slice(css.indexOf('@media (max-height: 520px) and (orientation: landscape)'));
-    // one row of five dots fits the 212px landscape rail only at 38px wide (every dot is 44px tall)
-    expect(landscape).toMatch(/\.bdot \{ width: 38px; \}/);
-    expect(css).toMatch(/\.bdot \{[^}]*height: 44px;/);
-    expect(portrait).toMatch(/\.bdot \{ width: 44px; \}/);
-    expect(css).toMatch(/#statusbar button\.px \{ min-height: 44px; \}/);
+    for (const [name, block] of [['portrait', portrait], ['landscape', landscape]]) {
+      const body = block.slice(0, block.indexOf('\n}\n'));
+      expect(body, name).toMatch(/\.swatch, #toolbar button\.px \{ height: 44px; min-height: 44px; \}/);
+      expect(body, name).toMatch(/\.bdot \{ width: \d+px; height: 44px; \}/);
+      expect(body, name).toMatch(/button\.px\.sq \{ width: 44px; height: 44px; \}/);
+    }
     expect(css).toMatch(/\.ts-item \{ min-height: 44px;/);
     expect(css + hud + main).not.toMatch(/\bMORE\b/);
   });
@@ -91,7 +92,7 @@ describe('tools are always reachable', () => {
   const chem = readFileSync(join(root, 'src', 'modes', 'chem.ts'), 'utf8');
   const playground = readFileSync(join(root, 'src', 'modes', 'playground.ts'), 'utf8');
 
-  it('ERASE is pinned under the scrolling rail in every mode; the playground pins only ERASE', () => {
+  it('ERASE is pinned beside the brush in every mode; the playground pins only ERASE', () => {
     expect(hud).toMatch(/label: 'ERASE',[^}]*pin: true/);
     expect(chem).toMatch(/label: 'ERASE'[^}]*pin: true/);
     expect(playground).toMatch(/pin: id === 'erase',\n/);
@@ -99,8 +100,8 @@ describe('tools are always reachable', () => {
 
   it('BUCKET and WIND join ERASE on the pinned row, not in the scrolling list', () => {
     expect(hud).toMatch(/addToolTiles\(pinned\)/);
-    expect(hud).toMatch(/gswatches pinrow/);
-    expect(hud).toMatch(/col\.appendChild\(pinned\)/);
+    expect(hud).toMatch(/h\('div', 'pinrow'\)/);
+    expect(hud).toMatch(/tools\.appendChild\(pinned\)/);
   });
 });
 
@@ -116,8 +117,8 @@ describe('type: read for sentences and names, display for buttons and headings',
     expect(silk).toBe(2); // .ts-foot and .menu-live
   });
 
-  it('every heading is display type', () => {
-    expect(css).toMatch(/\nh2 \{ font-family: var\(--font-display\);/);
+  it('every heading is the read face, bold (pixel type is only for the title screen and the logo)', () => {
+    expect(css).toMatch(/\nh2 \{ font-family: var\(--font-read\); font-weight: 700;/);
   });
 
   it('the room badge is read type on one line, with 14px buttons', () => {

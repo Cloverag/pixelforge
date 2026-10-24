@@ -103,6 +103,7 @@ export class PlaygroundMode implements ModeController {
         },
         bucket: false,
         counts: 'particles',
+        hint: 'Pick an emitter, then click and hold here. Or try a scene.',
       },
       this.ctx.brush(),
     );

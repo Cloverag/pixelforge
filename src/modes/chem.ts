@@ -4,7 +4,7 @@ import { rulesFor } from '../sim/reactions';
 import { CHEM_SCENES } from '../sim/chemscenes';
 import type { Res } from '../sim/protocol';
 import { RxWindow, readoutNote } from './rxwindow';
-import type { PaletteSection, Swatch } from '../ui/hud';
+import { rampGradient, type PaletteSection, type Swatch } from '../ui/hud';
 import { Stroke } from './stroke';
 import type { CursorLook, ModeController, ModeCtx } from './types';
 
@@ -34,12 +34,6 @@ const NONMETALS = [Mat.C, Mat.P, Mat.S, Mat.I, Mat.B, Mat.SI];
 const LIQUIDS = [Mat.BR, Mat.HG];
 /** the bench: things to react elements with, and to hold them */
 const BENCH = [Mat.WATER, Mat.ACID, Mat.LYE, Mat.RUST, Mat.FIRE, Mat.TORCH, Mat.LAVA, Mat.PLANT, Mat.GLASS, Mat.WALL];
-
-function rampGradient(ramp: readonly number[]): string {
-  const css = (u: number) => `rgb(${u & 255},${(u >>> 8) & 255},${(u >>> 16) & 255})`;
-  const [a, b, c, d] = ramp.map(css);
-  return `linear-gradient(135deg, ${a} 0 25%, ${b} 25% 50%, ${c} 50% 75%, ${d} 75% 100%)`;
-}
 
 /** What a material does in the lab, one line per rule it is in: its own
  *  rules as written, the others as "sodium: fizzes in water". */
@@ -93,12 +87,6 @@ export class ChemMode implements ModeController {
       return { id: String(m), label: d.name, chip, title: sym ? `${name} (${sym})` : d.name, info: [d.name, kind, lines, chip], sym, z: LAB_Z.get(m) };
     };
     const sections: PaletteSection[] = [
-      { label: 'TABLE', cls: 'toolbtns', buttons: [{ label: 'PERIODIC TABLE', title: 'Every element; the lit ones are in the lab (E)', onClick: () => void this.toggleTable() }] },
-      {
-        label: 'EXPERIMENTS',
-        cls: 'scenebtns',
-        buttons: CHEM_SCENES.map((s) => ({ label: s.label, title: s.tip, onClick: () => this.loadScene(s.id, s.label) })),
-      },
       { label: 'GASES', swatches: GASES.map(swatch), tiles: true },
       { label: 'METALS', swatches: METALS.map(swatch), tiles: true },
       { label: 'NON-METALS', swatches: NONMETALS.map(swatch), tiles: true },
@@ -107,6 +95,12 @@ export class ChemMode implements ModeController {
       {
         label: 'TOOLS',
         swatches: [{ id: '-1', label: 'ERASE', chip: 'var(--world-bg)', dashed: true, pin: true, title: 'Eraser (or hold right mouse button)', info: ['ERASE', '', 'Clears whatever the brush covers.', 'transparent'] }],
+      },
+      { label: 'TABLE', cls: 'toolbtns', buttons: [{ label: 'PERIODIC TABLE', title: 'Every element; the lit ones are in the lab (E)', onClick: () => void this.toggleTable() }] },
+      {
+        label: 'EXPERIMENTS',
+        cls: 'scenebtns',
+        buttons: CHEM_SCENES.map((s) => ({ label: s.label, title: s.tip, onClick: () => this.loadScene(s.id, s.label) })),
       },
     ];
     this.ctx.hud.buildPalette(
@@ -119,6 +113,7 @@ export class ChemMode implements ModeController {
         },
         bucket: true,
         counts: 'cells',
+        hint: 'Pick an element and draw it here. Or start an experiment.',
       },
       this.ctx.brush(),
     );

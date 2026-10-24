@@ -708,17 +708,7 @@ function nextRoomMode(): ModeController {
 }
 
 /** The host takes the whole room to the next mode (the world starts empty). */
-roomPill.onSwitchMode = async () => {
-  if (!mp?.host) return;
-  const next = nextRoomMode();
-  const ok = await confirmDialog({
-    title: next.id === 'sand' ? 'BACK TO THE SANDBOX?' : `TO THE ${next.roomName}?`,
-    body: `Everyone in the room goes with you, and the ${next.roomName.toLowerCase()} starts empty.`,
-    ok: 'GO',
-    cancel: 'STAY',
-  });
-  if (ok && mp) mp.local([{ k: 'mode', m: next.id }]);
-};
+roomPill.onSwitchMode = () => void switchMode(nextRoomMode().id);
 // dev only: paint straight into this peer's own world, bypassing the room,
 // to test that a desync is detected and repaired
 if (import.meta.env.DEV)
@@ -811,7 +801,41 @@ function showMode(m: ModeController): void {
   current = m;
   music.setScreen(trackForMode(m.id));
   m.buildUI();
+  hud.setMode(m.id, m.challengeId ? (CHALLENGES.find((c) => c.id === m.challengeId)?.name ?? null) : null);
   enterGame();
+}
+
+/**
+ * A mode tab in the bar. Alone: straight there, as the title screen would
+ * (the sandbox is saved first). In a room only the host moves everyone, after
+ * asking, and the world starts empty for all.
+ */
+async function switchMode(id: Mode): Promise<void> {
+  if (screen !== 'game' || (id === current.id && current.challengeId === null)) return;
+  sfx.uiSelect();
+  if (mp) {
+    if (!mp.host) {
+      toast('ONLY THE HOST CAN CHANGE THE MODE');
+      return;
+    }
+    const next = MODE_CTRL[id];
+    const ok = await confirmDialog({
+      title: id === 'sand' ? 'BACK TO THE SANDBOX?' : `TO THE ${next.roomName}?`,
+      body: `Everyone in the room goes with you, and the ${next.roomName.toLowerCase()} starts empty.`,
+      ok: 'GO',
+      cancel: 'STAY',
+    });
+    if (ok && mp) mp.local([{ k: 'mode', m: id }]);
+    return;
+  }
+  autosaveNow();
+  startMode(MODE_CTRL[id]);
+  // back to the sandbox: it comes back as it was left (the autosave)
+  if (id === 'sand') {
+    const saved = readSave();
+    const world = saved ? rleDecode(saved, SIM_W * SIM_H) : null;
+    if (world) adoptWorld(world);
+  }
 }
 
 function startSandbox(): void {
@@ -1236,7 +1260,11 @@ function setBrush(n: number): void {
 // A phone has no SPACE and no room on the bar for two controls: there the pause
 // button is the way into the pause menu (which freezes the game, and RESUME unfreezes it)
 const phone = matchMedia('(max-width: 900px) and (orientation: portrait), (max-height: 520px) and (orientation: landscape)');
-hud.initBar({ onPause: () => (phone.matches ? openPause() : togglePause()), onMenu: openPause });
+hud.initBar({
+  onPause: () => (phone.matches ? openPause() : togglePause()),
+  onMenu: openPause,
+  onMode: (m) => void switchMode(m),
+});
 
 // the saved block size and soft setting, now that the HUD exists
 restoreGrid();

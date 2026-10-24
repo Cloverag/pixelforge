@@ -59,6 +59,7 @@ export class SandMode implements ModeController {
         },
         bucket: true,
         counts: 'cells',
+        hint: 'Pick a material, then draw here',
       },
       this.ctx.brush(),
     );

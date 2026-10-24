@@ -28,7 +28,7 @@ export function setImmersive(want: boolean): boolean {
   on = want;
   const body = document.body;
   body.classList.toggle('immersive', on);
-  if (!on) body.classList.remove('reveal-left', 'reveal-bottom');
+  if (!on) body.classList.remove('reveal-top', 'reveal-bottom');
   const root = document.documentElement;
   if (on && !document.fullscreenElement && root.requestFullscreen) {
     root.requestFullscreen().catch(() => {
@@ -61,13 +61,13 @@ export function initImmersive(onChange: (on: boolean) => void): void {
       const open = body.classList.contains(cls);
       body.classList.toggle(cls, open ? within : near);
     };
-    const rail = document.getElementById('toolbar')?.getBoundingClientRect();
-    const status = document.getElementById('statusbar')?.getBoundingClientRect();
-    reveal('reveal-left', e.clientX <= EDGE, !!rail && e.clientX <= rail.width + SLACK);
+    const dock = document.getElementById('toolbar')?.getBoundingClientRect();
+    const bar = document.getElementById('hudbar')?.getBoundingClientRect();
+    reveal('reveal-top', e.clientY <= EDGE, !!bar && e.clientY <= bar.height + SLACK);
     reveal(
       'reveal-bottom',
       e.clientY >= window.innerHeight - EDGE,
-      !!status && e.clientY >= window.innerHeight - status.height - SLACK,
+      !!dock && e.clientY >= window.innerHeight - dock.height - SLACK,
     );
   });
 }
