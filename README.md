@@ -55,7 +55,7 @@ get their own layout.
 | **PARTICLE PLAYGROUND** | Light shows instead of materials: emitters, forces, bumpers that play notes, portals - with a film-look renderer, a full 3D view and sound design. See [The playground](#the-playground). |
 | **ASCII GARDEN** | Flowers, an eye made of words and 3D lilies, drawn as coloured text. Solo only. See [The ASCII garden](#the-ascii-garden). |
 | **MATH LAB** | Watch maths draw itself: a parametric heart, a neon butterfly, a spiral rosette, a globe of ellipses, a recursive tree - and 3D graphs (a rose surface, ripple, saddle, waves) you can turn. The code sits beside the drawing and lights the line drawing now; sliders change its numbers. Solo only. See [The math lab](#the-math-lab). |
-| **CHEM LAB** | Pick elements off a periodic table and drop them into water, acid, fire or each other: 30 elements, 70 reactions, 3 ready-made experiments. See [The chem lab](#the-chem-lab). |
+| **CHEM LAB** | Pick elements off a periodic table and drop them into water, acid, fire or each other: 32 elements (uranium and plutonium among them: fission and critical mass), 70 reactions, 5 ready-made experiments. See [The chem lab](#the-chem-lab). |
 | **SURPRISE ME** | A brand-new generated playground scene every click (`R`). |
 | **CHALLENGES** | 7 goal-based puzzles with material budgets, time limits, win/lose checks and a 3-star rating. Levels unlock in order; stars persist in `localStorage`. |
 
@@ -161,8 +161,8 @@ rounding. It is wrapped to 32 bits now, with every sequence unchanged.
 ## The chem lab
 
 The chem lab is the sandbox's world painted with elements instead of
-materials. Its left rail holds the 30 elements it simulates, grouped as gases,
-metals, non-metals and liquids, plus a bench of water, acid, lye, rust, fire, a torch,
+materials. Its left rail holds the 32 elements it simulates, grouped as gases,
+metals, non-metals, liquids and nuclear, plus a bench of water, acid, lye, rust, fire, a torch,
 lava, plants, glass and wall.
 
 - **Periodic table** (`E`): all 118 elements in their usual places, coloured
@@ -191,7 +191,20 @@ lava, plants, glass and wall.
 | iodine + fire or lava | turns straight to violet vapour, which settles back as crystals |
 
 - **Experiments**: ALKALI BATH, THERMITE (a magnesium ribbon burns into a
-  crucible that melts down and through its floor) and FLAME TESTS.
+  crucible that melts down and through its floor), FLAME TESTS, CRITICAL MASS
+  and REACTOR.
+- **Nuclear**: uranium and plutonium on the NUCLEAR rail with neutrons and
+  boron. A neutron is traced in a straight line the moment it is let out;
+  each uranium cell it crosses has a 3% chance to catch it (plutonium 5%),
+  and a caught one splits a few ticks later into heat and 2 neutrons
+  (plutonium 3). Boron soaks neutrons up; water and other solids only now and
+  then. So a chain needs enough metal: a small lump lets its neutrons escape
+  and fizzles, a big one (critical mass) runs away, and above 40 splits in
+  one tick it blows itself apart. CRITICAL MASS shows both lumps side by
+  side; REACTOR cages uranium in boron rods in a pool - erase rods and watch.
+  Measured: a 90x90 uranium lump loses about half its metal in 50 s and
+  bursts, a 30x30 one 2% (plutonium 30x30: 63%), and a boron cage keeps the
+  reactor at 1% where a stone one lets it burst.
 - Real densities keep their order: sodium, potassium and lithium float on
   water, iron and copper sink, and mercury and gold sink under everything else.
 - **Element data** comes from [PubChem](https://pubchem.ncbi.nlm.nih.gov/periodic-table/)
@@ -379,7 +392,7 @@ no icon set, no images.
   Resting the cursor on a mode plays that mode behind the list: SANDBOX
   cycles four worlds built from ordinary brush strokes (flower ponds, a
   volcano, TNT demolition, a waterfall), PLAYGROUND generated light shows,
-  CHEM LAB its three experiments, ASCII GARDEN its four scenes, MATH LAB its
+  CHEM LAB its five experiments, ASCII GARDEN its four scenes, MATH LAB its
   drawings and 3D graphs.
 - Explosions shake the canvas, flash and boom.
 - **SKY** (the deck, VIEW in the pause menu, OPTIONS on the title screen): the
@@ -538,7 +551,7 @@ tests/                     vitest: world rules, TNT debris, rendering, playgroun
 
 ### Testing
 
-346 tests. Beyond the material rules: two worlds fed the same inputs must
+349 tests. Beyond the material rules: two worlds fed the same inputs must
 match for 1200 frames; a world restored mid-game into a different seed must
 stay identical; host and two guests over a simulated network with random
 delays, reordering and a late joiner must agree at every frame; a corrupted

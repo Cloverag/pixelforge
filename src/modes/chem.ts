@@ -17,6 +17,7 @@ export const LAB_ELEMENTS = new Map<string, number>([
   ['Cu', Mat.CU], ['Zn', Mat.ZN], ['Sr', Mat.SR], ['I', Mat.I], ['Ba', Mat.BA],
   ['He', Mat.HE], ['B', Mat.B], ['F', Mat.F], ['Si', Mat.SI], ['Br', Mat.BR],
   ['Ag', Mat.AG], ['Sn', Mat.SN], ['Cs', Mat.CS], ['Au', Mat.AU], ['Hg', Mat.HG],
+  ['U', Mat.U], ['Pu', Mat.PU],
 ]);
 const SYMBOL = new Map([...LAB_ELEMENTS].map(([sym, m]) => [m, sym]));
 /** material -> atomic number, for the rail's tiles. Written out (from
@@ -27,12 +28,15 @@ export const LAB_Z = new Map<number, number>([
   [Mat.NE, 10], [Mat.NA, 11], [Mat.MG, 12], [Mat.AL, 13], [Mat.SI, 14], [Mat.P, 15], [Mat.S, 16],
   [Mat.CL, 17], [Mat.K, 19], [Mat.CA, 20], [Mat.FE, 26], [Mat.CU, 29], [Mat.ZN, 30], [Mat.BR, 35],
   [Mat.SR, 38], [Mat.AG, 47], [Mat.SN, 50], [Mat.I, 53], [Mat.CS, 55], [Mat.BA, 56], [Mat.AU, 79], [Mat.HG, 80],
+  [Mat.U, 92], [Mat.PU, 94],
 ]);
 
 const GASES = [Mat.H, Mat.O, Mat.N, Mat.CL, Mat.NE, Mat.HE, Mat.F];
 const METALS = [Mat.LI, Mat.NA, Mat.K, Mat.CS, Mat.MG, Mat.CA, Mat.SR, Mat.BA, Mat.AL, Mat.FE, Mat.CU, Mat.ZN, Mat.AG, Mat.SN, Mat.AU];
 const NONMETALS = [Mat.C, Mat.P, Mat.S, Mat.I, Mat.B, Mat.SI];
 const LIQUIDS = [Mat.BR, Mat.HG];
+/** fission: the two fissile metals, neutrons to start them, boron to stop them */
+const NUCLEAR = [Mat.U, Mat.PU, Mat.NEUTRON, Mat.B];
 /** the bench: things to react elements with, and to hold them */
 const BENCH = [Mat.WATER, Mat.ACID, Mat.LYE, Mat.RUST, Mat.FIRE, Mat.TORCH, Mat.LAVA, Mat.PLANT, Mat.GLASS, Mat.WALL];
 
@@ -111,6 +115,7 @@ export class ChemMode implements ModeController {
       { label: 'METALS', swatches: METALS.map(swatch), tiles: true },
       { label: 'NON-METALS', swatches: NONMETALS.map(swatch), tiles: true },
       { label: 'LIQUIDS', swatches: LIQUIDS.map(swatch), tiles: true },
+      { label: 'NUCLEAR', swatches: NUCLEAR.map(swatch), tiles: true },
       { label: 'BENCH', swatches: BENCH.map(swatch) },
       {
         label: 'TOOLS',
@@ -190,6 +195,10 @@ export class ChemMode implements ModeController {
 
 /** Bench materials whose lab role is not a rule of their own. */
 const CHEM_NOTE: Partial<Record<number, string>> = {
+  [Mat.U]: 'A neutron splits it into heat and 2 more neutrons. A small lump lets them escape; a big one (critical mass) keeps them - a chain reaction.',
+  [Mat.PU]: 'Splits more easily than uranium and gives 3 neutrons: its critical mass is much smaller.',
+  [Mat.NEUTRON]: 'Paint them to fire neutrons in every direction. They pass through most things; boron soaks them up.',
+  [Mat.B]: 'Boron soaks up neutrons: control rods. Cage uranium in it and the chain cannot run.',
   [Mat.WATER]: 'Alkali metals fizz in it; iron rusts in it.',
   [Mat.FIRE]: 'Heat for reactions; metals colour it (flame tests).',
   [Mat.TORCH]: 'Steady heat that never burns out; lights neon.',

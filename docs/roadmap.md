@@ -11,6 +11,8 @@ Live: https://cloverag.github.io/pixelforge/ (deployed from `main` by CI).
 | 2026-10-24 | Redesign R1-R3: arcade title screen, CC0 sound + adaptive music, pause menu |
 | 2026-10-24 | Arcade cabinet UI: marquee with modes, materials panel, control deck (VIEW, SKY, SOUND, WORLD) |
 | 2026-10-24 | Pixel and light engine: crisp cells, cell shading, sun and moon shadows, day/night cycle, clear water, path-traced light (RAY) |
+| 2026-10-24 | NUCLEAR in the chem lab: uranium, plutonium, neutrons, boron rods; CRITICAL MASS + REACTOR experiments |
+| 2026-10-24 | MATH LAB: YOUR CURVE formulas, MATH FLOWERS, PYTHON with turtle, 3D view, design links |
 | 2026-10-24 | MATH LAB 3D GRAPHS: rose surface, ripple, saddle, waves (drag to turn); menu previews for SANDBOX + MATH LAB |
 | 2026-10-24 | MATH LAB: heart, butterfly, rosette, sphere, tree drawn stroke by stroke beside their code, with sliders |
 | 2026-10-24 | ASCII Garden: flowers, EYE OF WORDS, 3D LILY as coloured text; title-screen preview; ASCII lamp in every mode; README with new GIFs |

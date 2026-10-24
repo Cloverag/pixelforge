@@ -84,6 +84,30 @@ export const CHEM_SCENES: ChemScene[] = [
       });
     },
   },
+  {
+    id: 'critical',
+    label: 'CRITICAL MASS',
+    tip: 'Two lumps of uranium: the small one lets its neutrons escape and fizzles; the big one keeps them and runs away',
+    build(g) {
+      rect(g, 0, FLOOR - 3, SIM_W - 1, FLOOR, Mat.STONE);
+      rect(g, 80, 286, 140, FLOOR - 4, Mat.STONE); // a plinth for the small one
+      rect(g, 100, 266, 119, 285, Mat.U);
+      rect(g, 380, 256, 479, FLOOR - 4, Mat.U);
+    },
+  },
+  {
+    id: 'reactor',
+    label: 'REACTOR',
+    tip: 'Uranium caged in boron rods, in a pool. Erase some rods and the water boils; erase them all and...',
+    build(g) {
+      rect(g, 0, FLOOR - 3, SIM_W - 1, FLOOR, Mat.STONE);
+      tank(g, 180, 170, 460, FLOOR - 4);
+      rect(g, 184, 190, 456, FLOOR - 6, Mat.WATER);
+      // the core: fuel in a grid of boron control rods every 12 cells
+      for (let y = 230; y <= 330; y++)
+        for (let x = 260; x <= 380; x++) put(g, x, y, (x - 260) % 12 === 0 || (y - 230) % 12 === 0 ? Mat.B : Mat.U);
+    },
+  },
 ];
 
 /** Build scene `id` into an already cleared grid; false if there is none. */

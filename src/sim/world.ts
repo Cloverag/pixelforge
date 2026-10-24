@@ -44,6 +44,10 @@ const DEB_G = 0.14;
 const DEB_DRAG = 0.995;
 const DEB_VMAX = 8;
 /** how far past the blast radius loose ground is kicked up, in radii */
+/** how far a neutron flies, in cells */
+const NEUTRON_RANGE = 60;
+/** fissions in one step that blow the metal apart */
+const FISSION_BURST = 40;
 const EJECTA = 2.2;
 
 interface Source {
@@ -512,6 +516,13 @@ export class World {
     }
 
     if (this.debris.length) this.stepDebris();
+    // a chain reaction splitting this many atoms at once blows the metal apart
+    if (this.fissions > FISSION_BURST) {
+      const cx = Math.round(this.fissionX / this.fissions);
+      const cy = Math.round(this.fissionY / this.fissions);
+      this.explode(cx, cy, Math.min(26, 8 + this.fissions / 12), true);
+    }
+    this.fissions = this.fissionX = this.fissionY = 0;
     if (ch) ch.check();
     g.chunks.spreadHalo();
     if (this.shake > 0) this.shake--;
@@ -611,11 +622,106 @@ export class World {
       case Mat.VOID:
         this.voidCell(x, y);
         break;
+      case Mat.U:
+      case Mat.PU:
+        this.fissile(x, y, i, m);
+        break;
+      case Mat.NEUTRON:
+        this.neutron(x, y, i);
+        break;
       default:
         // a tinted flame burns exactly like fire; elements run the reaction table
         if (FLAMES.has(m)) this.fire(x, y, i);
         else if (CHEM[m]) this.chem(x, y, m);
         break; // static solids
+    }
+  }
+
+  // ---------- nuclear ----------
+
+  /** fissions this step, and their position sums (for the burst's centre) */
+  private fissions = 0;
+  private fissionX = 0;
+  private fissionY = 0;
+
+  /**
+   * Uranium and plutonium. meta 0: at rest - now and then one splits by
+   * itself and lets out a neutron (spontaneous fission), which is what starts
+   * a chain in a big enough lump. meta > 0: hit by a neutron, it counts down
+   * and then splits: heat (fire) and two neutrons (plutonium: three).
+   */
+  private fissile(x: number, y: number, i: number, m: number): void {
+    const g = this.grid;
+    g.chunks.wakeCell(x, y); // spontaneous fission can happen any time
+    const left = g.meta[i];
+    if (left === 0) {
+      if (this.rng.chance(m === Mat.PU ? 1 / 20000 : 1 / 50000)) this.neutronRay(x, y, 1);
+      return;
+    }
+    if (left > 1) {
+      g.meta[i] = left - 1;
+      return;
+    }
+    g.setXY(x, y, Mat.FIRE, this.rng.range(20, 40));
+    this.fissions++;
+    this.fissionX += x;
+    this.fissionY += y;
+    this.events.ignites++;
+    this.neutronRay(x, y, m === Mat.PU ? 3 : 2);
+  }
+
+  /** A painted neutron flies off in a random direction at once; a trace spark just fades. */
+  private neutron(x: number, y: number, i: number): void {
+    const g = this.grid;
+    g.chunks.wakeCell(x, y);
+    const life = g.meta[i];
+    if (life === 0) {
+      g.setXY(x, y, Mat.EMPTY);
+      this.neutronRay(x, y, 1);
+    } else if (life <= 1) g.setXY(x, y, Mat.EMPTY);
+    else g.meta[i] = life - 1;
+  }
+
+  /**
+   * Send n neutrons out of (x, y) in straight lines, at once. Most pass
+   * through metal without hitting a nucleus; each uranium (plutonium) cell
+   * crossed has a small chance to catch one and start to split. Boron soaks
+   * them up; water and other solids only now and then. Faint sparks show
+   * the paths.
+   */
+  private neutronRay(x: number, y: number, n: number): void {
+    const g = this.grid;
+    for (let k = 0; k < n; k++) {
+      const a = this.rng.next() * Math.PI * 2;
+      const dx = Math.cos(a);
+      const dy = Math.sin(a);
+      for (let s = 1; s <= NEUTRON_RANGE; s++) {
+        const cx = Math.round(x + dx * s);
+        const cy = Math.round(y + dy * s);
+        if (cx < 0 || cy < 0 || cx >= g.W || cy >= g.H) break;
+        const t = g.get(cx, cy);
+        if (t === Mat.U || t === Mat.PU) {
+          const ci = g.idx(cx, cy);
+          if (g.meta[ci] === 0 && this.rng.chance(t === Mat.PU ? 0.05 : 0.03)) {
+            g.meta[ci] = this.rng.range(2, 7);
+            g.chunks.wakeCell(cx, cy);
+            break;
+          }
+          continue;
+        }
+        if (t === Mat.B) break; // boron: a control rod
+        if (t === Mat.WATER) {
+          if (this.rng.chance(0.03)) break;
+          continue;
+        }
+        if (t === Mat.EMPTY) {
+          if (s % 5 === 0 && this.fissions < 120) g.setXY(cx, cy, Mat.NEUTRON, 3);
+          continue;
+        }
+        // most things barely notice a neutron going through; boron (above) is what stops them
+        const c = MATS[t].cat;
+        if (c !== Cat.GAS && c !== Cat.LIQUID && this.rng.chance(0.03)) break;
+      }
     }
   }
 

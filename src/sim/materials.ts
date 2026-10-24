@@ -80,6 +80,10 @@ export const Mat = {
   CS: 73,
   AU: 74,
   HG: 75,
+  // ---- NUCLEAR: fissile metals and the neutrons that split them ----
+  U: 76,
+  PU: 77,
+  NEUTRON: 78,
 } as const;
 
 export type MatId = (typeof Mat)[keyof typeof Mat];
@@ -242,6 +246,14 @@ chem(Mat.SN, 'TIN', Cat.POWDER, 7.3, ['#9a9ca0', '#8a8c90', '#aaacb0', '#7a7c82'
 chem(Mat.CS, 'CAESIUM', Cat.POWDER, 1.93, ['#e8d49a', '#dcc684', '#f4e4b2', '#ccb870'], { acidChance: 0 });
 chem(Mat.AU, 'GOLD', Cat.POWDER, 19.3, ['#f0c030', '#e0ae20', '#ffd54a', '#c89a14'], { acidChance: 0 });
 chem(Mat.HG, 'MERCURY', Cat.LIQUID, 13.5, ['#d8dce4', '#c6cad4', '#eceff4', '#b2b8c4'], { disp: 2, acidChance: 0 });
+
+// Nuclear. Uranium and plutonium are dense solid metal that glows (the game's
+// licence: the real metals do not); a neutron that reaches one splits it into
+// heat and two (plutonium: three) more neutrons - a chain reaction if there is
+// enough metal close together for the neutrons to find. Boron soaks them up.
+chem(Mat.U, 'URANIUM', Cat.SOLID, 19.1, ['#4a6a3a', '#3e5c30', '#5a7c46', '#334e28'], { acidChance: 0 });
+chem(Mat.PU, 'PLUTONIUM', Cat.SOLID, 19.8, ['#7a6a5a', '#6c5c4c', '#8a7a68', '#5e4e40'], { acidChance: 0 });
+chem(Mat.NEUTRON, 'NEUTRON', Cat.GAS, 0.0001, ['#e6fbff', '#c8f4ff', '#ffffff', '#a8ecff'], { acidChance: 0 });
 
 /** The coloured flames: each burns exactly like FIRE. */
 export const FLAMES = new Set<number>([

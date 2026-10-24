@@ -456,7 +456,7 @@ void main() {
 }`;
 
 /** Materials that give off light: their glow bleeds into the cells around them. */
-const LIGHTS = new Set<number>([Mat.FIRE, Mat.EMBER, Mat.LAVA, Mat.TORCH, Mat.NEON_GLOW, Mat.IODINE_GAS, ...FLAMES]);
+const LIGHTS = new Set<number>([Mat.FIRE, Mat.EMBER, Mat.LAVA, Mat.TORCH, Mat.NEON_GLOW, Mat.IODINE_GAS, Mat.U, Mat.PU, Mat.NEUTRON, ...FLAMES]);
 
 /** What the composite needs to know about each material, by id: r = liquid, g = light source, b = solid body, a = clear water. */
 export function materialInfo(): Uint8Array {
