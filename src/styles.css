@@ -296,6 +296,8 @@ body.gl-render.crt-on #crt { background: radial-gradient(ellipse at center, tran
   color: rgba(244, 239, 255, 0.55);
   pointer-events: none;
 }
+/* only a game invites drawing: the title screen's demo world may be empty too */
+body:not(.in-game) #empty-hint { display: none; }
 #paused-badge {
   position: absolute;
   top: 14px;
