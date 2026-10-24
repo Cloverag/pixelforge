@@ -18,6 +18,8 @@ const TOOL_NOTES: Record<string, string> = {
   REPULSE: 'Particles are pushed away from your cursor.',
   VORTEX: 'Particles swirl around your cursor.',
   WALL: 'Paint indestructible wall blocks.',
+  BUCKET: 'Flood-fill the connected area with the selected material. (F)',
+  WIND: 'Drag to blow smoke, fire and light powders. (W)',
   ERASE: 'Erase cells or particles under the brush.',
 };
 
@@ -43,7 +45,8 @@ let installed = false;
 function describe(target: HTMLElement): { name: string; note: string } | null {
   const sw = target.closest('.swatch');
   if (sw) {
-    const name = sw.querySelector('.nm')?.textContent?.trim() ?? '';
+    // the rail shows Sand; the tables are keyed SAND
+    const name = (sw.querySelector('.nm')?.textContent?.trim() ?? '').toUpperCase();
     const m = MATS.find((x) => x && x.name === name);
     if (m) {
       const cat = CAT_NAMES[m.cat] ?? 'material';

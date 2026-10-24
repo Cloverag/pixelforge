@@ -67,7 +67,7 @@ function buildContent(box: HTMLElement): void {
   const rows: [string, string][] = [
     ['LEFT DRAG', 'paint selected material'],
     ['RIGHT DRAG', 'erase'],
-    ['WHEEL / [ ]', 'brush size 2-24'],
+    ['WHEEL / [ ]', 'brush size 2-24 (the five dots in the rail light the nearest)'],
     ['F', 'flood-fill bucket (sandbox, chem lab)'],
     ['W', 'wind brush - drag to blow, click for a puff (sandbox, chem lab)'],
     ['E', 'periodic table (chem lab)'],

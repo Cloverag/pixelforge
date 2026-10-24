@@ -4,6 +4,21 @@ import { BrushCursor } from './cursor';
 import { ELEMENT_NOTES } from './help';
 import { h } from './widgets';
 
+/** The five brush dots (the brush itself runs 2..24; the wheel and [ ] reach every even size). */
+export const BRUSH_SIZES = [2, 6, 12, 18, 24] as const;
+
+/** SAND -> Sand, BLACK HOLE -> Black Hole: the rail shows names in sentence type, not shouting. */
+export function titleCase(name: string): string {
+  return name.toLowerCase().replace(/(^|\s)(\S)/g, (_, sp: string, c: string) => sp + c.toUpperCase());
+}
+
+/** The dot that stands for brush size `n`: the nearest preset. */
+export function nearestBrush(n: number): number {
+  let best = 0;
+  for (let i = 1; i < BRUSH_SIZES.length; i++) if (Math.abs(BRUSH_SIZES[i] - n) < Math.abs(BRUSH_SIZES[best] - n)) best = i;
+  return best;
+}
+
 const CAT_WORD = ['', 'powder', 'liquid', 'gas', 'solid'];
 
 function cssHex(u: number): string {
@@ -141,8 +156,7 @@ export class Hud {
   private pauseBtn!: HTMLButtonElement;
   private fpsEl: HTMLElement | null = null;
   private pausedBadge: HTMLElement | null = null;
-  private brushLabel!: HTMLElement;
-  private brushDot!: HTMLElement;
+  private brushDots: HTMLElement[] = [];
   private swatchEls = new Map<string, HTMLElement>();
   private status!: {
     chip: HTMLElement;
@@ -305,6 +319,7 @@ export class Hud {
 
     const pal = h('div');
     pal.id = 'palette';
+    const grids = new Map<string, HTMLElement>();
     for (const sec of spec.sections) {
       const group = h('div', 'matgroup');
       group.appendChild(h('span', 'glabel', sec.label));
@@ -323,14 +338,10 @@ export class Hud {
             el.appendChild(h('span', 'nm', sw.label));
           } else {
             const chip = h('div', 'chip');
-            if (sw.dashed) {
-              chip.style.background = sw.chip;
-              chip.style.border = '1px dashed var(--danger)';
-            } else {
-              chip.style.backgroundImage = sw.chip;
-            }
+            if (sw.dashed) chip.classList.add('dashed');
+            else chip.style.backgroundImage = sw.chip;
             el.appendChild(chip);
-            el.appendChild(h('span', 'nm', sw.label));
+            el.appendChild(h('span', 'nm', titleCase(sw.label)));
           }
           el.title = sw.title;
           el.onclick = () => this.pick(sw.id);
@@ -339,6 +350,7 @@ export class Hud {
           this.swatchInfo.set(sw.id, sw.info);
         }
         group.appendChild(grid);
+        grids.set(sec.label, grid);
       } else {
         const row = h('div', sec.cls);
         for (const b of sec.buttons) {
@@ -354,14 +366,19 @@ export class Hud {
     }
 
     this.toolbar.appendChild(pal);
-    this.buildBrushCol(brush, spec.bucket);
+    this.bucketBtn = null;
+    this.windBtn = null;
+    // BUCKET and WIND are tools, not brush options: two tiles beside ERASE
+    const tools = grids.get('TOOLS');
+    if (spec.bucket && tools) this.addToolTiles(tools);
+    this.buildBrush(brush);
     this.pick(spec.initial);
     this.particleMode = spec.counts === 'particles';
     if (this.status) this.status.cellsKey.textContent = this.particleMode ? 'particles' : 'cells';
   }
 
-  private bucketBtn: HTMLButtonElement | null = null;
-  private windBtn: HTMLButtonElement | null = null;
+  private bucketBtn: HTMLElement | null = null;
+  private windBtn: HTMLElement | null = null;
 
   /** BUCKET and WIND are the same one-of-three choice, so they light as one. */
   setToolKind(kind: PaintKind): void {
@@ -371,55 +388,52 @@ export class Hud {
     this.renderTool();
   }
 
-  private buildBrushCol(brush: number, withBucket = true): void {
-    const col = h('div', 'toolcol');
-    const row = h('div', 'brushrow');
-    row.appendChild(h('span', '', 'BRUSH'));
-
-    const slider = document.createElement('input');
-    slider.type = 'range';
-    slider.min = '2';
-    slider.max = '24';
-    slider.value = String(brush);
-    slider.step = '1';
-    slider.title = 'Brush size';
-    slider.setAttribute('aria-label', 'Brush size');
-    slider.oninput = () => {
-      const n = Number(slider.value);
-      this.setBrushDisplay(n);
-      window.dispatchEvent(new CustomEvent('pf-brush', { detail: n }));
-    };
-    row.appendChild(slider);
-
-    this.brushLabel = h('span', '', String(brush));
-    row.appendChild(this.brushLabel);
-
-    // a dot scaled to the real brush radius - cheaper to read than a number
-    const preview = h('div', 'brush-preview');
-    this.brushDot = h('div', 'brush-dot');
-    preview.appendChild(this.brushDot);
-    row.appendChild(preview);
-
-    col.appendChild(row);
-    col.appendChild(h('div', 'brushrow hint', 'Wheel or [ ] to resize'));
-
-    this.bucketBtn = null;
-    this.windBtn = null;
-    if (withBucket) {
-      const pick = (kind: PaintKind, btn: () => HTMLButtonElement) => () => {
-        // clicking the lit button turns it off rather than doing nothing
-        const next = btn().classList.contains('toggled') ? 'brush' : kind;
+  /** BUCKET and WIND as tiles in the TOOLS group: held like a tool, lit while on. */
+  private addToolTiles(grid: HTMLElement): void {
+    const make = (kind: PaintKind, name: string, title: string): HTMLElement => {
+      const el = h('div', 'swatch tooltile');
+      el.appendChild(h('div', `chip ico-${kind}`));
+      el.appendChild(h('span', 'nm', titleCase(name)));
+      el.title = title;
+      el.onclick = () => {
+        // clicking the lit tile turns it off rather than doing nothing
+        const next = el.classList.contains('toggled') ? 'brush' : kind;
         this.setToolKind(next);
         window.dispatchEvent(new CustomEvent('pf-tool', { detail: next }));
       };
-      const toolRow = h('div', 'toolbtns');
-      this.bucketBtn = this.mkBtn('BUCKET', pick('flood', () => this.bucketBtn!), 'Flood fill (F)', true);
-      this.windBtn = this.mkBtn('WIND', pick('wind', () => this.windBtn!), 'Drag to blow smoke, fire and light powders (W)', true);
-      toolRow.appendChild(this.bucketBtn);
-      toolRow.appendChild(this.windBtn);
-      col.appendChild(toolRow);
-    }
+      grid.appendChild(el);
+      return el;
+    };
+    this.bucketBtn = make('flood', 'BUCKET', 'Flood fill (F)');
+    this.windBtn = make('wind', 'WIND', 'Drag to blow smoke, fire and light powders (W)');
+    this.setToolKind(this.toolKind);
+  }
 
+  /** Five brush sizes as five dots of growing size; the wheel and [ ] move the lit one. */
+  private buildBrush(brush: number): void {
+    const col = h('div', 'toolcol');
+    col.appendChild(h('span', 'glabel', 'BRUSH'));
+    const row = h('div', 'brushdots');
+    row.setAttribute('role', 'group');
+    row.setAttribute('aria-label', 'Brush size');
+    this.brushDots = BRUSH_SIZES.map((n, i) => {
+      const b = h('button', 'bdot') as HTMLButtonElement;
+      b.type = 'button';
+      b.title = `Brush size ${n} (wheel or [ ])`;
+      b.setAttribute('aria-label', `Brush size ${i + 1} of ${BRUSH_SIZES.length}`);
+      // the dot's diameter grows with the brush, from 4px to 26px
+      const d = h('span', 'd');
+      const px = 4 + ((n - BRUSH_SIZES[0]) / (BRUSH_SIZES[BRUSH_SIZES.length - 1] - BRUSH_SIZES[0])) * 22;
+      d.style.width = d.style.height = `${Math.round(px)}px`;
+      b.appendChild(d);
+      b.onclick = () => {
+        this.setBrushDisplay(n);
+        window.dispatchEvent(new CustomEvent('pf-brush', { detail: n }));
+      };
+      row.appendChild(b);
+      return b;
+    });
+    col.appendChild(row);
     this.toolbar.appendChild(col);
     this.setBrushDisplay(brush);
   }
@@ -465,12 +479,7 @@ export class Hud {
   setBrushDisplay(n: number): void {
     this.cursor.setSize(n);
     this.renderTool();
-    if (this.brushLabel) this.brushLabel.textContent = String(n);
-    if (this.brushDot) {
-      // 26px preview box; brush runs 2..24 so it always fits
-      const px = Math.max(2, Math.min(26, n));
-      this.brushDot.style.width = `${px}px`;
-      this.brushDot.style.height = `${px}px`;
-    }
+    const lit = nearestBrush(n);
+    this.brushDots.forEach((el, i) => el.classList.toggle('sel', i === lit));
   }
 }

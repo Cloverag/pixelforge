@@ -242,9 +242,12 @@ no icon set, no images.
   fill (accent = on). Fire and glow are additive light, which vanishes on a
   light field, so there is no light theme.
 - Explosions shake the canvas, flash and boom.
-- Palette swatches paint themselves from each material's **real colour ramp**
-  and are grouped by kind (powder / life / liquid / gas / solid), so the
-  toolbar doubles as a legend. Solids are textured: bricks, wood grain,
+- The rail is **tiles**: a 56px square painted from each material's **real
+  colour ramp**, its name under it, three to a row, grouped by kind (powder /
+  life / liquid / gas / solid), so the rail doubles as a legend. The picked tile
+  has an accent outline and a marker. The brush is five dots of growing size
+  (the wheel and `[` `]` move the lit one); BUCKET and WIND are tiles beside
+  ERASE. Solids are textured: bricks, wood grain,
   cobbles, glass glints, ice fractures.
 - **SOFT** blends the simulation with a GPU fluid that carries smoke and glow
   through the wind field; water gets depth, caustics and surface glints.

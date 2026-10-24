@@ -40,3 +40,22 @@ describe('the bottom bar replaces the topbar', () => {
     expect(main).toMatch(/case 'd':/);
   });
 });
+
+describe('the rail is tiles and five brush dots', () => {
+  it('has no brush slider, number, preview square or hint left', () => {
+    expect(css).not.toMatch(/brushrow|brush-preview|brush-dot|input\[type=.range.\]/);
+    expect(hud).not.toMatch(/type = 'range'|brushrow|brush-preview|Wheel or \[ \] to resize/);
+  });
+
+  it('every text size in the stylesheet is at least 14px (the game screens have a type floor)', () => {
+    // the title screen's footer and LIVE caption are clamp()ed from 11px by design (R1); everything else is >= 14
+    const small = [...css.matchAll(/font-size:\s*([0-9.]+)px/g)].filter((m) => Number(m[1]) < 14).map((m) => m[0]);
+    expect(small).toEqual([]);
+  });
+
+  it('never truncates a name with an ellipsis in the rail, bar or buttons', () => {
+    const rules = css.split('}').filter((r) => /text-overflow:\s*ellipsis/.test(r));
+    const touched = rules.map((r) => r.split('{')[0].trim());
+    expect(touched.filter((sel) => /swatch|sb-|scenebtns|toolbtns|#toolbar|button\.px/.test(sel))).toEqual([]);
+  });
+});
