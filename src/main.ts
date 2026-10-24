@@ -264,8 +264,8 @@ function toggleGrid(): void {
   const next = i + 1 >= BLOCK_SIZES.length ? null : BLOCK_SIZES[i + 1];
   applyGrid(next);
   try {
-    if (next === null) localStorage.removeItem(GRID_KEY);
-    else localStorage.setItem(GRID_KEY, String(next));
+    // 'off' rather than nothing: a player who chose no grid is not a new player
+    localStorage.setItem(GRID_KEY, next === null ? 'off' : String(next));
   } catch {
     /* private mode: the setting just will not persist */
   }
@@ -278,16 +278,22 @@ function applyGrid(n: number | null): void {
   renderer.setBlockSize(n);
 }
 
-/** Restores the saved block size once the HUD buttons exist. */
-function restoreGrid(): void {
+/** The block size the player picked: null for none, undefined if they never picked. */
+function savedGrid(): number | null | undefined {
   let saved: string | null = null;
   try {
     saved = localStorage.getItem(GRID_KEY);
   } catch {
     /* ignore */
   }
-  const n = saved === null ? NaN : Number(saved);
-  applyGrid(BLOCK_SIZES.includes(n as (typeof BLOCK_SIZES)[number]) ? n : null);
+  if (saved === null) return undefined;
+  const n = Number(saved);
+  return BLOCK_SIZES.includes(n as (typeof BLOCK_SIZES)[number]) ? n : null;
+}
+
+/** Restores the saved block size (none for a new player) once the HUD buttons exist. */
+function restoreGrid(): void {
+  applyGrid(savedGrid() ?? null);
 }
 /** steps sent, for tools that emit on a slower beat than every step */
 let frameNo = 0;
@@ -817,7 +823,7 @@ function onPointer(e: PointerEvt): void {
 function enterGame(): void {
   stopAttract();
   screen = 'game';
-  restoreGrid(); // the player's own block size; the menu always shows 4px
+  restoreGrid();
   paused = false;
   resultOpen = false;
   hud.setPaused(false);
@@ -941,9 +947,10 @@ function openMenu(firstVisit = false): void {
   autosaveNow();
   sfx.playground(null); // the menu's demo is silent
   screen = 'menu';
-  // the title screen is always drawn in 4px blocks, the retro look, whatever
-  // grid the player picked in game (that one is restored on the way back in)
-  applyGrid(4);
+  // a new player's title screen is drawn in 4px blocks, the retro look; once
+  // they pick a grid in game (none included), the title screen follows it
+  const g = savedGrid();
+  applyGrid(g === undefined ? 4 : g);
   music.setScreen('title');
   current.leave();
   close3d();

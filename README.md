@@ -248,8 +248,8 @@ text and the sky shows as it is.
   texel cast 12 rays a frame, blended over time, so coloured light bounces off
   walls and fire throws soft shadows. If the frame rate stays under 40 FPS for
   3 seconds it switches itself off.
-- The **title screen** is always drawn in 4px blocks; in game GRID keeps
-  whatever you picked.
+- A new player's **title screen** is drawn in 4px blocks; once you pick a
+  GRID size in game (or none), the title screen uses it too.
 
 ## Controls
 
