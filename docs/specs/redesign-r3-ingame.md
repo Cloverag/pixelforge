@@ -139,6 +139,41 @@ cursor, the same list styling, sounds `uiMove/uiSelect/uiBack`).
 - `SPACE` still freezes / unfreezes the sim without a menu (it is a
   building tool, not a pause menu); `N` still steps.
 
+## Background colour (Raghav, 2026-10-24: "add sandbox color for customization")
+
+The colour of the empty world behind the materials, picked by the player.
+
+- A **VIEW** item `BACKGROUND: NIGHT`, cycled with Enter / Left / Right
+  like the other values, plus the same item in R1's OPTIONS. Presets only
+  (no free colour picker - a bright free colour would wash out fire, glow
+  and bloom, which are built for a dark world): about 6-8 named presets,
+  starting with `NIGHT` = today's `#0b0b14`, then e.g. deep blue, deep
+  purple, forest, dusk, ember, slate, and **at most one** light-ish preset
+  if fire, lava and the fluid glints still read on it (measure; drop it if
+  not). Name each in one word.
+- **Presentation only.** It changes how pixels are drawn, never a cell:
+  not in the snapshot, not in the fingerprint, not sent to a room. Each
+  player in a room sees their own. Persist in localStorage (one key,
+  parsed defensively, unknown value -> NIGHT).
+- **Every place the background is drawn follows it.** Today it is baked
+  in several copies of `#0b0b14` - find them all, make one source:
+  `world.ts` `BG` (the frame fill and the wind-dust speck background),
+  `particles.ts` `PG_BG` and its additive blend (`BG_R/G/B`), the
+  `materials.ts` EMPTY ramp, `renderer.ts` (2D fallback fill),
+  `blocks.ts` (GRID view's EMPTY compare), `voxel3d.ts` / `pg3d.ts` if they
+  draw empty space, the eraser chip (`hud.ts`, `chem.ts`), and any shader
+  that treats the background as "nothing" (bloom, fluid composite). The
+  worker learns the colour through a presentation `Req` (not a `NetInput`).
+- All modes: sandbox, challenges, chem lab and playground. Report
+  how the playground's nebula and stars look on each preset; if some
+  preset breaks it, say so rather than special-casing.
+- Test: the chosen colour never changes a world's fingerprint (two worlds,
+  same inputs, different backgrounds -> same hash) - mutation-check it by
+  making the background touch a cell.
+- Verification: a screenshot of the same scene (flame tests, and a lava +
+  water sandbox) on every preset; the pixel colour of an empty cell read
+  back from the canvas equals the preset.
+
 ## Phone (390px portrait and landscape)
 
 - Portrait: canvas on top, the rail becomes a horizontal tile strip under
@@ -205,6 +240,6 @@ theme now:
 Branch `feat/redesign-r3-ingame` from current main (`190368b`) in your
 worktree, one verified change per commit (suggested order: tokens + frame
 + light-theme removal; bottom bar + topbar removal; pause menu; rail tiles
-+ brush; phone), no push, no merge. Report to
++ brush; background colour; phone), no push, no merge. Report to
 `chem-lab-playground-refactor` with the numbers, screenshot paths, and
 anything you disagree with.
