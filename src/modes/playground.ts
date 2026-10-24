@@ -31,7 +31,6 @@ const HELD_TOOLS = new Set<PgTool>(['fountain', 'sparkler', 'hose', 'fireflies']
 /** The particle playground: emitters, forces, portals, bumpers and scenes. */
 export class PlaygroundMode implements ModeController {
   readonly id = 'playground';
-  readonly label = 'PARTICLE PLAYGROUND';
   readonly roomName = 'PLAYGROUND';
   readonly cinematic = true;
   // deliberately throwaway: no save, no autosave
@@ -71,6 +70,8 @@ export class PlaygroundMode implements ModeController {
         chip,
         title,
         info: [id.toUpperCase(), '', title, chip],
+        // ERASE is the most-used tool: pinned under the rail, never behind a scroll
+        pin: id === 'erase',
       }));
     const sections: PaletteSection[] = ['EMITTERS', 'FORCES', 'TOOLS'].map((g) => ({ label: g, swatches: swatches(g) }));
     // demo scenes, one click each

@@ -1,3 +1,4 @@
+import { bgLift } from '../sim/background';
 import { FLAMES, MATS, Mat, NMATS, Cat } from '../sim/materials';
 import { CHUNKS_X, CHUNKS_Y, SIM_H, SIM_W } from '../sim/protocol';
 import { Blockifier, fitSize } from './blocks';
@@ -29,6 +30,8 @@ uniform float uGlow;
 uniform float uDyeGain;
 uniform float uSoft;
 uniform float uTime;
+// how far the chosen background sits above NIGHT, per channel: the bloom threshold clears it
+uniform vec3 uBgLift;
 // cinematic (playground) mode: write HDR, and light walls from last frame's bloom
 uniform float uCine;
 uniform sampler2D uLight;
@@ -88,7 +91,7 @@ void main() {
     g *= 0.125;
     // only what is already bright is allowed to bleed, so the dark tube stays
     // dark instead of turning into grey fog
-    g = max(g - 0.30, 0.0);
+    g = max(g - 0.30 - uBgLift, 0.0);
     c += g * uGlow;
   }
 
@@ -183,7 +186,7 @@ function emissionTable(): Uint8Array {
 export class GLRenderer implements SimRenderer {
   private gl: WebGL2RenderingContext;
   private stage: HTMLElement;
-  private bezel: HTMLElement | null;
+  private frame: HTMLElement | null;
 
   private frameTex: WebGLTexture;
   private composite: Program;
@@ -222,7 +225,7 @@ export class GLRenderer implements SimRenderer {
     this.gl = gl;
     bindDummyVao(gl);
     this.stage = document.getElementById('stage')!;
-    this.bezel = document.getElementById('bezel');
+    this.frame = document.getElementById('viewport');
 
     canvas.width = SIM_W;
     canvas.height = SIM_H;
@@ -271,7 +274,7 @@ export class GLRenderer implements SimRenderer {
   }
 
   resize(): void {
-    const { w, h } = fitSize(this.stage, this.bezel);
+    const { w, h } = fitSize(this.stage, this.frame);
     this.canvas.style.width = `${w}px`;
     this.canvas.style.height = `${h}px`;
   }
@@ -280,6 +283,9 @@ export class GLRenderer implements SimRenderer {
   reset(): void {
     this.fluid.reset();
   }
+
+  /** The composite reads the background every frame (uBgLift): nothing to repaint. */
+  refreshBackground(): void {}
 
   /**
    * Feeds the frame's material map and the CPU wind field into the fluid.
@@ -332,6 +338,8 @@ export class GLRenderer implements SimRenderer {
       .f('uDyeGain', this.soft ? DYE_GAIN : 0)
       .f('uSoft', this.soft ? 1 : 0)
       .f('uTime', (performance.now() - this.t0) / 1000);
+    const lift = bgLift();
+    this.composite.v3('uBgLift', lift[0], lift[1], lift[2]);
     const cine = this.cineOn ? this.cine : null;
     this.composite
       .f('uCine', cine ? 1 : 0)

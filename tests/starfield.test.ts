@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { skyLayer, type Bender } from '../src/sim/starfield';
 import { World } from '../src/sim/world';
-import { PG_BG } from '../src/sim/particles';
+import { DEFAULT_BACKGROUND, packAbgr } from '../src/sim/background';
 import { SIM_H, SIM_W } from '../src/sim/protocol';
+
+/** the game's default empty colour (NIGHT): these tests draw on it */
+const PG_BG = packAbgr(DEFAULT_BACKGROUND);
 
 /** pixels of a frame that differ from the flat background */
 function lit(pix: Uint32Array): number {

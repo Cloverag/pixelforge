@@ -65,3 +65,34 @@ describe('title navigation', () => {
     expect(open(s, 'options')).toBe(s);
   });
 });
+
+describe('pause menu navigation', () => {
+  it('opens on PAUSE, not PRESS START, and its home is PAUSE', () => {
+    const n = initialNav(true, 'pause'); // a first visit does not apply: there is no title here
+    expect(n.screen).toBe('pause');
+    expect(n.home).toBe('pause');
+    expect(start(n)).toBe(n);
+  });
+
+  it('VIEW and OPTIONS open from PAUSE and BACK lands on the item that opened them', () => {
+    let n = initialNav(false, 'pause');
+    n = moveTo(n, 4); // VIEW
+    n = open(n, 'view');
+    expect(n.screen).toBe('view');
+    expect(n.cursor.view).toBe(0);
+    n = back(n)!;
+    expect(n.screen).toBe('pause');
+    expect(n.cursor.pause).toBe(4);
+    n = open(moveTo(n, 5), 'options');
+    expect(back(n)!.screen).toBe('pause'); // not MAIN: OPTIONS is the same screen under both menus
+  });
+
+  it('BACK from PAUSE itself is nothing: the view turns that into RESUME', () => {
+    expect(back(initialNav(false, 'pause'))).toBeNull();
+  });
+
+  it('the title menu still returns OPTIONS to MAIN', () => {
+    const n = open(initialNav(false), 'options');
+    expect(back(n)!.screen).toBe('main');
+  });
+});

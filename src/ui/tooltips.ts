@@ -1,5 +1,5 @@
 /**
- * Hover tooltips for every tool, swatch and topbar button.
+ * Hover tooltips for every tool, swatch and bar button.
  *
  * Owned by MANAGER lane. Installed automatically by initHelp(); no builder
  * wiring needed. Uses event delegation on .swatch / button.px elements so it
@@ -18,6 +18,8 @@ const TOOL_NOTES: Record<string, string> = {
   REPULSE: 'Particles are pushed away from your cursor.',
   VORTEX: 'Particles swirl around your cursor.',
   WALL: 'Paint indestructible wall blocks.',
+  BUCKET: 'Flood-fill the connected area with the selected material. (F)',
+  WIND: 'Drag to blow smoke, fire and light powders. (W)',
   ERASE: 'Erase cells or particles under the brush.',
 };
 
@@ -31,10 +33,7 @@ const BTN_NOTES: Record<string, string> = {
   MUSIC: 'Mute / unmute the music.',
   CRT: 'Toggle the CRT scanline filter. (C)',
   BG: 'Backdrop: cycle the picture around the game screen (grid, neon, nebula, ember).',
-  AUTO: 'Theme follows your system light/dark setting. Click to cycle. (T)',
-  LIGHT: 'Light theme. Click to cycle. (T)',
-  DARK: 'Dark theme. Click to cycle. (T)',
-  MENU: 'Back to the main menu. (ESC)',
+  MENU: 'Open the pause menu. (ESC)',
   BUCKET: 'Flood-fill the connected area with the selected material. (F)',
   '?': 'Open the help overlay.',
   X: 'Close this panel.',
@@ -46,7 +45,8 @@ let installed = false;
 function describe(target: HTMLElement): { name: string; note: string } | null {
   const sw = target.closest('.swatch');
   if (sw) {
-    const name = sw.querySelector('.nm')?.textContent?.trim() ?? '';
+    // the rail shows Sand; the tables are keyed SAND
+    const name = (sw.querySelector('.nm')?.textContent?.trim() ?? '').toUpperCase();
     const m = MATS.find((x) => x && x.name === name);
     if (m) {
       const cat = CAT_NAMES[m.cat] ?? 'material';

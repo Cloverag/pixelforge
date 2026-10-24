@@ -1,3 +1,4 @@
+import { bgCss } from '../sim/background';
 import { SIM_H, SIM_W } from '../sim/protocol';
 import { Blockifier, fitSize } from './blocks';
 
@@ -25,6 +26,8 @@ export interface SimRenderer {
   ): void;
   /** Clears accumulated visual state, e.g. on world clear or a level load. */
   reset(): void;
+  /** The player picked another background colour: repaint what is cleared with it. */
+  refreshBackground(): void;
   /** Film look for the playground; only the WebGL renderer has one. */
   setCinematic?(on: boolean): void;
 }
@@ -43,8 +46,8 @@ const GLOW_BLUR = 2.2;
 export class Renderer implements SimRenderer {
   private ctx: CanvasRenderingContext2D;
   private stage: HTMLElement;
-  /** cabinet bezel around the screen; null if the shell markup is absent */
-  private bezel: HTMLElement | null;
+  /** the framed box around the screen; null if the shell markup is absent */
+  private frame: HTMLElement | null;
 
   /** block size in sim cells, or null for the normal 1:1 pixel view */
   private block: number | null = null;
@@ -71,7 +74,7 @@ export class Renderer implements SimRenderer {
     this.canBlur = this.ctx.filter === 'blur(1px)';
     this.ctx.filter = 'none';
     this.stage = document.getElementById('stage')!;
-    this.bezel = document.getElementById('bezel');
+    this.frame = document.getElementById('viewport');
     window.addEventListener('resize', () => this.resize());
     this.resize();
   }
@@ -98,8 +101,12 @@ export class Renderer implements SimRenderer {
     this.ctx.globalCompositeOperation = 'source-over';
     this.ctx.globalAlpha = 1;
     this.ctx.filter = 'none';
-    this.ctx.fillStyle = '#0b0b14';
+    this.ctx.fillStyle = bgCss();
     this.ctx.fillRect(0, 0, SIM_W, SIM_H);
+  }
+
+  refreshBackground(): void {
+    this.reset();
   }
 
   /** null restores the 1:1 pixel view; a number is the block edge in cells. */
@@ -112,7 +119,7 @@ export class Renderer implements SimRenderer {
   }
 
   resize(): void {
-    const { w, h } = fitSize(this.stage, this.bezel);
+    const { w, h } = fitSize(this.stage, this.frame);
     this.canvas.style.width = `${w}px`;
     this.canvas.style.height = `${h}px`;
   }

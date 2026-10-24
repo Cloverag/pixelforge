@@ -35,8 +35,6 @@ export interface CursorLook {
 export interface ModeController {
   /** the world the worker runs for it */
   readonly id: Mode;
-  /** the HUD's mode label */
-  readonly label: string;
   /** what a room switch toast calls it: THE ROOM IS NOW IN THE ... */
   readonly roomName: string;
   /** film-look renderer (bloom, tone mapping) */

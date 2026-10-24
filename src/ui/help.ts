@@ -67,12 +67,11 @@ function buildContent(box: HTMLElement): void {
   const rows: [string, string][] = [
     ['LEFT DRAG', 'paint selected material'],
     ['RIGHT DRAG', 'erase'],
-    ['WHEEL / [ ]', 'brush size 2-24'],
+    ['WHEEL / [ ]', 'brush size 2-24 (the five dots in the rail light the nearest)'],
     ['F', 'flood-fill bucket (sandbox, chem lab)'],
     ['W', 'wind brush - drag to blow, click for a puff (sandbox, chem lab)'],
     ['E', 'periodic table (chem lab)'],
     ['L', 'chem lab (menu)'],
-    ['T', 'theme: auto / light / dark'],
     ['1-9', 'quick-pick palette swatch'],
     ['SPACE', 'pause / resume'],
     ['N', 'single step while paused'],
@@ -81,11 +80,12 @@ function buildContent(box: HTMLElement): void {
     ['X', 'clear everything (playground)'],
     ['R', 'SURPRISE ME: a new generated scene'],
     ['Z', 'in a room: ping where your cursor is (look here!)'],
-    ['M / C', 'mute sfx / CRT filter'],
+    ['M / C', 'mute everything / CRT filter'],
+    ['D', 'FPS readout in the corner of the screen'],
     ['B', 'grid view - chunky blocks, cycles size'],
     ['3', 'toggle 3D voxel view'],
     ['I', 'immersive: fill the window; panels slide in at the edges'],
-    ['ESC', 'leave immersive, then back to menu'],
+    ['ESC', 'leave immersive, then the pause menu (resume, save, view, options, quit)'],
   ];
   for (const [k, d] of rows) {
     const line = h('div', 'pf-help-krow');

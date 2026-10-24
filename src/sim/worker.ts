@@ -3,6 +3,7 @@ import { CHUNKS_X, CHUNKS_Y, HASH_EVERY, SIM_H, SIM_W, NetInput, Req, Res, SaveD
 import { World } from './world';
 import { RULES } from './reactions';
 import { rxDiff } from './rxdelta';
+import { setBackground } from './background';
 
 const ctx = self as unknown as DedicatedWorkerGlobalScope;
 
@@ -76,6 +77,36 @@ function handle(e: MessageEvent<Req>): void {
       watchFluid = msg.on;
       windDirty = true;
       break;
+
+    // the empty world's colour: drawing only, so no cell, hash or snapshot ever sees it
+    case 'bg':
+      setBackground(msg.id);
+      forceFull = true;
+      break;
+
+    // the current frame again, in the colours now chosen, without a step: a
+    // paused world has no next frame to carry a presentation change
+    case 'redraw': {
+      const pix = new Uint32Array(msg.buf);
+      if (w.mode === 'playground' && w.parts && master) {
+        w.parts.draw(master, true, w.f);
+        pix.set(master);
+      } else if (master) {
+        w.renderInto(master, true);
+        w.drawDebris(master);
+        pix.set(master);
+      } else {
+        w.renderInto(pix, true);
+        w.drawDebris(pix);
+      }
+      forceFull = false;
+      const st = w.stats();
+      respond(
+        { t: 'frame', buf: msg.buf, f: w.f, mode: w.mode, counts: st.counts, used: st.used, budget: st.budget, result: w.challenge && w.challenge.done ? w.challenge.result : null },
+        [msg.buf],
+      );
+      break;
+    }
 
     case 'step': {
       const pix = new Uint32Array(msg.buf);

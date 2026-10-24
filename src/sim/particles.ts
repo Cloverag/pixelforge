@@ -1,6 +1,7 @@
 import { RNG } from '../core/rng';
 import { Mat, colorAt } from './materials';
 import { drawStars, skyLayer } from './starfield';
+import { BG } from './background';
 import { SIM_H, SIM_W, PgToolMsg } from './protocol';
 
 const CAP = 24000;
@@ -44,8 +45,6 @@ for (let k = 0; k < RAINBOW_N; k++) {
   const to = (v: number) => Math.round((v + m * 0.55) * 255);
   RAINBOW.push((((255 << 24) | (to(b) << 16) | (to(g) << 8) | to(r)) >>> 0));
 }
-
-export const PG_BG = u32('#0b0b14');
 
 /** particle kinds */
 const PK_PLAIN = 0;
@@ -126,15 +125,12 @@ export interface PgStats {
 export function emptyPgStats(): PgStats {
   return { particles: 0, fountain: 0, hose: 0, sparkler: 0, sparks: 0, fireflies: 0, bumps: 0, notes: [], warps: 0, portalsPlaced: 0, swallowed: 0, holes: 0, vortices: 0, pulls: 0, rockets: 0 };
 }
-const BG_R = PG_BG & 255;
-const BG_G = (PG_BG >>> 8) & 255;
-const BG_B = (PG_BG >>> 16) & 255;
 
 /** additive blend with saturation: overlapping particles glow brighter */
 function addSat(a: number, b: number): number {
-  const r = Math.min(255, (a & 255) + (b & 255) - BG_R);
-  const g = Math.min(255, ((a >>> 8) & 255) + ((b >>> 8) & 255) - BG_G);
-  const bl = Math.min(255, ((a >>> 16) & 255) + ((b >>> 16) & 255) - BG_B);
+  const r = Math.min(255, (a & 255) + (b & 255) - BG.r);
+  const g = Math.min(255, ((a >>> 8) & 255) + ((b >>> 8) & 255) - BG.g);
+  const bl = Math.min(255, ((a >>> 16) & 255) + ((b >>> 16) & 255) - BG.b);
   return ((255 << 24) | (Math.max(0, bl) << 16) | (Math.max(0, g) << 8) | Math.max(0, r)) >>> 0;
 }
 
@@ -1137,9 +1133,9 @@ export class PSys {
       let r = (base & 255) + ((255 - (base & 255)) * hot);
       let gr = ((base >>> 8) & 255) + ((255 - ((base >>> 8) & 255)) * hot);
       let b = ((base >>> 16) & 255) + ((255 - ((base >>> 16) & 255)) * hot);
-      r = BG_R + (r - BG_R) * fade;
-      gr = BG_G + (gr - BG_G) * fade;
-      b = BG_B + (b - BG_B) * fade;
+      r = BG.r + (r - BG.r) * fade;
+      gr = BG.g + (gr - BG.g) * fade;
+      b = BG.b + (b - BG.b) * fade;
       // clamp: a flickering spark brighter than full would carry into the
       // next byte - and the top byte is the alpha tag the composite reads
       const col = ((255 << 24) | (Math.min(255, b | 0) << 16) | (Math.min(255, gr | 0) << 8) | Math.min(255, r | 0)) >>> 0;
@@ -1159,7 +1155,7 @@ export class PSys {
       const k = 1 - age / FLARE_RING;
       const rad = 6 + age * 4.2;
       const pts = Math.ceil(rad * 6.3);
-      const col = ((255 << 24) | (((BG_B + 235 * k) | 0) << 16) | (((BG_G + 215 * k) | 0) << 8) | ((BG_R + 170 * k) | 0)) >>> 0;
+      const col = ((255 << 24) | (((BG.b + 235 * k) | 0) << 16) | (((BG.g + 215 * k) | 0) << 8) | ((BG.r + 170 * k) | 0)) >>> 0;
       for (let j = 0; j < pts; j++) {
         const a = (j / pts) * Math.PI * 2;
         const ix = (fl.x + Math.cos(a) * rad) | 0;

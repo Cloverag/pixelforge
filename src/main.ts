@@ -7,7 +7,10 @@ import type { PG3D } from './render/pg3d';
 import { Sfx } from './game/audio';
 import { Juice } from './game/juice';
 import { Hud } from './ui/hud';
-import { setMenuLive, showMenu, type MenuEntry } from './ui/menu';
+import { isPauseOpen, setMenuLive, showMenu, showPause, type MenuSound } from './ui/menu';
+import type { MenuEntry } from './ui/menu';
+import { pauseRule } from './game/pause';
+import { BG, backgroundById, bgCss, loadBackgroundId, saveBackgroundId, setBackground, stepBackground } from './sim/background';
 import { hideOverlay, showResult, toast } from './ui/widgets';
 import { Mat, MATS } from './sim/materials';
 import { MpSession, newRoomCode, roomFromUrl, roomUrl, type MpHooks } from './net/mp';
@@ -29,7 +32,6 @@ import { applyWallpaper, loadBgIndex, WALLPAPER_NAMES } from './game/wallpapers'
 import { initHelp, toggleHelp } from './ui/help';
 import { initImmersive, isImmersive, setImmersive, toggleImmersive } from './ui/immersive';
 import { initMusic, trackForMode } from './game/music';
-import { applyTheme, cycleTheme, loadTheme } from './ui/theme';
 import type { ModeController, ModeCtx } from './modes/types';
 import { SandMode } from './modes/sand';
 import { PlaygroundMode } from './modes/playground';
@@ -38,7 +40,6 @@ import { ChemMode } from './modes/chem';
 const STEP_MS = 1000 / 60;
 
 let canvas = document.getElementById('screen') as HTMLCanvasElement;
-const topbar = document.getElementById('topbar')!;
 const toolbar = document.getElementById('toolbar')!;
 const overlay = document.getElementById('overlay')!;
 
@@ -73,12 +74,12 @@ if (!renderer) {
   hasFluid = false;
 }
 const sfx = new Sfx();
-// the flash sits over the screen inside the cabinet, so it shakes with it
+// the flash sits over the screen inside its frame, so it shakes with it
 const flashEl = document.createElement('div');
 flashEl.id = 'blast-flash';
 document.getElementById('screen-wrap')!.appendChild(flashEl);
-const juice = new Juice(document.getElementById('bezel') ?? canvas, flashEl);
-const hud = new Hud(topbar, toolbar);
+const juice = new Juice(document.getElementById('viewport') ?? canvas, flashEl);
+const hud = new Hud(toolbar);
 
 const worker = new Worker(new URL('./sim/worker.ts', import.meta.url), {
   type: 'module',
@@ -143,7 +144,6 @@ async function togglePg3d(): Promise<void> {
     view3dOn = false;
     pgView?.hide();
     document.getElementById('screen')!.style.visibility = 'visible';
-    hud.set3dToggled(false);
     post({ t: 'watch3d', on: false });
     return;
   }
@@ -166,7 +166,6 @@ async function togglePg3d(): Promise<void> {
   view3dOn = true;
   pgView.show();
   document.getElementById('screen')!.style.visibility = 'hidden';
-  hud.set3dToggled(true);
   post({ t: 'watch3d', on: true });
 }
 
@@ -177,7 +176,6 @@ function close3d(): void {
   view3d?.hide();
   pgView?.hide();
   document.getElementById('screen')!.style.visibility = 'visible';
-  hud.set3dToggled(false);
   post({ t: 'watch3d', on: false });
 }
 
@@ -188,7 +186,6 @@ async function toggle3d(): Promise<void> {
     view3dOn = false;
     view3d?.hide();
     document.getElementById('screen')!.style.visibility = 'visible';
-    hud.set3dToggled(false);
     post({ t: 'watch3d', on: false });
     return;
   }
@@ -208,7 +205,6 @@ async function toggle3d(): Promise<void> {
   view3dOn = true;
   view3d.show();
   document.getElementById('screen')!.style.visibility = 'hidden';
-  hud.set3dToggled(true);
   post({ t: 'watch3d', on: true });
 }
 
@@ -232,7 +228,6 @@ function toggleSoft(): void {
 
 function applySoft(on: boolean): void {
   renderer.setSoft(on);
-  hud.setSoftToggled(on);
   // the material map is only worth streaming when something consumes it
   if (hasFluid) post({ t: 'watchFluid', on });
 }
@@ -267,7 +262,6 @@ function toggleGrid(): void {
 
 function applyGrid(n: number | null): void {
   renderer.setBlockSize(n);
-  hud.setGridSize(n);
 }
 
 /** Restores the saved block size once the HUD buttons exist. */
@@ -314,6 +308,7 @@ worker.onmessage = (e: MessageEvent<Res>) => {
     // is wired up further down this file - so any watch flags set during boot
     // were dropped. Re-send them now that there is something listening.
     if (hasFluid) post({ t: 'watchFluid', on: renderer.isSoft() });
+    post({ t: 'bg', id: BG.id });
     requestAnimationFrame(loop);
     return;
   }
@@ -365,6 +360,7 @@ worker.onmessage = (e: MessageEvent<Res>) => {
     }
     maybeShowResult(r.result ?? null);
     fpsFrames++;
+    if (redrawWanted) sendRedraw();
     return;
   }
   if (r.t === 'error') {
@@ -427,6 +423,43 @@ function adoptWorld(d: { a: Uint8Array; b: Uint8Array }): void {
     t: 'load',
     data: { w: SIM_W, h: SIM_H, cells: d.a, meta: d.b, frame: 0 },
   });
+}
+
+// ---- the empty world's colour (sim/background.ts): drawing only ----
+
+// the saved choice, live before the first frame is drawn
+setBackground(loadBackgroundId());
+document.documentElement.style.setProperty('--world-bg', bgCss());
+/** a presentation change is waiting for the worker to be free to redraw */
+let redrawWanted = false;
+
+/** Ask for the current frame again, in the new colours, without stepping: a paused world has no next frame. */
+function sendRedraw(): void {
+  if (!stepBuf || inFlight) {
+    redrawWanted = true;
+    return;
+  }
+  redrawWanted = false;
+  inFlight = true;
+  const buf = stepBuf;
+  stepBuf = null;
+  post({ t: 'redraw', buf }, [buf]);
+}
+
+/** Pick a background: remembered, shown by every renderer, and told to the worker (never to a room). */
+function applyBackground(id: string): void {
+  const p = setBackground(id);
+  saveBackgroundId(p.id);
+  document.documentElement.style.setProperty('--world-bg', bgCss());
+  renderer.refreshBackground();
+  view3d?.refreshBackground();
+  pgView?.refreshBackground();
+  post({ t: 'bg', id: p.id });
+  sendRedraw();
+}
+
+function cycleBackground(d: number): void {
+  applyBackground(stepBackground(BG.id, d).id);
 }
 
 // ---- sim ticking ----
@@ -758,8 +791,6 @@ function enterGame(): void {
   resultOpen = false;
   hud.setPaused(false);
   hud.showBars(true);
-  hud.setModeLabel(current.label);
-  hud.setSaveEnabled(current.saveable);
   hideOverlay();
   renderer.resize();
   acc = 0;
@@ -804,7 +835,14 @@ function startChallenge(id: string): void {
   startMode(new SandMode(modeCtx, def));
 }
 
-/** ESC / MENU: in a room, make sure first - leaving takes you out of it. */
+function menuSound(k: MenuSound): void {
+  if (k === 'move') sfx.uiMove();
+  else if (k === 'select') sfx.uiSelect();
+  else if (k === 'back') sfx.uiBack();
+  else sfx.uiDeny();
+}
+
+/** QUIT TO TITLE: in a room, make sure first - leaving takes you out of it. */
 async function requestMenu(): Promise<void> {
   if (mp) {
     const host = mp.role === 'host';
@@ -824,6 +862,7 @@ async function requestMenu(): Promise<void> {
 /** `firstVisit`: the first menu of a page load with nothing saved - PRESS START comes first. */
 function openMenu(firstVisit = false): void {
   setImmersive(false);
+  pauseRestore = null;
   leaveRoom('YOU LEFT THE ROOM');
   // the demo behind the menu replaces the world: save the sandbox first
   // (a no-op outside it), queued ahead of the demo's mode switch
@@ -842,22 +881,16 @@ function openMenu(firstVisit = false): void {
       sfx.ensure();
       startChallenge(id);
     },
-    sound: (k) => {
-      if (k === 'move') sfx.uiMove();
-      else if (k === 'select') sfx.uiSelect();
-      else if (k === 'back') sfx.uiBack();
-      else sfx.uiDeny();
-    },
+    sound: menuSound,
     onPreview: previewAttract,
     volume: (bus) => sfx.getVolumes()[bus],
     setVolume: (bus, v) => {
       sfx.setVolume(bus, v);
-      syncAudioHud();
     },
-    onCycleTheme: () => void nextTheme(),
-    theme: loadTheme,
     onToggleBg: () => void cycleWallpaper(),
     backdrop: () => WALLPAPER_NAMES[bgIndex],
+    backgroundName: () => backgroundById(BG.id).name,
+    stepBackground: cycleBackground,
     onToggleCrt: toggleCrt,
     onHelp: () => toggleHelp(),
   });
@@ -1007,7 +1040,7 @@ const MENU: MenuEntry[] = [
   {
     name: 'OPTIONS',
     opens: 'options',
-    sub: 'sound, music, theme, backdrop, controls',
+    sub: 'sound, music, backdrop, controls',
   },
 ];
 
@@ -1059,50 +1092,117 @@ function maybeShowResult(result: import('./sim/protocol').ChallengeResult | null
 
 // ---- toggles ----
 
+function setPaused(p: boolean): void {
+  paused = p;
+  hud.setPaused(p);
+  // paused: no frames arrive, so fade the playground's voices explicitly
+  if (p) sfx.playground(null);
+}
+
 function togglePause(): void {
   if (screen !== 'game') return;
-  paused = !paused;
-  hud.setPaused(paused);
+  setPaused(!paused);
   sfx.ui();
-  // paused: no frames arrive, so fade the playground's voices explicitly
-  if (paused) sfx.playground(null);
+}
+
+// ---- the pause menu (ESC in game) ----
+
+/** The pause state to put back on RESUME; null while no pause menu is open. */
+let pauseRestore: boolean | null = null;
+
+/** Open the menu over the game: alone it freezes the sim, in a room it never does (game/pause.ts). */
+function openPause(): void {
+  if (screen !== 'game' || isPauseOpen()) return;
+  const rule = pauseRule(paused, !!mp);
+  pauseRestore = rule.pausedOnResume;
+  if (rule.freezeOnOpen) setPaused(true);
+  sfx.uiSelect();
+  showPause({
+    title: mp ? 'MENU' : 'PAUSED',
+    resume: closePause,
+    canSave: current.saveable,
+    save: () => requestSnapshot('store'),
+    load: loadSaved,
+    share: () => requestSnapshot('share'),
+    view: {
+      immerse: () => {
+        sfx.ui();
+        toggleImmersive();
+      },
+      soft: toggleSoft,
+      crt: toggleCrt,
+      grid: toggleGrid,
+      fps: toggleFps,
+      view3d: toggle3d,
+      backdrop: () => void cycleWallpaper(),
+      state: () => ({
+        immerse: isImmersive(),
+        soft: renderer.isSoft(),
+        crt: document.body.classList.contains('crt-on'),
+        grid: renderer.getBlockSize(),
+        fps: document.body.classList.contains('show-fps'),
+        view3d: view3dOn,
+        backdrop: WALLPAPER_NAMES[bgIndex],
+      }),
+    },
+    quit: () => void requestMenu(),
+    sound: menuSound,
+    volume: (bus) => sfx.getVolumes()[bus],
+    setVolume: (bus, v) => {
+      sfx.setVolume(bus, v);
+    },
+    onToggleBg: () => void cycleWallpaper(),
+    backdrop: () => WALLPAPER_NAMES[bgIndex],
+    backgroundName: () => backgroundById(BG.id).name,
+    stepBackground: cycleBackground,
+    onToggleCrt: toggleCrt,
+    onHelp: () => toggleHelp(),
+  });
+}
+
+function closePause(): void {
+  if (!isPauseOpen()) return;
+  hideOverlay();
+  if (pauseRestore !== null) setPaused(pauseRestore);
+  pauseRestore = null;
+}
+
+/** LOAD: the saved world, into this sandbox. */
+function loadSaved(): void {
+  const blob = readSave();
+  if (!blob) {
+    toast('NO SAVE FOUND', true);
+    return;
+  }
+  const d = rleDecode(blob, SIM_W * SIM_H);
+  if (!d) {
+    toast('SAVE CORRUPTED', true);
+    return;
+  }
+  adoptWorld(d);
+  toast('GAME LOADED');
 }
 
 function stepOnce(): void {
   if (screen === 'game' && paused) sendStep();
 }
 
-/** The SFX and MUSIC lamps say whether that bus can be heard: its own mute or master's. */
-function syncAudioHud(): void {
-  const m = sfx.getVolumes().mute;
-  hud.setMuted(m.master || m.sfx);
-  hud.setMusicToggled(!(m.master || m.music));
-}
-
-/** The SFX button: mute or unmute the effects (their level is kept). */
-function toggleMute(): void {
-  sfx.toggleMute('sfx');
-  syncAudioHud();
-}
-
 /** The M key: mute or unmute everything, as a game's mute key does. */
 function toggleMaster(): void {
   sfx.toggleMute('master');
-  syncAudioHud();
+  toast(sfx.getVolumes().mute.master ? 'SOUND OFF' : 'SOUND ON');
 }
 
-applyTheme(loadTheme());
-
-function nextTheme(): string {
-  const t = cycleTheme();
-  hud.setThemeLabel(t);
-  sfx.ui();
-  toast(`THEME: ${t.toUpperCase()}`);
-  return t;
-}
+// the CRT filter is on until the player turns it off
+document.body.classList.add('crt-on');
 
 function toggleCrt(): void {
-  hud.setCrt(document.body.classList.toggle('crt-on'));
+  document.body.classList.toggle('crt-on');
+}
+
+/** The D key and VIEW's FPS: a small frames-per-second readout in the canvas corner, off by default. */
+function toggleFps(): void {
+  document.body.classList.toggle('show-fps');
 }
 
 const music = initMusic(sfx);
@@ -1110,12 +1210,6 @@ const music = initMusic(sfx);
 sfx.onReady = () => music.start();
 // ...and a restored game has no PRESS START, so any first click or key is the gesture
 for (const ev of ['pointerdown', 'keydown'] as const) addEventListener(ev, () => sfx.ensure(), { once: true, capture: true });
-
-/** The MUSIC button: mute or unmute the music (its level is kept). */
-function toggleMusic(): void {
-  sfx.toggleMute('music');
-  syncAudioHud();
-}
 
 let bgIndex = loadBgIndex();
 
@@ -1139,46 +1233,14 @@ function setBrush(n: number): void {
 
 // ---- input wiring ----
 
-hud.initTopbar({
-  onPause: togglePause,
-  onStep: stepOnce,
-  onMenu: () => void requestMenu(),
-  onSave: () => requestSnapshot('store'),
-  onShare: () => requestSnapshot('share'),
-  onLoad: () => {
-    const blob = readSave();
-    if (!blob) {
-      toast('NO SAVE FOUND', true);
-      return;
-    }
-    const d = rleDecode(blob, SIM_W * SIM_H);
-    if (!d) {
-      toast('SAVE CORRUPTED', true);
-      return;
-    }
-    adoptWorld(d);
-    toast('GAME LOADED');
-  },
-  onToggleMute: toggleMute,
-  onToggleCrt: toggleCrt,
-  onToggleBg: cycleWallpaper,
-  onToggleMusic: toggleMusic,
-  onHelp: () => toggleHelp(),
-  onToggle3d: () => void toggle3d(),
-  onToggleGrid: toggleGrid,
-  onToggleSoft: toggleSoft,
-  onCycleTheme: () => void nextTheme(),
-  onToggleImmersive: () => {
-    sfx.ui();
-    toggleImmersive();
-  },
-});
-hud.setThemeLabel(loadTheme());
+// A phone has no SPACE and no room on the bar for two controls: there the pause
+// button is the way into the pause menu (which freezes the game, and RESUME unfreezes it)
+const phone = matchMedia('(max-width: 900px) and (orientation: portrait), (max-height: 520px) and (orientation: landscape)');
+hud.initBar({ onPause: () => (phone.matches ? openPause() : togglePause()), onMenu: openPause });
 
-// the GRID and SOFT buttons exist only after initTopbar, so restore here
+// the saved block size and soft setting, now that the HUD exists
 restoreGrid();
 restoreSoft();
-syncAudioHud();
 
 new Input(
   canvas,
@@ -1192,11 +1254,11 @@ new Input(
       case 'n':
         stepOnce();
         break;
-      case 't':
-        nextTheme();
-        break;
       case 'm':
         toggleMaster();
+        break;
+      case 'd':
+        if (screen === 'game') toggleFps();
         break;
       case 'c':
         toggleCrt();
@@ -1208,9 +1270,14 @@ new Input(
         setBrush(brush + 2);
         break;
       case 'escape':
-        // one step back at a time: out of immersive first, then the menu
+        // one step back at a time: out of immersive, then the mode's own panel
+        // (the periodic table), then the pause menu; a finished challenge's
+        // result screen has no pause to offer, so ESC goes on to the title
         if (isImmersive()) setImmersive(false);
-        else if (screen === 'game' && !current.onEscape?.()) void requestMenu();
+        else if (screen === 'game' && !current.onEscape?.()) {
+          if (resultOpen) void requestMenu();
+          else openPause();
+        }
         break;
       case 'i':
         if (screen === 'game') toggleImmersive();
@@ -1250,7 +1317,6 @@ window.addEventListener('pf-star', (e) => {
 overlay.classList.add('hidden');
 initHelp();
 initImmersive((on) => {
-  hud.setImmersiveToggled(on);
   if (on) toast('IMMERSIVE - EDGES FOR CONTROLS - I OR ESC TO LEAVE');
 });
 applyWallpaper(bgIndex);

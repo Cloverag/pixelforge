@@ -3,7 +3,7 @@ import { isUnlocked, loadProgress, Progress } from '../game/progress';
 import { isDialogOpen } from './dialog';
 import { isHelpOpen } from './help';
 import { cycleVolume, stepVolume, volumeBar, type Bus } from '../game/volume';
-import { back, initialNav, move, moveTo, open, start, type Nav } from './menucursor';
+import { back, initialNav, move, moveTo, open, start, type MenuHome, type Nav } from './menucursor';
 import { h } from './widgets';
 
 /** An item of the title screen's MAIN list; main.ts owns the list and its hotkeys. */
@@ -22,26 +22,57 @@ export interface MenuEntry {
 
 export type MenuSound = 'move' | 'select' | 'back' | 'deny';
 
-export interface MenuCallbacks {
+/** What the title screen and the pause menu share: the sounds and the OPTIONS screen. */
+export interface CommonCallbacks {
+  sound(s: MenuSound): void;
+  // OPTIONS: a setting acts, and the view reads the new value back
+  volume(bus: Bus): number;
+  setVolume(bus: Bus, v: number): void;
+  /** cycle the backdrop */
+  onToggleBg(): void;
+  backdrop(): string;
+  onToggleCrt(): void;
+  onHelp(): void;
+  /** the empty world's colour (a preset's name) and a step along the presets (+1 next, -1 previous) */
+  backgroundName(): string;
+  stepBackground(d: number): void;
+}
+
+export interface MenuCallbacks extends CommonCallbacks {
   entries: MenuEntry[];
   /** a fresh visit: show PRESS START first */
   firstVisit: boolean;
   /** PRESS START was pressed: the user gesture that unlocks audio */
   onStart(): void;
   onChallenge(id: string): void;
-  sound(s: MenuSound): void;
   onPreview(kind: 'pg' | 'chem'): void;
-  // OPTIONS: a setting acts, and the view reads the new value back
-  volume(bus: Bus): number;
-  setVolume(bus: Bus, v: number): void;
-  /** cycle the theme */
-  onCycleTheme(): void;
-  theme(): string;
-  /** cycle the backdrop */
-  onToggleBg(): void;
-  backdrop(): string;
-  onToggleCrt(): void;
-  onHelp(): void;
+}
+
+/** The view toggles of the pause menu's VIEW screen: each acts, and `state` reads them back. */
+export interface ViewOps {
+  immerse(): void;
+  soft(): void;
+  crt(): void;
+  grid(): void;
+  fps(): void;
+  /** loads the 3D view the first time, so it resolves later */
+  view3d(): Promise<void>;
+  backdrop(): void;
+  state(): { immerse: boolean; soft: boolean; crt: boolean; grid: number | null; fps: boolean; view3d: boolean; backdrop: string };
+}
+
+export interface PauseOps extends CommonCallbacks {
+  /** the header: PAUSED alone, MENU in a room (the game keeps running there) */
+  title: string;
+  resume(): void;
+  /** SAVE / LOAD / SHARE exist only in the sandbox; elsewhere they are dim */
+  canSave: boolean;
+  save(): void;
+  load(): void;
+  share(): void;
+  view: ViewOps;
+  /** back to the title screen (asks first in a room) */
+  quit(): void;
 }
 
 const STARS_PER_LEVEL = 3;
@@ -60,7 +91,10 @@ interface Row {
   go(): void;
 }
 
-let cbs: MenuCallbacks | null = null;
+/** one menu is up at a time: the title screen (menu) or the pause menu (pause) */
+let cbs: CommonCallbacks | null = null;
+let title: MenuCallbacks | null = null;
+let pause: PauseOps | null = null;
 let nav: Nav = initialNav(false);
 let root: HTMLElement | null = null;
 let rows: Row[] = [];
@@ -84,10 +118,18 @@ function stars(n: number): string {
 
 const onOff = (b: boolean): string => (b ? 'ON' : 'OFF');
 
+/** The pause menu is on screen (a result or the share panel replaces it, so this is read, not stored). */
+export function isPauseOpen(): boolean {
+  return !!pause && !!root?.isConnected && !root.closest('#overlay')?.classList.contains('hidden');
+}
+
 /** The rows of the list screen now showing. */
-function buildRows(c: MenuCallbacks): Row[] {
-  if (nav.screen === 'main') {
-    return c.entries.map((e) => ({
+function buildRows(c: CommonCallbacks): Row[] {
+  if (nav.screen === 'pause' && pause) return pauseRows(c, pause);
+  if (nav.screen === 'view' && pause) return viewRows(pause);
+  if (nav.screen === 'main' && title) {
+    const t = title;
+    return t.entries.map((e) => ({
       label: e.opens ? `${e.name} >` : e.name,
       desc: typeof e.sub === 'function' ? e.sub() : e.sub,
       go: () => {
@@ -97,7 +139,8 @@ function buildRows(c: MenuCallbacks): Row[] {
       },
     }));
   }
-  if (nav.screen === 'challenges') {
+  if (nav.screen === 'challenges' && title) {
+    const t = title;
     const prog: Progress = loadProgress();
     const order = CHALLENGES.map((x) => x.id);
     const out: Row[] = CHALLENGES.map((ch, i) => {
@@ -112,7 +155,7 @@ function buildRows(c: MenuCallbacks): Row[] {
             return;
           }
           c.sound('select');
-          c.onChallenge(ch.id);
+          t.onChallenge(ch.id);
         },
       };
     });
@@ -149,17 +192,97 @@ function buildRows(c: MenuCallbacks): Row[] {
     volumeRow('MASTER VOLUME', 'master', 'Everything at once. M mutes it.'),
     volumeRow('MUSIC VOLUME', 'music', 'The soundtrack.'),
     volumeRow('EFFECTS VOLUME', 'sfx', 'Clicks, blasts and fizzes.'),
-    toggleRow(`THEME: ${c.theme().toUpperCase()}`, 'Light, dark or follow your system - for the game screens.', c.onCycleTheme),
     toggleRow(`BACKDROP: ${c.backdrop()}`, 'The picture around the game screen.', c.onToggleBg),
+    backgroundRow(c),
     toggleRow(`CRT FILTER: ${onOff(document.body.classList.contains('crt-on'))}`, 'Scanlines and a soft vignette over the game.', c.onToggleCrt),
     { label: 'CONTROLS', desc: 'Keys, brushes and how to play.', go: () => { c.sound('select'); c.onHelp(); } },
     { label: 'BACK', desc: 'Back to the main list.', go: () => goBack(c) },
   ];
 }
 
-function goBack(c: MenuCallbacks): void {
+/** BACKGROUND: the colour of the empty world; Left/Right step either way, Enter goes on */
+function backgroundRow(c: CommonCallbacks): Row {
+  const step = (d: number): void => {
+    c.stepBackground(d);
+    c.sound('select');
+    repaintLabels();
+  };
+  return {
+    label: `BACKGROUND: ${c.backgroundName()}`,
+    desc: 'The colour of the empty world. Only you see it.',
+    adjust: step,
+    go: () => step(1),
+  };
+}
+
+/** the pause menu's list: RESUME, the file keys (dim outside the sandbox), the submenus, QUIT */
+function pauseRows(c: CommonCallbacks, p: PauseOps): Row[] {
+  // a file key closes the menu so the toast, or the share panel, is what you see
+  const file = (label: string, desc: string, fn: () => void): Row => ({
+    label,
+    desc: p.canSave ? desc : 'Saving is for the sandbox.',
+    locked: !p.canSave,
+    go: () => {
+      if (!p.canSave) return c.sound('deny');
+      c.sound('select');
+      fn();
+      p.resume();
+    },
+  });
+  const sub = (name: string, to: 'view' | 'options', desc: string): Row => ({
+    label: `${name} >`,
+    desc,
+    go: () => {
+      c.sound('select');
+      setNav(open(nav, to));
+    },
+  });
+  return [
+    { label: 'RESUME', desc: 'Back to the game.', go: () => { c.sound('back'); p.resume(); } },
+    file('SAVE', 'Keep this world in this browser.', p.save),
+    file('LOAD', 'Bring back the saved world.', p.load),
+    file('SHARE', 'Copy a link that opens this world.', p.share),
+    sub('VIEW', 'view', 'Soft glow, CRT, grid, 3D, immersive, backdrop.'),
+    sub('OPTIONS', 'options', 'Sound, music, backdrop, controls.'),
+    { label: 'CONTROLS', desc: 'Keys, brushes and how to play.', go: () => { c.sound('select'); c.onHelp(); } },
+    { label: 'QUIT TO TITLE', desc: p.title === 'MENU' ? 'Leave the room and go to the title screen.' : 'Leave this game for the title screen.', go: () => { c.sound('select'); p.quit(); } },
+  ];
+}
+
+/** VIEW: each a value item like OPTIONS', changed with Enter or Left/Right */
+function viewRows(p: PauseOps): Row[] {
+  const v = p.view;
+  const st = v.state();
+  const row = (label: string, value: string, desc: string, fn: () => void | Promise<void>): Row => {
+    const go = (): void => {
+      p.sound('select');
+      void Promise.resolve(fn()).then(repaintLabels);
+    };
+    return { label: `${label}: ${value}`, desc, adjust: go, go };
+  };
+  return [
+    row('IMMERSE', onOff(st.immerse), 'Fill the window; panels slide in at the edges.', v.immerse),
+    row('SOFT', onOff(st.soft), 'Smooth particles with trails and glow.', v.soft),
+    row('CRT', onOff(st.crt), 'Scanlines and a soft vignette over the game.', v.crt),
+    row('GRID', st.grid === null ? 'OFF' : `${st.grid}PX`, 'Chunky blocks: cycles the size.', v.grid),
+    row('FPS', onOff(st.fps), 'A frames-per-second readout in the corner of the screen.', v.fps),
+    row('3D', onOff(st.view3d), 'Look at the world as a 3D diorama.', v.view3d),
+    row('BACKDROP', st.backdrop, 'The picture around the game screen.', v.backdrop),
+    backgroundRow(p),
+    { label: 'BACK', desc: 'Back to the pause menu.', go: () => goBack(p) },
+  ];
+}
+
+function goBack(c: CommonCallbacks): void {
   const b = back(nav);
-  if (!b) return;
+  if (!b) {
+    // BACK on the pause menu's own list is RESUME
+    if (nav.screen === 'pause' && pause) {
+      c.sound('back');
+      pause.resume();
+    }
+    return;
+  }
   c.sound('back');
   setNav(b);
 }
@@ -195,9 +318,9 @@ function paint(): void {
   });
   itemEls[cur]?.focus({ preventScroll: true });
   if (descEl) descEl.textContent = rows[cur]?.desc ?? '';
-  if (nav.screen === 'main') {
-    const kind = cbs.entries[cur]?.preview;
-    if (kind) cbs.onPreview(kind);
+  if (nav.screen === 'main' && title) {
+    const kind = title.entries[cur]?.preview;
+    if (kind) title.onPreview(kind);
   }
 }
 
@@ -210,8 +333,8 @@ function moveCursor(d: number): void {
 }
 
 function pressStart(): void {
-  if (!cbs || nav.screen !== 'start') return;
-  cbs.onStart(); // the gesture that unlocks audio
+  if (!cbs || !title || nav.screen !== 'start') return;
+  title.onStart(); // the gesture that unlocks audio
   cbs.sound('select');
   setNav(start(nav));
 }
@@ -226,7 +349,12 @@ const HINTS = {
   main: '↑↓ SELECT · ENTER OK',
   challenges: '↑↓ SELECT · ENTER OK · ESC BACK',
   options: '↑↓ SELECT · ENTER / ←→ CHANGE · ESC BACK',
+  pause: '↑↓ SELECT · ENTER OK · ESC RESUME',
+  view: '↑↓ SELECT · ENTER / ←→ CHANGE · ESC BACK',
 };
+
+const HEADINGS = { challenges: 'CHALLENGES', options: 'OPTIONS', view: 'VIEW' };
+const LIST_NAMES = { main: 'Main menu', challenges: 'Challenges', options: 'Options', pause: 'Pause menu', view: 'View' };
 
 /** Build the screen for the current state into the overlay. */
 function render(): void {
@@ -247,10 +375,11 @@ function render(): void {
   } else {
     rows = buildRows(c);
     const name = nav.screen;
-    if (name !== 'main') body.appendChild(h('h2', 'ts-heading', name === 'challenges' ? 'CHALLENGES' : 'OPTIONS'));
+    if (name === 'pause') body.appendChild(h('h2', 'ts-heading', pause?.title ?? 'PAUSED'));
+    else if (name !== 'main') body.appendChild(h('h2', 'ts-heading', HEADINGS[name]));
     const list = h('div', `ts-list ts-${name}`);
     list.setAttribute('role', 'menu');
-    list.setAttribute('aria-label', name === 'main' ? 'Main menu' : name === 'challenges' ? 'Challenges' : 'Options');
+    list.setAttribute('aria-label', LIST_NAMES[name]);
     rows.forEach((r, i) => {
       const el = h('div', 'ts-item' + (r.locked ? ' locked' : ''));
       el.setAttribute('role', 'menuitem');
@@ -340,8 +469,8 @@ function onKey(e: KeyboardEvent): void {
       }
       return;
   }
-  if (nav.screen === 'main') {
-    const i = cbs.entries.findIndex((en) => en.hotkey === k);
+  if (nav.screen === 'main' && title) {
+    const i = title.entries.findIndex((en) => en.hotkey === k);
     if (i >= 0) {
       used();
       setNav(moveTo(nav, i));
@@ -350,26 +479,42 @@ function onKey(e: KeyboardEvent): void {
   }
 }
 
-export function showMenu(callbacks: MenuCallbacks): void {
-  cbs = callbacks;
-  nav = initialNav(callbacks.firstVisit);
+/** Put a menu's screen into the overlay and start listening for keys. */
+function mount(home: MenuHome, firstVisit: boolean): HTMLElement {
+  nav = initialNav(firstVisit, home);
   const overlay = document.getElementById('overlay')!;
   overlay.innerHTML = '';
   overlay.classList.remove('hidden');
-
   root = h('div', 'title-screen');
-  root.appendChild(h('h1', 'ts-logo', 'PIXELFORGE'));
-  root.appendChild(h('div', 'ts-foot'));
-  // PRESS START: any click or tap goes on
-  root.addEventListener('click', pressStart);
-  overlay.appendChild(root);
-  const live = h('div', 'menu-live hidden');
-  live.id = 'menu-live';
-  overlay.appendChild(live);
-
+  root.dataset.kind = home === 'pause' ? 'pause' : 'title';
   if (!listening) {
     listening = true;
     window.addEventListener('keydown', onKey, true);
   }
+  return overlay;
+}
+
+export function showMenu(callbacks: MenuCallbacks): void {
+  cbs = title = callbacks;
+  pause = null;
+  const overlay = mount('main', callbacks.firstVisit);
+  root!.appendChild(h('h1', 'ts-logo', 'PIXELFORGE'));
+  root!.appendChild(h('div', 'ts-foot'));
+  // PRESS START: any click or tap goes on
+  root!.addEventListener('click', pressStart);
+  overlay.appendChild(root!);
+  const live = h('div', 'menu-live hidden');
+  live.id = 'menu-live';
+  overlay.appendChild(live);
+  render();
+}
+
+/** The pause menu, over the game behind it (ESC, or the MENU button). */
+export function showPause(ops: PauseOps): void {
+  cbs = pause = ops;
+  title = null;
+  const overlay = mount('pause', false);
+  root!.appendChild(h('div', 'ts-foot'));
+  overlay.appendChild(root!);
   render();
 }

@@ -1,16 +1,13 @@
 /* ===========================================================================
-   PIXELFORGE - forge skin
-   Soot, iron and one molten accent. The canvas is the product, so the chrome
-   is thin: a slim topbar of grouped controls, a material rail on the left
-   (paint-app style, which hands the 16:9 canvas the height it needs), and a
-   status strip under the canvas. Everything is driven off the tokens below.
+   PIXELFORGE - one look, always dark
+   Soot, iron and one molten accent, the title screen's palette on every
+   screen. Every panel wears the same pixel frame: a 2px --frame border and a
+   hard 4px offset shadow. No gradients, bevels, glows or rounded corners.
    =========================================================================== */
 
-:root,
-.force-dark {
+:root {
   /* ---- ground: one warm grey family, no blue-purple ---- */
   --bg: #0c0a09;
-  --bg-2: #13100e;
   --panel: #191513;
   --panel-2: #211c19;
   --panel-3: #2b2420;
@@ -31,39 +28,22 @@
   --accent-rgb: 245, 158, 59;
   /* cool steel - information, never decoration */
   --accent-2: #9cbccb;
-  --accent-2-lo: #344b56;
   --danger: #ef5f4f;
   --ok: #8fd47a;
-
-  /* ---- bevel helpers (light top-left, dark bottom-right) ---- */
-  --bev-hi: rgba(255, 236, 214, 0.07);
-  --bev-lo: rgba(0, 0, 0, 0.55);
 
   --font: 'Silkscreen', 'Press Start 2P', monospace;
   --font-display: 'Press Start 2P', monospace;
   --font-read: 'IBM Plex Mono', ui-monospace, 'Courier New', monospace;
 
-  /* ---- surfaces that differ per theme ---- */
-  --btn-hover: #382f2a;
-  --btn-hover-line: #5a4c42;
-  --led-off: #0d0b0a;
-  --led-rim: #000;
-  --stage-bg: radial-gradient(ellipse 80% 70% at 50% 45%, #1a1512 0%, #0d0b0a 62%, #070605 100%);
-  --frame: linear-gradient(160deg, #2a231f, #15110f 60%, #1d1815);
-  --track: linear-gradient(180deg, #080706, #1f1a17);
-  --ink-ghost: #564d44;
-  --overlay-bg: radial-gradient(ellipse at center, rgba(14, 11, 9, 0.84), rgba(6, 5, 4, 0.95));
-  --danger-ink: #ffb0a6;
-  /* recessed rows and cards: darker than the panel in dark, lighter in light */
-  --row-bg: rgba(0, 0, 0, 0.16);
+  /* ---- the frame: every panel, button and the canvas ---- */
+  --frame: #5b4d42;
+  --frame-line: 2px solid var(--frame);
+  --frame-shadow: 4px 4px 0 var(--edge-dark);
+  --overlay-bg: rgba(8, 6, 5, 0.86);
   color-scheme: dark;
 
-  --rail-w: 236px;
-  --topbar-h: 56px;
-  --status-h: 30px;
-  --r-sm: 3px;
-  --r-md: 6px;
-  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --rail-w: 264px;
+  --bar-h: 48px;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -73,10 +53,15 @@ html, body {
   overflow: hidden;
   background: var(--bg);
   color: var(--ink);
-  font-family: var(--font);
-  font-size: 10px;
+  /* names and sentences are read type; display type is only for buttons and headings */
+  font-family: var(--font-read);
+  font-size: 14px;
   -webkit-font-smoothing: antialiased;
 }
+
+/* every heading in a panel: display type, 16px or more */
+h2 { font-family: var(--font-display); font-weight: 400; }
+.share-box h2 { font-size: 18px; }
 
 /* Keyboard users get a visible ring; mouse users never see it. */
 :focus-visible {
@@ -130,86 +115,9 @@ body.has-wallpaper #app { position: relative; z-index: 1; }
 
 .hidden { display: none !important; }
 
-/* ---------------------------------------------------------------- top bar */
-
-#topbar {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: flex-end;
-  flex-wrap: wrap;
-  gap: 6px 18px;
-  min-height: var(--topbar-h);
-  padding: 7px 14px 9px;
-  background: linear-gradient(180deg, var(--panel-2), var(--panel));
-  border-bottom: 1px solid var(--edge-dark);
-  box-shadow: inset 0 -1px 0 var(--bev-hi), 0 6px 18px rgba(0, 0, 0, 0.45);
-  z-index: 20;
-}
-
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  align-self: center;
-}
-/* three cascading pixels: sand, steel, fire - the game in one glyph */
-.brand-mark {
-  flex: 0 0 auto;
-  width: 4px;
-  height: 4px;
-  margin: 0 10px 8px 2px;
-  background: var(--accent);
-  box-shadow:
-    5px 5px 0 0 var(--accent-2),
-    10px 10px 0 0 var(--danger);
-}
-#topbar .title {
-  font-family: var(--font-display);
-  color: var(--accent);
-  font-size: 13px;
-  letter-spacing: 2px;
-  text-shadow: 0 0 14px rgba(var(--accent-rgb), 0.45), 2px 2px 0 rgba(0, 0, 0, 0.6);
-}
-#topbar .mode-label {
-  color: var(--ink-dim);
-  font-size: 11px;
-  letter-spacing: 1px;
-  padding: 3px 7px;
-  border: 1px solid var(--line-soft);
-  border-radius: var(--r-sm);
-  background: var(--panel-deep);
-}
-#topbar .mode-label:empty { display: none; }
-#topbar .spacer { flex: 1; }
-
-/* a cluster: tiny label over a joined row of keys */
-.btn-group {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-/* a cluster whose keys are all hidden goes too */
-.btn-group:not(:has(button.px:not(.hidden))) { display: none; }
-.btn-group.end {
-  flex-direction: row;
-  align-items: flex-end;
-  gap: 6px;
-}
-.grp-label {
-  font-size: 9px;
-  letter-spacing: 1.5px;
-  color: var(--ink-faint);
-  padding-left: 2px;
-  text-transform: uppercase;
-}
-.grp-row { display: flex; }
-.grp-row > button.px { border-radius: 0; margin-left: -1px; }
-.grp-row > button.px:first-child { border-radius: var(--r-sm) 0 0 var(--r-sm); margin-left: 0; }
-.grp-row > button.px:last-child { border-radius: 0 var(--r-sm) var(--r-sm) 0; }
-.grp-row > button.px:only-child { border-radius: var(--r-sm); }
-.grp-row > button.px.hidden + button.px { border-radius: var(--r-sm) 0 0 var(--r-sm); }
-
 /* -------------------------------------------------------------- buttons */
+/* One button: the pixel frame, display type. A toggle (.tog) shows its state
+   by fill: on = accent background and dark text; off = clear, dim text. */
 
 button.px {
   position: relative;
@@ -217,66 +125,30 @@ button.px {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  font-family: var(--font);
-  font-size: 12px;
-  line-height: 1;
-  color: var(--ink-dim);
-  background: linear-gradient(180deg, var(--panel-3), var(--panel-2));
-  border: 1px solid var(--line);
-  border-bottom-color: var(--edge-dark);
-  border-radius: var(--r-sm);
-  box-shadow: inset 0 1px 0 var(--bev-hi);
-  padding: 7px 10px;
-  cursor: pointer;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  white-space: nowrap;
-  transition: background 0.15s var(--ease-out), color 0.15s, border-color 0.15s, transform 0.08s;
-}
-button.px:hover {
+  font-family: var(--font-display);
+  font-size: 14px;
+  line-height: 1.2;
+  letter-spacing: 0;
   color: var(--ink);
-  background: linear-gradient(180deg, var(--btn-hover), var(--panel-3));
-  border-color: var(--btn-hover-line);
-  border-bottom-color: var(--edge-dark);
-  z-index: 1;
+  background: var(--panel-2);
+  border: var(--frame-line);
+  border-radius: 0;
+  box-shadow: var(--frame-shadow);
+  padding: 10px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  text-transform: uppercase;
 }
-button.px:active {
-  transform: translateY(1px);
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.55);
-}
-
-/* indicator lamp: a single pixel-square LED, dark until the feature is on */
-button.px .led {
-  width: 6px;
-  height: 6px;
-  background: var(--led-off);
-  box-shadow: inset 0 0 0 1px var(--led-rim), 0 1px 0 var(--bev-hi);
-  transition: background 0.15s, box-shadow 0.15s;
-}
-button.px.toggled { color: var(--ink); }
-button.px.toggled .led {
-  background: var(--accent-hi);
-  box-shadow: 0 0 6px 1px rgba(var(--accent-rgb), 0.8), inset 0 0 0 1px rgba(122, 69, 18, 0.6);
-}
-/* toggles without a lamp (legacy callers) still read as engaged */
-button.px.toggled:not(.has-led) {
-  border-color: var(--accent);
-  color: var(--accent-hi);
-}
-
-button.px.primary {
-  background: linear-gradient(180deg, var(--accent-hi), var(--accent) 60%, #d9822a);
-  color: #241606;
-  border-color: #ffd9a3;
-  border-bottom-color: #8a4f14;
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.3);
-}
-button.px.primary:hover {
-  background: linear-gradient(180deg, #ffd9a3, var(--accent-hi));
-  color: #241606;
-}
-
-button.px.danger { color: var(--danger-ink); }
+button.px:hover { color: var(--accent-hi); border-color: var(--accent); }
+button.px:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 var(--edge-dark); }
+button.px.tog { background: transparent; color: var(--ink-dim); }
+button.px.tog:hover { color: var(--ink); }
+button.px.tog.toggled,
+button.px.tog.toggled:hover { background: var(--accent); border-color: var(--accent); color: #1a1004; }
+button.px.toggled:not(.tog) { border-color: var(--accent); color: var(--accent-hi); }
+button.px.primary,
+button.px.primary:hover { background: var(--accent); border-color: var(--accent); color: #1a1004; }
+button.px.danger { color: var(--danger); }
 
 /* a key that is there but not for this mode: dimmed, no lift, no press */
 button.px:disabled,
@@ -285,12 +157,10 @@ button.px:disabled:active {
   opacity: 0.4;
   cursor: default;
   color: var(--ink-dim);
-  background: linear-gradient(180deg, var(--panel-3), var(--panel-2));
-  border-color: var(--line);
-  border-bottom-color: var(--edge-dark);
-  box-shadow: inset 0 1px 0 var(--bev-hi);
+  background: var(--panel-2);
+  border-color: var(--frame);
+  box-shadow: var(--frame-shadow);
   transform: none;
-  z-index: auto;
 }
 
 /* ------------------------------------------------------ stage / screen */
@@ -302,50 +172,35 @@ button.px:disabled:active {
   align-items: center;
   justify-content: center;
   min-height: 0;
-  padding: 8px;
-  background:
-    radial-gradient(ellipse 70% 60% at 50% 46%, rgba(var(--accent-rgb), 0.06), transparent 70%),
-    var(--stage-bg);
+  /* room for the canvas frame's 4px shadow */
+  padding: 8px 12px 12px 8px;
+  overflow: hidden;
+  background: var(--bg);
 }
-/* film grain, so the dark field is a surface rather than a void */
-#stage::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  opacity: 0.35;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.6 0 0 0 0 0.5 0 0 0 0 0.4 0 0 0 0.09 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-}
+/* under the title screen the demo is the whole backdrop: no frame, no padding */
+body:not(.in-game) #stage { padding: 0; }
+body:not(.in-game) #viewport { border: 0; box-shadow: none; }
 body.has-wallpaper #stage { background: transparent; }
 
-/* the frame: thin iron, not a plastic cabinet - every pixel goes to the sim */
-#bezel {
+/* the canvas wears the one frame; the 16:9 sim letterboxes in the dark around it */
+#viewport {
   position: relative;
-  padding: 5px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-md);
-  background: var(--frame);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 236, 214, 0.08),
-    0 0 0 1px var(--edge-dark),
-    0 24px 60px -10px rgba(0, 0, 0, 0.8),
-    0 0 80px -20px rgba(var(--accent-rgb), 0.18);
+  flex: none;
+  border: var(--frame-line);
+  box-shadow: var(--frame-shadow);
+  background: #000;
 }
-
-#led { display: none; }
 
 #screen-wrap {
   position: relative;
   line-height: 0;
-  border-radius: var(--r-sm);
   overflow: hidden;
   background: #050403;
-  box-shadow: 0 0 0 1px var(--edge-dark), inset 0 0 30px rgba(0, 0, 0, 0.9);
 }
 
 #screen {
   display: block;
-  background: #0b0a09;
+  background: var(--world-bg, #0b0b14);
   touch-action: none;
   cursor: crosshair;
   image-rendering: auto;
@@ -355,20 +210,7 @@ body.has-wallpaper #stage { background: transparent; }
   image-rendering: crisp-edges;
 }
 
-/* --- glass: always on. It is the tube, not the CRT effect. ---
-   No mix-blend-mode: blending re-reads the canvas backdrop on every simulated
-   frame, which cost ~4 FPS at large canvas sizes. */
-#glass {
-  pointer-events: none;
-  position: absolute;
-  inset: 0;
-  z-index: 6;
-  transform: translateZ(0);
-  background:
-    linear-gradient(107deg, rgba(255, 245, 230, 0.06) 0%, rgba(255, 245, 230, 0.02) 20%, transparent 40%);
-}
-
-/* --- 3D voxel view: overlays the 2D canvas inside the same tube --- */
+/* --- 3D voxel view: overlays the 2D canvas inside the same frame --- */
 #view3d {
   position: absolute;
   inset: 0;
@@ -378,7 +220,7 @@ body.has-wallpaper #stage { background: transparent; }
   justify-content: center;
 }
 #view3d.hidden { display: none; }
-/* the 3D playground: same tube, its own canvas (render/pg3d.ts) */
+/* the 3D playground: same frame, its own canvas (render/pg3d.ts) */
 #pg3d {
   position: absolute;
   inset: 0;
@@ -391,21 +233,16 @@ body.has-wallpaper #stage { background: transparent; }
   bottom: 10px;
   translate: -50% 0;
   padding: 5px 10px;
-  font-family: var(--font);
-  font-size: 10px;
-  letter-spacing: 1px;
+  font-family: var(--font-read);
+  font-size: 14px;
   line-height: 1.4;
-  color: #cfc6b8;
-  background: rgba(8, 8, 14, 0.62);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 3px;
+  color: var(--ink);
+  background: rgba(8, 6, 5, 0.8);
+  border: var(--frame-line);
   pointer-events: none;
   white-space: nowrap;
 }
-#view3d canvas {
-  border: 1px solid var(--line);
-  box-shadow: 0 0 0 1px var(--edge-dark), 0 0 40px rgba(0, 0, 0, 0.6);
-}
+#view3d canvas { border: var(--frame-line); }
 
 /* --- crt: toggleable scanlines and vignette ---
    Static on purpose: an animated layer over a 60 Hz canvas cost ~8 FPS. */
@@ -416,7 +253,6 @@ body.has-wallpaper #stage { background: transparent; }
   z-index: 5;
   opacity: 0;
   transform: translateZ(0);
-  transition: opacity 0.18s;
 }
 body.crt-on #crt {
   opacity: 1;
@@ -448,214 +284,260 @@ body.crt-on #crt {
   rotate: 45deg;
 }
 
-/* ------------------------------------------------------ status bar */
+/* ------------------------------------------------------ bottom bar */
+/* One line, 48px, under the rail and the canvas: the picked material on the
+   left; the count, the chem lab's readout, PAUSE and MENU on the right. */
 
 #statusbar {
-  flex: 0 0 var(--status-h);
+  flex: 0 0 var(--bar-h);
+  height: var(--bar-h);
   display: flex;
   align-items: stretch;
   min-width: 0;
-  background: var(--panel-deep);
-  border-top: 1px solid var(--edge-dark);
-  box-shadow: inset 0 1px 0 var(--bev-hi);
-  font-size: 11px;
-  letter-spacing: 1px;
+  background: var(--panel);
+  border-top: var(--frame-line);
   color: var(--ink-dim);
   z-index: 20;
 }
 .sb-seg {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   padding: 0 14px;
-  border-right: 1px solid var(--line-soft);
   white-space: nowrap;
 }
-.sb-seg:last-child { border-right: 0; }
-.sb-mat { flex: 1 1 auto; min-width: 0; }
-.sb-key { color: var(--ink-faint); text-transform: uppercase; }
-/* the CHEM LAB readout: the rate keeps its width so the bar does not twitch,
-   and NOW gives way (with an ellipsis) before the FPS segment does */
-.sb-rx .sb-val { min-width: 8ch; }
-.sb-now { flex: 0 1 auto; min-width: 0; max-width: 46ch; }
-/* while NOW shows, the selected material's description is what gives way:
-   it takes what is left rather than sharing the squeeze (:has keeps every
-   other mode's bar as it was) */
-@media (min-width: 1181px) {
-  #statusbar:has(.sb-now:not(.hidden)) .sb-mat { flex: 1 1 0; min-width: 150px; overflow: hidden; }
+.sb-mat { flex: 1 1 0; min-width: 0; overflow: hidden; }
+.sb-name {
+  flex: 0 0 auto;
+  font-family: var(--font-display);
+  font-size: 16px;
+  color: var(--ink);
 }
-/* Narrower bars give up the readout in steps, so the FPS segment never leaves
-   the bar: below 1180px NOW would be a sliver, so the rate stays and the line
-   goes; below 1000px the lab's cell count goes too; on a phone, the rate. */
-@media (max-width: 1180px) { .sb-now { display: none; } }
-@media (max-width: 1000px) { #statusbar:has(.sb-rx:not(.hidden)) .sb-cells { display: none; } }
-@media (max-width: 720px) { .sb-rx { display: none; } }
-.sb-val { color: var(--ink); }
-.sb-val.num { font-variant-numeric: tabular-nums; font-family: var(--font-read); font-size: 11px; letter-spacing: 0; }
+/* the note wraps to a second line before it ever clips; segments give way whole */
 .sb-note {
+  min-width: 0;
   font-family: var(--font-read);
-  font-size: 11px;
-  letter-spacing: 0;
-  color: var(--ink-faint);
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-size: 15px;
+  line-height: 1.15;
+  color: var(--ink-dim);
+  white-space: normal;
 }
 .sb-chip {
   flex: 0 0 auto;
-  width: 12px;
-  height: 12px;
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--line);
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--frame);
 }
-.sb-lamp {
-  width: 7px;
-  height: 7px;
-  background: var(--ok);
-  box-shadow: 0 0 6px rgba(143, 212, 122, 0.8);
-  animation: lamp-idle 3.4s ease-in-out infinite;
+.sb-val { color: var(--ink); }
+.sb-val.num {
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-read);
+  font-size: 15px;
 }
-body.sim-paused .sb-lamp {
-  background: var(--accent);
-  box-shadow: 0 0 6px rgba(var(--accent-rgb), 0.85);
-  animation: none;
+.sb-unit, .sb-rxlbl { font-family: var(--font-read); font-size: 14px; color: var(--ink-dim); }
+.sb-rxlbl { font-family: var(--font-display); }
+/* the CHEM LAB readout: the rate keeps its width so the bar does not twitch */
+.sb-rx .sb-val { min-width: 6ch; }
+.sb-now { flex: 0 1 auto; min-width: 0; max-width: 40ch; }
+.sb-btns { gap: 10px; padding-right: 10px; }
+.sb-cells { min-width: 11ch; }
+/* a small bar gives up its readout in steps, whole segments at a time: NOW
+   first, then the chem lab's rate, then the material's note */
+@media (max-width: 1500px) { .sb-now { display: none; } }
+@media (max-width: 1100px) { .sb-rx { display: none; } }
+@media (max-width: 900px) { .sb-note { display: none; } }
+
+#statusbar button.px { min-height: 44px; }
+button.px.sq {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  box-shadow: none;
 }
-@keyframes lamp-idle {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
+/* the pause glyph, drawn: two bars; resumed-from-paused shows a play triangle */
+button.px.sq .ico {
+  width: 16px;
+  height: 18px;
+  background: currentColor;
+  clip-path: polygon(0 0, 35% 0, 35% 100%, 0 100%, 0 0, 65% 0, 100% 0, 100% 100%, 65% 100%, 65% 0);
 }
+button.px.sq.toggled .ico { clip-path: polygon(0 0, 100% 50%, 0 100%); }
+
+/* the PAUSED badge on the canvas: blinks in hard steps, and keeps blinking
+   under reduced motion (it is information, not decoration) */
+#paused-badge {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  translate: -50% 0;
+  z-index: 6;
+  padding: 8px 14px;
+  font-family: var(--font-display);
+  font-size: 16px;
+  line-height: 1;
+  color: var(--accent-hi);
+  background: rgba(8, 6, 5, 0.86);
+  border: var(--frame-line);
+  box-shadow: var(--frame-shadow);
+  animation: ts-blink 1s steps(1) infinite;
+  pointer-events: none;
+}
+/* the FPS readout (D): a small corner box, off until asked for */
+#fps {
+  display: none;
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  z-index: 6;
+  padding: 2px 6px;
+  font-family: var(--font-read);
+  font-size: 14px;
+  line-height: 1.3;
+  color: var(--ink);
+  background: rgba(8, 6, 5, 0.8);
+  pointer-events: none;
+}
+body.show-fps.in-game #fps { display: block; }
+body:not(.in-game) #paused-badge { display: none; }
 
 /* ---------------------------------------------------------- material rail */
+/* Tiles, not rows: a 56px square filled with the material's own four colours,
+   its name under it, three to a row. The list scrolls on its own (#palette);
+   the brush row stays pinned at the bottom (.toolcol). */
 
 #toolbar {
   flex: 0 0 var(--rail-w);
   width: var(--rail-w);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   min-height: 0;
-  padding: 12px 10px 12px 12px;
-  /* the list scrolls (#palette), the brush block never does */
+  padding: 8px 12px 12px;
   overflow: hidden;
-  background: linear-gradient(90deg, var(--panel), var(--panel-2));
-  border-right: 1px solid var(--edge-dark);
-  box-shadow: inset -1px 0 0 var(--bev-hi);
+  background: var(--panel);
+  border-right: var(--frame-line);
   z-index: 15;
 }
 
 #palette {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  /* so the scrollbar does not sit on the swatches */
-  padding-right: 4px;
+  /* room for the scrollbar and for the buttons' 4px shadow */
+  padding: 4px 8px 6px 5px;
 }
 
-/* materials are grouped by physical category so the palette teaches itself */
 .matgroup {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 .glabel {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 10px;
-  letter-spacing: 2px;
-  color: var(--ink-faint);
-  text-transform: uppercase;
-}
-.glabel::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: var(--line-soft);
+  font-family: var(--font-display);
+  font-size: 14px;
+  color: var(--ink-dim);
 }
 .gswatches {
   display: grid;
-  /* minmax(0, ...) so a long name or a budget badge cannot widen its column */
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 4px;
+  /* three columns that grow to their widest name, so Fireflies is not broken
+     into Firefli / es; the rail is wide enough for the widest row */
+  grid-template-columns: repeat(3, auto);
+  justify-content: space-between;
+  gap: 8px 6px;
 }
-/* a swatch carrying a challenge budget takes the full row, so the count
-   never squeezes the name */
-.swatch:has(.budget) { grid-column: 1 / -1; }
 
 .swatch {
   position: relative;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 7px;
-  height: 28px;
-  padding: 0 6px;
-  border: 1px solid transparent;
-  border-radius: var(--r-sm);
-  background: rgba(0, 0, 0, 0.18);
+  gap: 4px;
+  min-width: 0;
   cursor: pointer;
-  transition: background 0.12s, border-color 0.12s, transform 0.08s;
 }
 .swatch .chip {
+  position: relative;
   flex: 0 0 auto;
-  width: 16px;
-  height: 16px;
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 236, 214, 0.06);
+  width: 56px;
+  height: 56px;
+  border: 2px solid var(--frame);
+}
+/* the eraser: the world's empty colour inside a dashed red frame */
+.swatch .chip.dashed {
+  background: var(--world-bg, #0b0b14);
+  border: 2px dashed var(--danger);
 }
 .swatch .nm {
-  min-width: 0;
-  font-size: 11px;
-  letter-spacing: 0.3px;
+  max-width: 100%;
+  font-family: var(--font-read);
+  font-size: 14px;
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+  text-align: center;
   color: var(--ink-dim);
-  line-height: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  /* a name wraps before it ever clips: Black hole, not Black h... */
+  overflow-wrap: anywhere;
 }
-.swatch:hover { background: var(--panel-3); border-color: var(--line); }
+.swatch:hover .chip { border-color: var(--ink-dim); }
 .swatch:hover .nm { color: var(--ink); }
-.swatch:active { transform: translateY(1px); }
-.swatch.sel {
-  background: linear-gradient(90deg, rgba(var(--accent-rgb), 0.2), rgba(var(--accent-rgb), 0.06));
-  border-color: rgba(var(--accent-rgb), 0.7);
-  box-shadow: inset 2px 0 0 var(--accent), 0 0 14px -4px rgba(var(--accent-rgb), 0.6);
+.swatch:active .chip { transform: translate(1px, 1px); }
+/* picked: a 3px accent pixel outline, and the title screen's marker hanging left of the name */
+.swatch.sel .chip,
+.swatch.toggled .chip { outline: 3px solid var(--accent); outline-offset: 1px; border-color: var(--bg); }
+.swatch.sel .nm,
+.swatch.toggled .nm { color: var(--accent-hi); }
+.swatch.sel .nm::before,
+.swatch.toggled .nm::before {
+  content: '▶';
+  display: inline-block;
+  width: 0;
+  overflow: visible;
+  transform: translateX(-1.3em);
+  color: var(--accent-hi);
 }
-.swatch.sel .nm { color: var(--accent-hi); }
+/* a challenge's budget: in the tile's top-right corner */
 .swatch .budget {
-  margin-left: auto;
+  position: absolute;
+  top: -3px;
+  right: calc(50% - 32px);
+  z-index: 1;
+  padding: 0 4px;
   background: var(--danger);
   color: #fff;
   font-family: var(--font-read);
-  font-size: 10px;
+  font-size: 14px;
+  line-height: 1.25;
   font-variant-numeric: tabular-nums;
-  padding: 1px 4px;
-  border-radius: 2px;
 }
-/* the CHEM LAB's elements: small periodic-table tiles, five to a row.
+/* the CHEM LAB's elements keep the periodic-table design at the same 56px:
    number top left, symbol centred, the material's own colours as a stripe */
-.gswatches.tiles { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .swatch.tile {
-  flex-direction: column;
+  width: 56px;
+  height: 56px;
+  justify-self: center;
   justify-content: center;
   gap: 0;
-  height: auto;
-  aspect-ratio: 1 / 1;
-  padding: 0;
+  border: 2px solid var(--frame);
+  background: var(--panel-deep);
   overflow: hidden;
 }
 .swatch.tile .tz {
   position: absolute;
-  top: 3px;
-  left: 4px;
+  top: 1px;
+  left: 3px;
   font-family: var(--font-read);
-  font-size: 8px;
+  font-size: 14px;
   line-height: 1;
   color: var(--ink-faint);
 }
 .swatch.tile .tsym {
+  margin-top: 12px;
   font-family: var(--font-read);
-  font-size: 15px;
+  font-size: 20px;
   font-weight: 700;
   line-height: 1;
   color: var(--ink);
@@ -665,7 +547,7 @@ body.sim-paused .sb-lamp {
   left: 0;
   right: 0;
   bottom: 0;
-  height: 3px;
+  height: 5px;
 }
 /* the name is for the tooltips and screen readers, not the eye (clip-path,
    not a 1px box, so it never reads as a truncated name) */
@@ -675,90 +557,62 @@ body.sim-paused .sb-lamp {
   clip-path: inset(50%);
   pointer-events: none;
 }
+.swatch.tile:hover { border-color: var(--ink-dim); }
+.swatch.tile.sel { outline: 3px solid var(--accent); outline-offset: 1px; border-color: var(--bg); }
 .swatch.tile.sel .tsym { color: var(--accent-hi); }
 .swatch.exhausted { opacity: 0.3; pointer-events: none; filter: grayscale(1); }
 .swatch.locked { opacity: 0.22; pointer-events: none; }
+/* BUCKET and WIND: tool tiles with a drawn mark */
+.chip.ico-flood, .chip.ico-wind { display: grid; place-items: center; background: var(--panel-3); }
+.chip.ico-flood::after {
+  content: '';
+  width: 26px;
+  height: 22px;
+  background: var(--accent-2);
+  clip-path: polygon(10% 0, 90% 0, 100% 100%, 0 100%);
+}
+.chip.ico-wind::after {
+  content: '';
+  width: 30px;
+  height: 4px;
+  background: var(--accent-2);
+  box-shadow: -6px -10px 0 var(--accent-2), 6px 10px 0 var(--accent-2);
+}
 
-/* -------------------------------------------------- brush / tool block */
+/* buttons in the rail (scenes, experiments, GRAVITY, CLEAR...): the one frame,
+   full width, one per line, wrapping rather than ever truncating */
+.scenebtns, .toolbtns { display: grid; gap: 10px; padding-right: 4px; }
+#toolbar button.px { width: 100%; white-space: normal; text-align: center; }
+
+/* -------------------------------------------------- pinned tools and brush */
+/* ERASE, BUCKET and WIND sit on one row above the brush dots, under the
+   scrolling materials: the most-used tools never need a scroll */
 
 .toolcol {
   margin-top: auto;
   display: flex;
   flex-direction: column;
-  gap: 9px;
-  padding: 10px;
-  border: 1px solid var(--line-soft);
-  border-radius: var(--r-md);
-  background: var(--panel-deep);
+  gap: 4px;
+  padding: 8px 0 0 5px;
+  border-top: var(--frame-line);
 }
-.brushrow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--ink-dim);
-  font-size: 11px;
-  letter-spacing: 1px;
-}
-.brushrow > span:nth-child(3) {
-  min-width: 16px;
-  text-align: right;
-  font-family: var(--font-read);
-  font-size: 11px;
-  color: var(--ink);
-  font-variant-numeric: tabular-nums;
-}
-.brushrow.hint { color: var(--ink-faint); font-size: 9px; text-transform: uppercase; }
-
-.brush-preview {
-  flex: 0 0 auto;
-  width: 28px;
-  height: 28px;
+.pinrow { margin-bottom: 4px; padding-right: 8px; }
+/* five dots of growing size; the lit one has the accent outline */
+.brushdots { display: flex; justify-content: space-between; }
+.bdot {
   display: grid;
   place-items: center;
-  border: 1px solid var(--line-soft);
-  border-radius: var(--r-sm);
-  background: rgba(0, 0, 0, 0.4);
-}
-.brush-dot {
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 8px rgba(var(--accent-rgb), 0.6);
-  transition: width 0.08s, height 0.08s;
-}
-
-input[type='range'] {
-  -webkit-appearance: none;
-  appearance: none;
-  flex: 1 1 auto;
-  min-width: 0;
-  width: 100%;
-  height: 6px;
-  border-radius: 3px;
-  background: var(--track);
-  border: 1px solid var(--line-soft);
-  outline: none;
+  width: 38px;
+  height: 44px;
+  padding: 0;
+  background: transparent;
+  border: 2px solid transparent;
   cursor: pointer;
 }
-input[type='range']::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 10px;
-  height: 18px;
-  border-radius: 2px;
-  background: linear-gradient(180deg, var(--accent-hi), var(--accent) 60%, #c9761f);
-  border: 1px solid var(--accent-lo);
-  box-shadow: 0 0 8px rgba(var(--accent-rgb), 0.45);
-  cursor: ew-resize;
-}
-input[type='range']::-moz-range-thumb {
-  width: 10px;
-  height: 18px;
-  border-radius: 2px;
-  background: linear-gradient(180deg, var(--accent-hi), var(--accent) 60%, #c9761f);
-  border: 1px solid var(--accent-lo);
-  box-shadow: 0 0 8px rgba(var(--accent-rgb), 0.45);
-  cursor: ew-resize;
-}
+.bdot .d { border-radius: 50%; background: var(--ink-dim); }
+.bdot:hover .d { background: var(--ink); }
+.bdot.sel { border-color: var(--accent); }
+.bdot.sel .d { background: var(--accent); }
 
 /* ------------------------------------------------------ overlay / menu */
 
@@ -771,32 +625,30 @@ input[type='range']::-moz-range-thumb {
   justify-content: center;
   padding: 16px;
   background: var(--overlay-bg);
-  backdrop-filter: blur(3px);
   animation: fade-in 0.18s ease-out;
 }
 #overlay.hidden { display: none; }
 /* ---- the title screen: an arcade menu floating on the running game ----
-   Always dark, like the sim screen under it: the tokens below are the dark
-   theme's, so a light theme only changes the in-game panels. Sizes follow the
-   viewport (and its height, for a phone on its side). */
+   Sizes follow the viewport (and its height, for a phone on its side). */
 #overlay:has(.title-screen) {
   padding: 0;
   /* clear in the middle so the demo shows, dark at the edges so the list reads */
   background: radial-gradient(ellipse at center, rgba(8, 6, 5, 0) 50%, rgba(8, 6, 5, 0.85) 100%);
   backdrop-filter: none;
 }
-/* reduced motion runs no demo: a plain dark backdrop instead of a frozen frame */
-#overlay:has(.title-screen):not(.attract) {
+/* the pause menu dims the game under it evenly (the rail and the bar are busy behind the list), darker at the edges */
+#overlay:has(.title-screen[data-kind='pause']) {
+  background: radial-gradient(ellipse at center, rgba(8, 6, 5, 0.76) 30%, rgba(8, 6, 5, 0.92) 100%);
+}
+/* reduced motion runs no demo: a plain dark backdrop instead of a frozen frame
+   (the pause menu keeps the vignette: the game under it is the point) */
+#overlay:has(.title-screen[data-kind='title']):not(.attract) {
   background: radial-gradient(ellipse at center, rgba(14, 11, 9, 0.8), rgba(6, 5, 4, 0.97));
 }
 .title-screen {
-  --ink: #f1e8da;
-  --ink-dim: #ab9f8f;
-  --ink-faint: #72675b;
   /* a hard dark outline that holds in pixel fonts, plus a soft halo: the demo
      behind is random, so the text has to win on any background */
   --ts-outline: 2px 2px 0 #0a0706, -1px -1px 0 #0a0706, 0 0 8px rgba(0, 0, 0, 0.8);
-  color-scheme: dark;
   position: relative;
   isolation: isolate;
   width: 100%;
@@ -933,6 +785,12 @@ body.crt-on .title-screen::after {
   text-shadow: 2px 2px 0 #0a0706, -1px -1px 0 #0a0706, 0 0 8px rgba(0, 0, 0, 0.8);
   pointer-events: none;
 }
+/* the pause menu is a game screen: its key hints keep the 14px floor */
+.title-screen[data-kind='pause'] .ts-foot { font-size: 14px; }
+/* a finger needs 44px: list rows are at least that tall on touch screens and phones */
+@media (pointer: coarse), (max-width: 720px) {
+  .ts-item { min-height: 44px; display: flex; align-items: center; justify-content: center; line-height: 1.25; }
+}
 @keyframes ts-blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
 @keyframes ts-bob { 0%, 49% { transform: translateY(0); } 50%, 100% { transform: translateY(-2px); } }
 @keyframes ts-fade { from { opacity: 0; } to { opacity: 1; } }
@@ -943,20 +801,17 @@ body.crt-on .title-screen::after {
 }
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 
+/* the one panel: results, help, dialogs */
 .screen {
   position: relative;
   width: min(920px, 94vw);
   max-height: 92vh;
   overflow-y: auto;
-  background: linear-gradient(180deg, var(--panel-2) 0%, var(--panel) 45%, var(--panel-deep) 100%);
-  border: 2px solid var(--line);
-  border-radius: 6px;
-  box-shadow:
-    inset 0 1px 0 var(--bev-hi),
-    0 0 0 4px var(--edge-dark),
-    0 26px 70px rgba(0, 0, 0, 0.85);
+  background: var(--panel);
+  border: var(--frame-line);
+  box-shadow: var(--frame-shadow);
   padding: 30px 32px;
-  animation: panel-in 0.2s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+  animation: panel-in 0.2s steps(4);
 }
 @keyframes panel-in {
   from { opacity: 0; transform: translateY(10px) scale(0.985); }
@@ -967,7 +822,7 @@ body.crt-on .title-screen::after {
 
 #toast-wrap {
   position: fixed;
-  top: calc(var(--topbar-h) + 14px);
+  top: 14px;
   left: 50%;
   translate: -50% 0;
   z-index: 80;
@@ -978,20 +833,16 @@ body.crt-on .title-screen::after {
   pointer-events: none;
 }
 .toast {
-  background: linear-gradient(180deg, var(--panel-3), var(--panel-deep));
+  background: var(--panel);
   border: 2px solid var(--accent);
-  border-left-width: 6px;
   color: var(--ink);
-  font-size: 11.5px;
-  letter-spacing: 1px;
-  padding: 11px 15px;
-  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.7), 0 0 18px rgba(var(--accent-rgb), 0.2);
+  font-family: var(--font-read);
+  font-size: 14px;
+  padding: 10px 14px;
+  box-shadow: var(--frame-shadow);
   animation: toast-in 0.16s steps(3);
 }
-.toast.bad {
-  border-color: var(--danger);
-  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.7), 0 0 18px rgba(255, 96, 96, 0.24);
-}
+.toast.bad { border-color: var(--danger); }
 @keyframes toast-in {
   from { transform: translateY(-10px); opacity: 0; }
   to { transform: none; opacity: 1; }
@@ -1001,17 +852,16 @@ body.crt-on .title-screen::after {
 .result-box h2 {
   text-align: center;
   font-size: 20px;
-  letter-spacing: 3px;
   margin-bottom: 6px;
 }
-.result-box h2.win { color: var(--ok); text-shadow: 0 0 24px rgba(120, 220, 120, 0.55); }
-.result-box h2.lose { color: var(--danger); text-shadow: 0 0 24px rgba(255, 96, 96, 0.5); }
+.result-box h2.win { color: var(--ok); }
+.result-box h2.lose { color: var(--danger); }
 
 .result-name {
   text-align: center;
-  font-size: 11.5px;
+  font-family: var(--font-read);
+  font-size: 14px;
   color: var(--ink-dim);
-  letter-spacing: 2px;
   margin-bottom: 18px;
 }
 .result-stars {
@@ -1024,8 +874,7 @@ body.crt-on .title-screen::after {
 .result-stars span { display: inline-block; }
 /* each earned star pops in on its own beat, matched to the chime timing */
 .result-stars .on {
-  animation: star-pop 0.34s cubic-bezier(0.2, 1.4, 0.4, 1) backwards;
-  text-shadow: 0 0 20px rgba(var(--accent-rgb), 0.75);
+  animation: star-pop 0.34s steps(4) backwards;
 }
 .result-stars .on:nth-child(1) { animation-delay: 0.5s; }
 .result-stars .on:nth-child(2) { animation-delay: 0.8s; }
@@ -1042,7 +891,7 @@ body.crt-on .title-screen::after {
   max-width: 420px;
   margin: 0 auto 24px;
   font-family: var(--font-read);
-  font-size: 12px;
+  font-size: 14px;
   color: var(--ink-dim);
 }
 .result-stats .row {
@@ -1051,7 +900,7 @@ body.crt-on .title-screen::after {
   gap: 16px;
   padding: 7px 12px;
   background: rgba(0, 0, 0, 0.3);
-  border-left: 2px solid var(--line);
+  border-left: 4px solid var(--frame);
 }
 .result-stats .row b { color: var(--ink); font-weight: 500; }
 
@@ -1064,150 +913,59 @@ body.crt-on .title-screen::after {
 
 /* ------------------------------------------------------------ responsive */
 
-/* Narrow screens: the rail folds into a bottom strip that scrolls sideways,
-   because a 216px column would eat a third of a phone's width. */
-@media (max-width: 900px) {
-  #workspace { flex-direction: column-reverse; }
-  #toolbar {
-    flex: 0 0 auto;
-    width: auto;
-    flex-direction: row;
-    align-items: stretch;
-    overflow-x: auto !important;
-    overflow-y: hidden;
-    padding: 8px 10px;
-    border-right: 0;
-    border-top: 1px solid var(--edge-dark);
-  }
-  #palette { flex-direction: row; flex: 0 0 auto; overflow: visible; padding-right: 0; }
-  .gswatches { grid-template-columns: none; grid-template-rows: 1fr 1fr; grid-auto-flow: column; }
-  .swatch:has(.budget) { grid-column: auto; }
-  .swatch { width: 96px; }
-  /* element tiles: a strip of fixed squares, two rows high */
-  .gswatches.tiles { grid-template-columns: none; grid-template-rows: repeat(2, 44px); grid-auto-columns: 44px; grid-auto-flow: column; }
-  .swatch.tile { width: auto; }
-  .toolcol { margin-top: 0; min-width: 190px; }
-  .sb-note, .sb-cells, .sb-now { display: none; }
-}
 @media (max-width: 720px) {
-  #topbar { padding: 6px 10px; gap: 6px 10px; }
-  #topbar .title { font-size: 14.5px; }
-  .grp-label { display: none; }
-  button.px { padding: 7px 8px; font-size: 13px; }
+  button.px { padding: 8px 10px; }
   .screen { padding: 22px 18px; }
 }
 
 /* ==== PHONES ====
-   The top bar folds to one row (brand, MORE, ?, MENU) with everything else
-   in a drop-down; portrait puts the canvas full-width under it and gives
-   the rest of the screen to big, thumb-sized material buttons; landscape
-   puts a narrow material column beside the canvas. Desktop: the fold
-   wrapper is display: contents and MORE is hidden, so nothing changes. */
-.topbar-groups { display: contents; }
-.more-btn { display: none !important; }
+   Portrait: the canvas on top, the bar at the bottom, and the rail fills
+   everything between as a vertical tile grid - as many 56px columns as fit,
+   scrolling inside its own box with ERASE, BUCKET, WIND and the brush pinned
+   at its bottom. Landscape: the desktop layout with a narrower rail. Every
+   tap target is 44px or more (the landscape brush dots are 38px wide only so
+   five fit one row). */
 
-@media (max-width: 720px), (max-height: 520px) and (orientation: landscape) {
-  :root { --topbar-h: 44px; }
-  #topbar {
-    position: relative;
-    flex-wrap: nowrap;
-    align-items: center;
-    min-height: 44px;
-    padding: 5px 10px;
-    gap: 8px;
-  }
-  #topbar .mode-label { display: none; }
-  #topbar .title { font-size: 13px; }
-  .more-btn { display: inline-flex !important; }
-  .topbar-groups {
-    display: none;
-    position: absolute;
-    top: 100%;
-    left: 0;
-    right: 0;
-    z-index: 30;
-    flex-wrap: wrap;
-    gap: 12px 16px;
-    padding: 12px;
-    background: var(--panel);
-    border-bottom: 1px solid var(--line);
-    box-shadow: 0 14px 28px rgba(0, 0, 0, 0.5);
-  }
-  #topbar.more-open .topbar-groups { display: flex; }
-  #topbar.more-open .more-btn { border-color: var(--accent); color: var(--accent); }
-  .topbar-groups .grp-label { display: block; }
-  .topbar-groups button.px { min-height: 40px; }
-  /* the room badge: just the essentials */
-  .room-pill { top: 6px; gap: 6px; padding: 4px 6px 4px 8px; }
-  .room-pill .room-role,
-  .room-pill .room-people { display: none; }
-  .room-pill .px { padding: 4px 6px; font-size: 9px; }
-}
-
-@media (max-width: 720px) and (orientation: portrait) {
+@media (max-width: 900px) and (orientation: portrait) {
   /* the rail comes first in the DOM: reversed, the canvas sits on top */
   #workspace { flex-direction: column-reverse; justify-content: flex-end; }
-  #stagecol { order: 3; }
-  #workspace .react-bar { order: 2; flex-direction: row; justify-content: center; padding: 6px; border-left: 0; border-top: 1px solid var(--edge-dark); }
+  body.in-game #stagecol { order: 3; flex: 0 0 auto; }
+  #workspace .react-bar { order: 2; flex-direction: row; justify-content: center; padding: 6px; border-left: 0; border-top: var(--frame-line); }
   #workspace .react-btn.ping { margin: 0 0 0 6px; }
-  #toolbar { order: 1; }
-  #stagecol { flex: 0 0 auto; }
   /* exactly tall enough for a full-width 16:9 canvas plus its frame */
-  #stage { flex: 0 0 auto; height: calc((100vw - 16px) * 0.5625 + 40px); padding: 4px; }
+  body.in-game #stage { flex: 0 0 auto; height: calc((100vw - 20px) * 0.5625 + 20px); }
   #toolbar {
-    flex: 1 1 auto;
-    flex-direction: column;
-    overflow-x: hidden;
-    overflow-y: auto !important;
-    padding: 10px 12px 18px;
-    border-top: 1px solid var(--edge-dark);
+    order: 1;
+    flex: 1 1 0;
+    width: auto;
+    min-height: 0;
+    padding: 8px 10px 6px;
+    border-right: 0;
+    border-top: var(--frame-line);
   }
-  #palette { flex-direction: column; flex: 0 0 auto; overflow: visible; padding-right: 0; }
-  .gswatches { grid-template-columns: repeat(3, 1fr); grid-template-rows: none; grid-auto-flow: row; }
-  .swatch { width: auto; min-height: 44px; }
-  .gswatches.tiles { grid-template-columns: repeat(6, minmax(0, 1fr)); grid-template-rows: none; grid-auto-flow: row; grid-auto-columns: auto; }
-  .swatch.tile { min-height: 0; }
-  .toolcol { order: -1; min-width: 0; margin: 0 0 12px; }
-  .scenebtns .px,
-  .toolbtns .px { min-height: 40px; }
+  /* as many 56px tiles as fit a row: 5 at 390 (tracking tightened so Fireflies still fits) */
+  .gswatches { grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); justify-content: stretch; gap: 8px 2px; }
+  .swatch .nm { letter-spacing: -0.07em; }
+  .gswatches .swatch { justify-self: center; }
+  .scenebtns, .toolbtns { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  #toolbar button.px { min-height: 44px; }
+  .pinrow { grid-template-columns: repeat(3, minmax(64px, 1fr)); }
+  .bdot { width: 44px; }
+  .sb-seg { padding: 0 8px; }
+  /* the pause button opens the pause menu here, so MENU would only repeat it */
+  #statusbar .sb-btns button.px:not(.sq) { display: none; }
 }
+@media (max-width: 560px) { .sb-cells { display: none; } }
 
 @media (max-height: 520px) and (orientation: landscape) {
-  #workspace { flex-direction: row; }
-  #toolbar {
-    flex: 0 0 176px;
-    width: 176px;
-    flex-direction: column;
-    overflow-x: hidden;
-    overflow-y: auto !important;
-    padding: 8px;
-    border-top: 0;
-    border-right: 1px solid var(--edge-dark);
-  }
-  #palette { flex-direction: column; flex: 0 0 auto; overflow: visible; padding-right: 0; }
-  .gswatches { grid-template-columns: 1fr 1fr; grid-template-rows: none; grid-auto-flow: row; }
-  .swatch { width: auto; min-height: 38px; }
-  .gswatches.tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: none; grid-auto-flow: row; grid-auto-columns: auto; }
-  .swatch.tile { min-height: 0; }
-  /* the 176px rail fits one scene button per row, not two (ALKALI BATH,
-     MUSIC STAIRS and PORTAL LOOP are wider than half of it) */
-  #toolbar .scenebtns { grid-template-columns: 1fr; }
-  .toolcol { order: -1; min-width: 0; margin: 0 0 10px; }
-  #statusbar { display: none; }
-  #stage { padding: 4px; }
-  /* a narrow column: label over a full-width slider, nothing wider than it */
-  .toolcol .brushrow:not(.hint) { flex-wrap: wrap; }
-  .toolcol .brushrow input[type='range'] { flex: 1 1 100%; order: 3; min-width: 0; }
-  #palette, .matgroup, .gswatches, .swatch { min-width: 0; }
-  /* two columns in 176px: tighter labels so POWDER and TURBINE still fit */
-  .swatch { gap: 5px; padding-inline: 5px; }
-  .swatch .chip { width: 12px; height: 12px; flex: none; }
-  .swatch .nm { font-size: 8.5px; letter-spacing: 0.3px; overflow: hidden; text-overflow: ellipsis; }
-}
-
-/* touch screens have no wheel, no keyboard: drop hints that name them */
-@media (pointer: coarse), (max-width: 720px), (max-height: 520px) and (orientation: landscape) {
-  .brushrow.hint { display: none; }
+  :root { --rail-w: 212px; }
+  #toolbar { padding: 6px 8px 8px; }
+  .toolcol .glabel { display: none; }
+  .bdot { width: 38px; }
+  #statusbar .sb-btns button.px:not(.sq) { display: none; }
+  #workspace .react-btn { width: 44px; height: 44px; font-size: 20px; }
+  #stage { padding: 4px 8px 8px 4px; }
+  .sb-seg { padding: 0 8px; }
 }
 
 /* Motion is decoration here; none of it carries information on its own. */
@@ -1218,6 +976,10 @@ body.crt-on .title-screen::after {
     transition-duration: 0.001ms !important;
   }
 }
+/* ...except the PAUSED badge's blink: it says the game is stopped */
+@media (prefers-reduced-motion: reduce) {
+  #paused-badge { animation: ts-blink 1s steps(1) infinite !important; }
+}
 
 /* --- 3D voxel view: in-view camera / render controls --- */
 .v3d-ui {
@@ -1226,27 +988,25 @@ body.crt-on .title-screen::after {
   bottom: 14px;
   translate: -50% 0;
   /* the pill must never grow past the screen it floats over, or the leftmost
-     button slides out of the bezel when the status hint gets longer */
+     button slides out of the frame when the status hint gets longer */
   max-width: calc(100% - 24px);
   z-index: 5;
   display: flex;
   align-items: center;
   gap: 6px;
   padding: 6px 10px;
-  border: 2px solid var(--line);
-  border-radius: 4px;
-  background: rgba(8, 8, 18, 0.82);
-  box-shadow: 0 0 0 2px var(--edge-dark), 0 6px 22px rgba(0, 0, 0, 0.55);
+  border: var(--frame-line);
+  background: rgba(8, 6, 5, 0.86);
+  box-shadow: var(--frame-shadow);
 }
-.v3d-ui .px { font-size: 13px; padding: 4px 8px; }
+.v3d-ui .px { padding: 4px 8px; }
 .v3d-hint {
   margin-left: 4px;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: 11.5px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-family: var(--font-read);
+  font-size: 14px;
   color: var(--ink-faint);
   white-space: nowrap;
 }
@@ -1263,7 +1023,7 @@ body.crt-on .title-screen::after {
 }
 .share-blurb {
   font-family: var(--font-read);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.5;
   color: var(--ink-dim);
   text-align: center;
@@ -1272,50 +1032,28 @@ body.crt-on .title-screen::after {
   width: 100%;
   padding: 10px 12px;
   font-family: var(--font-read);
-  font-size: 12px;
+  font-size: 14px;
   color: var(--ink);
   background: var(--bg);
-  border: 2px solid var(--line);
-  border-radius: 3px;
-  text-overflow: ellipsis;
+  border: var(--frame-line);
 }
 .share-url:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 .share-meta {
   font-family: var(--font-read);
-  font-size: 11px;
+  font-size: 14px;
   color: var(--ink-faint);
   text-align: center;
   line-height: 1.5;
 }
 .share-meta.warn { color: var(--accent); }
 
-/* --- brush tool row: BUCKET / WIND share one line --- */
-.toolbtns {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.toolbtns .px {
-  flex: 1;
-  white-space: nowrap;
-}
-/* SURPRISE ME: spans the scene grid; a slow shimmer says "press me" */
+/* SURPRISE ME: spans the scene grid, accent-coloured */
 .scenebtns .px.surprise {
   grid-column: 1 / -1;
 }
 .px.surprise {
-  background-image: linear-gradient(110deg, transparent 30%, rgba(var(--accent-rgb), 0.22) 50%, transparent 70%);
-  background-size: 250% 100%;
-  animation: surprise-shimmer 3.2s ease-in-out infinite;
-  border-color: rgba(var(--accent-rgb), 0.55);
+  border-color: var(--accent);
   color: var(--accent);
-}
-@keyframes surprise-shimmer {
-  0% { background-position: 120% 0; }
-  60%, 100% { background-position: -120% 0; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .px.surprise { animation: none; }
 }
 /* playing together: the room badge over the top of the stage */
 .room-pill {
@@ -1328,38 +1066,35 @@ body.crt-on .title-screen::after {
   align-items: center;
   gap: 10px;
   padding: 6px 8px 6px 12px;
-  font-size: 10.5px;
-  letter-spacing: 1.2px;
+  font-family: var(--font-read);
+  font-size: 14px;
+  white-space: nowrap;
   color: var(--ink);
-  background: color-mix(in srgb, var(--panel) 88%, transparent);
-  border: 1px solid var(--line);
-  border-radius: var(--r-md);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  background: var(--panel);
+  border: var(--frame-line);
+  box-shadow: var(--frame-shadow);
 }
 .room-pill[hidden] { display: none; }
-.room-pill .px { padding: 4px 8px; font-size: 9.5px; }
+.room-pill .px { padding: 6px 10px; box-shadow: none; }
 .room-code { color: var(--accent); font-weight: 700; }
 .room-role { color: var(--ink-faint); }
 .room-people { color: var(--ink-dim); min-width: 8ch; }
 .room-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
+  width: 8px;
+  height: 8px;
   background: var(--ok);
-  box-shadow: 0 0 8px var(--ok);
 }
-.room-pill.alone .room-dot { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+.room-pill.alone .room-dot { background: var(--accent); }
 
 .room-dots { display: flex; gap: 3px; }
 .room-avatar {
   display: grid;
   place-items: center;
-  width: 20px;
-  height: 20px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
-  font-size: 8.5px;
+  font-size: 14px;
   font-weight: 700;
-  letter-spacing: 0;
   color: #111;
   cursor: default;
 }
@@ -1371,16 +1106,22 @@ body.crt-on .title-screen::after {
   width: 15ch;
   padding: 3px 6px;
   font: inherit;
-  font-size: 10px;
-  letter-spacing: 1px;
+  font-size: 14px;
   color: var(--ink);
   background: var(--panel-3);
-  border: 1px solid var(--accent);
-  border-radius: 3px;
+  border: 2px solid var(--accent);
   outline: none;
 }
-.room-pill.waiting .room-dot { background: var(--danger); box-shadow: 0 0 8px var(--danger); animation: blink 1s steps(2) infinite; }
+.room-pill.waiting .room-dot { background: var(--danger); animation: blink 1s steps(2) infinite; }
 .room-pill.waiting .room-role { color: var(--danger); }
+/* a phone: the code and two buttons (the avatars go), wrapping only on a narrower screen than 390 */
+@media (max-width: 720px), (max-height: 520px) and (orientation: landscape) {
+  .room-pill { top: 6px; gap: 6px; padding: 4px 6px 4px 8px; flex-wrap: wrap; justify-content: center; width: max-content; max-width: calc(100% - 16px); white-space: normal; }
+  .room-pill .room-role,
+  .room-pill .room-people,
+  .room-pill .room-dots { display: none; }
+  .room-pill .px { padding: 6px 8px; min-height: 44px; }
+}
 @keyframes blink { 50% { opacity: 0.3; } }
 
 /* other players' cursors (ui/cursors.ts): arrow, tool mark, name tag */
@@ -1404,13 +1145,10 @@ body.crt-on .title-screen::after {
   left: 14px;
   top: 20px;
   padding: 2px 6px;
-  border-radius: 3px;
-  font-size: 9px;
+  font-size: 14px;
   font-weight: 700;
-  letter-spacing: 1px;
   white-space: nowrap;
   color: #111;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
 }
 /* the tool mark sits centred on the tip: faint while hovering, solid painting */
 .peer-tool {
@@ -1427,7 +1165,6 @@ body.crt-on .title-screen::after {
 }
 .peer-tool.tool-b.active {
   background: color-mix(in srgb, currentColor 22%, transparent);
-  box-shadow: 0 0 10px currentColor;
 }
 .peer-tool.tool-e { border-style: dashed; }
 .peer-tool.tool-e.active { background: rgba(255, 138, 138, 0.12); }
@@ -1464,29 +1201,27 @@ body.crt-on .title-screen::after {
 .pf-dialog-box {
   width: min(420px, 92vw);
   padding: 22px 24px 18px;
-  border: 2px solid var(--accent);
-  border-radius: var(--r-md);
+  border: var(--frame-line);
+  border-color: var(--accent);
   background: var(--panel);
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+  box-shadow: var(--frame-shadow);
 }
-.pf-dialog-box h2 { margin: 0 0 12px; font-size: 15px; letter-spacing: 2px; color: var(--accent); }
-.pf-dialog-box p { margin: 0 0 14px; font-size: 12px; line-height: 1.5; color: var(--ink-dim); }
-.pf-dialog-box .pf-dialog-hint { margin: 10px 0 0; font-size: 10.5px; color: var(--ink-faint); }
-.pf-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.pf-dialog-box h2 { margin: 0 0 12px; font-size: 16px; color: var(--accent); }
+.pf-dialog-box p { margin: 0 0 14px; font-family: var(--font-read); font-size: 14px; line-height: 1.5; color: var(--ink-dim); }
+.pf-dialog-box .pf-dialog-hint { margin: 10px 0 0; font-size: 14px; color: var(--ink-faint); }
+.pf-dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
 .pf-name-row { display: flex; align-items: center; gap: 12px; }
-.room-avatar.big { width: 38px; height: 38px; font-size: 13px; flex: none; }
+.room-avatar.big { width: 38px; height: 38px; font-size: 14px; flex: none; }
 .pf-name-input {
   flex: 1;
   min-width: 0;
   padding: 9px 10px;
   font: inherit;
   font-size: 14px;
-  letter-spacing: 2px;
   text-transform: uppercase;
   color: var(--ink);
   background: var(--panel-3);
-  border: 1px solid var(--line);
-  border-radius: var(--r-sm);
+  border: var(--frame-line);
   outline: none;
 }
 .pf-name-input:focus { border-color: var(--accent); }
@@ -1511,7 +1246,7 @@ body.crt-on .title-screen::after {
   gap: 6px;
   padding: 10px 8px;
   background: var(--panel);
-  border-left: 1px solid var(--edge-dark);
+  border-left: var(--frame-line);
 }
 .react-btn {
   display: grid;
@@ -1521,15 +1256,13 @@ body.crt-on .title-screen::after {
   padding: 0;
   font-size: 22px;
   line-height: 1;
-  background: var(--row-bg);
-  border: 1px solid var(--line-soft);
-  border-radius: 12px;
+  background: var(--panel-deep);
+  border: 2px solid var(--frame);
   cursor: pointer;
-  transition: transform 0.1s var(--ease-out), border-color 0.1s, background 0.1s;
 }
-.react-btn:hover { border-color: var(--accent); transform: scale(1.1); }
-.react-btn:active { transform: scale(0.92); }
-.react-btn.ping { margin-top: 6px; border-color: rgba(var(--accent-rgb), 0.5); }
+.react-btn:hover { border-color: var(--accent); }
+.react-btn:active { transform: translate(2px, 2px); }
+.react-btn.ping { margin-top: 6px; border-color: var(--accent); }
 .react-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 .emote { position: absolute; z-index: 6; pointer-events: none; }
@@ -1543,7 +1276,6 @@ body.crt-on .title-screen::after {
   border: 3px solid var(--who);
   border-radius: 50%;
   opacity: 0;
-  box-shadow: 0 0 12px var(--who);
   animation: ping-pulse 1.3s ease-out 2 both;
 }
 .ping-dot {
@@ -1554,21 +1286,17 @@ body.crt-on .title-screen::after {
   height: 12px;
   border-radius: 50%;
   background: var(--who);
-  box-shadow: 0 0 10px var(--who);
 }
 .ping-label {
   position: absolute;
   left: 22px;
   top: -40px;
   padding: 4px 8px;
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 700;
-  letter-spacing: 1px;
   white-space: nowrap;
   color: #111;
   background: var(--who);
-  border-radius: 3px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
 }
 @keyframes ping-pulse {
   0% { transform: scale(0.2); opacity: 1; }
@@ -1589,8 +1317,7 @@ body.crt-on .title-screen::after {
   line-height: 1;
   background: var(--panel);
   border: 2px solid currentColor;
-  border-radius: 14px 14px 14px 3px;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
+  box-shadow: 3px 3px 0 var(--edge-dark);
   transform-origin: 0% 100%;
   animation: bubble-life 2.6s cubic-bezier(0.2, 0.8, 0.3, 1) forwards;
 }
@@ -1604,9 +1331,9 @@ body.crt-on .title-screen::after {
 /* ...and on their avatar in the room badge */
 .room-avatar { transition: background 0.2s; }
 .room-avatar.reacting {
-  font-size: 13px;
+  font-size: 14px;
   background: var(--panel-3) !important;
-  box-shadow: 0 0 0 2px var(--who), 0 0 10px var(--who);
+  box-shadow: 0 0 0 2px var(--who);
   animation: avatar-pop 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.4);
 }
 .room-avatar.reacting.held { animation: none; }
@@ -1621,31 +1348,7 @@ body.crt-on .title-screen::after {
   .ping-ring { animation: none; opacity: 1; }
 }
 @media (max-width: 720px), (max-height: 520px) and (orientation: landscape) {
-  #workspace .react-btn { width: 36px; height: 36px; font-size: 18px; border-radius: 10px; }
-}
-
-/* playground demo scenes: two columns of small buttons */
-.scenebtns {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-}
-.scenebtns .px {
-  font-size: 9.5px;
-  /* tighter than the default 1px: MUSIC STAIRS fits its 97px button by less
-     than a pixel at 1280x720, and an ellipsis on a sub-pixel is a bug */
-  letter-spacing: 0.5px;
-  padding-inline: 4px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-/* the text sits in a centred flex child, so the button's own overflow cut an
-   over-wide label on BOTH sides; clip (with an ellipsis) at the label instead */
-.scenebtns .px .lbl {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  #workspace .react-btn { width: 44px; height: 44px; font-size: 20px; }
 }
 
 /* CHEM LAB periodic table (ui/periodic.ts): 18 columns, the f-block two
@@ -1665,13 +1368,12 @@ body.crt-on .title-screen::after {
   overflow: auto;
   padding: 16px 18px 18px;
   border: 2px solid var(--accent);
-  border-radius: var(--r-md);
   background: var(--panel);
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+  box-shadow: var(--frame-shadow);
 }
 .pt-head { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
-.pt-head h2 { margin: 0; font-size: 15px; letter-spacing: 2px; color: var(--accent); }
-.pt-hint { flex: 1; font: 11px var(--font-read); color: var(--ink-faint); }
+.pt-head h2 { margin: 0; font-size: 16px; color: var(--accent); }
+.pt-hint { flex: 1; font: 14px var(--font-read); color: var(--ink-faint); }
 .pt-grid {
   display: grid;
   grid-template-columns: repeat(18, minmax(0, 1fr));
@@ -1687,17 +1389,15 @@ body.crt-on .title-screen::after {
   display: grid;
   place-items: center;
   border: 1px solid color-mix(in srgb, var(--tint) 70%, transparent);
-  border-radius: 4px;
   background: color-mix(in srgb, var(--tint) 30%, var(--panel-deep));
   color: var(--ink);
   cursor: pointer;
-  transition: transform 0.08s var(--ease-out), box-shadow 0.08s;
 }
 .pt-cell:hover:not(.off), .pt-cell:focus-visible { transform: scale(1.12); box-shadow: 0 0 0 2px var(--accent); z-index: 1; outline: none; }
 .pt-cell.sel { box-shadow: 0 0 0 2px var(--accent-hi); }
 .pt-cell.off { opacity: 0.32; cursor: default; }
-.pt-z { position: absolute; top: 2px; left: 3px; font: 8px var(--font-read); color: var(--ink-dim); }
-.pt-sym { font: 700 clamp(10px, 1.4vw, 15px) var(--font-read); }
+.pt-z { position: absolute; top: 2px; left: 3px; font: 14px var(--font-read); color: var(--ink-dim); }
+.pt-sym { font: 700 clamp(14px, 1.4vw, 15px) var(--font-read); }
 .pt-cell.alkali { --tint: #e8734a; }
 .pt-cell.alkaline { --tint: #e8b44a; }
 .pt-cell.transition { --tint: #c9a6d8; }
@@ -1711,7 +1411,7 @@ body.crt-on .title-screen::after {
 .pt-card {
   align-self: start;
   padding: 6px 10px;
-  font: 11px/1.45 var(--font-read);
+  font: 14px/1.45 var(--font-read);
   color: var(--ink-dim);
 }
 .pt-card-title { display: flex; align-items: baseline; gap: 10px; color: var(--ink); font-weight: 700; }
@@ -1720,7 +1420,6 @@ body.crt-on .title-screen::after {
 .pt-card-off { color: var(--ink-faint); }
 .pt-card-rx { margin: 0; padding-left: 16px; color: var(--ink); }
 @media (prefers-reduced-motion: reduce) {
-  .pt-cell { transition: none; }
   .pt-cell:hover:not(.off), .pt-cell:focus-visible { transform: none; }
 }
 
@@ -1742,7 +1441,7 @@ body.crt-on .title-screen::after {
   display: flex;
   flex-direction: column;
   padding: 20px 24px;
-  border: 2px solid var(--accent-2);
+  border-color: var(--accent-2);
 }
 .pf-help-head {
   display: flex;
@@ -1759,17 +1458,20 @@ body.crt-on .title-screen::after {
   padding-right: 6px;
 }
 .pf-help-heading {
-  font-size: 13px;
+  font-family: var(--font-display);
+  font-size: 14px;
   color: var(--accent-2);
   border-bottom: 2px solid var(--line);
   padding-bottom: 6px;
   margin-bottom: 8px;
 }
 .pf-key {
-  flex: 0 0 104px;
+  flex: 0 0 132px;
   color: var(--ink);
+  font-family: var(--font-read);
+  font-size: 14px;
   background: var(--panel-2);
-  border: 1px solid var(--line);
+  border: 2px solid var(--frame);
   padding: 3px 5px;
   margin-right: 8px;
   white-space: nowrap;
@@ -1797,7 +1499,7 @@ body.crt-on .title-screen::after {
 .pf-el-txt { font-family: ui-monospace, 'Courier New', monospace; font-size: 14.5px; color: var(--ink-dim); }
 .pf-el-txt b { color: var(--ink); }
 .pf-chal { margin-bottom: 10px; }
-.pf-chal-name { font-size: 11.5px; color: var(--ink); margin-bottom: 3px; }
+.pf-chal-name { font-size: 14px; font-weight: 700; color: var(--ink); margin-bottom: 3px; }
 .pf-chal-desc { font-family: ui-monospace, 'Courier New', monospace; font-size: 14.5px; color: var(--ink-dim); line-height: 1.45; }
 .pf-chal-hint { font-family: ui-monospace, 'Courier New', monospace; font-size: 14.5px; color: var(--accent); opacity: 0.85; margin-top: 2px; }
 .pf-help-blurb {
@@ -1815,6 +1517,7 @@ body.crt-on .title-screen::after {
   padding: 7px 10px;
   background: var(--panel-2);
   border: 2px solid var(--accent-2);
+  box-shadow: 3px 3px 0 var(--edge-dark);
   color: var(--ink-dim);
   font-family: ui-monospace, 'Courier New', monospace;
   font-size: 14.5px;
@@ -1843,143 +1546,26 @@ body.crt-on .title-screen::after {
   );
 }
 
-/* ==== LIGHT THEME ====
-   Warm paper and ink. The simulation screen stays dark on purpose: fire,
-   glow and the gas fluid are additive light, and additive light on a white
-   field is invisible - so in light mode the canvas reads as a monitor on a
-   bright desk. data-theme is set by ui/theme.ts (AUTO follows the OS). */
-:root[data-theme='light'] {
-  --bg: #f1ebe1;
-  --bg-2: #e9e1d4;
-  --panel: #f8f3eb;
-  --panel-2: #f0e8dc;
-  --panel-3: #e7ddce;
-  --panel-deep: #ebe2d4;
-  --line: #c8b9a4;
-  --line-soft: #ddd0be;
-  --edge-dark: #bba892;
-
-  --ink: #2a211a;
-  --ink-dim: #5d5146;
-  --ink-faint: #85786a;
-  --ink-ghost: #a99c8c;
-
-  /* darker molten amber: the dark theme's #f59e3b fails contrast on paper */
-  --accent: #b8620f;
-  --accent-hi: #dc8226;
-  --accent-lo: #7a3f0b;
-  --accent-rgb: 184, 98, 15;
-  --accent-2: #3b6a80;
-  --accent-2-lo: #c9dbe3;
-  --danger: #c23a2c;
-  --danger-ink: #a8301f;
-  --ok: #3d8a33;
-
-  --bev-hi: rgba(255, 255, 255, 0.7);
-  --bev-lo: rgba(60, 40, 20, 0.18);
-
-  --btn-hover: #fffaf2;
-  --btn-hover-line: #b3a28c;
-  --led-off: #d8ccbb;
-  --led-rim: #b9a993;
-  --stage-bg: radial-gradient(ellipse 80% 70% at 50% 45%, #efe7da 0%, #e4dacb 62%, #d9cdbb 100%);
-  --frame: linear-gradient(160deg, #5a4f46, #3a322c 60%, #4a413a);
-  --track: linear-gradient(180deg, #d6cab8, #ece3d6);
-  --overlay-bg: radial-gradient(ellipse at center, rgba(241, 235, 225, 0.82), rgba(214, 203, 188, 0.94));
-  --row-bg: rgba(255, 255, 255, 0.5);
-  color-scheme: light;
-}
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme]) {
-    --bg: #f1ebe1;
-    --bg-2: #e9e1d4;
-    --panel: #f8f3eb;
-    --panel-2: #f0e8dc;
-    --panel-3: #e7ddce;
-    --panel-deep: #ebe2d4;
-    --line: #c8b9a4;
-    --line-soft: #ddd0be;
-    --edge-dark: #bba892;
-
-    --ink: #2a211a;
-    --ink-dim: #5d5146;
-    --ink-faint: #85786a;
-    --ink-ghost: #a99c8c;
-
-  /* darker molten amber: the dark theme's #f59e3b fails contrast on paper */
-    --accent: #b8620f;
-    --accent-hi: #dc8226;
-    --accent-lo: #7a3f0b;
-    --accent-rgb: 184, 98, 15;
-    --accent-2: #3b6a80;
-    --accent-2-lo: #c9dbe3;
-    --danger: #c23a2c;
-    --danger-ink: #a8301f;
-    --ok: #3d8a33;
-
-    --bev-hi: rgba(255, 255, 255, 0.7);
-    --bev-lo: rgba(60, 40, 20, 0.18);
-
-    --btn-hover: #fffaf2;
-    --btn-hover-line: #b3a28c;
-    --led-off: #d8ccbb;
-    --led-rim: #b9a993;
-    --stage-bg: radial-gradient(ellipse 80% 70% at 50% 45%, #efe7da 0%, #e4dacb 62%, #d9cdbb 100%);
-    --frame: linear-gradient(160deg, #5a4f46, #3a322c 60%, #4a413a);
-    --track: linear-gradient(180deg, #d6cab8, #ece3d6);
-    --overlay-bg: radial-gradient(ellipse at center, rgba(241, 235, 225, 0.82), rgba(214, 203, 188, 0.94));
-    --row-bg: rgba(255, 255, 255, 0.5);
-    color-scheme: light;
-  }
-}
-
-/* shadows and title glow tuned for paper rather than soot */
-:root[data-theme='light'] #topbar,
-:root[data-theme='light'] #statusbar { box-shadow: inset 0 -1px 0 var(--bev-hi), 0 4px 14px rgba(60, 40, 20, 0.12); }
-:root[data-theme='light'] #topbar .title { text-shadow: 2px 2px 0 rgba(122, 63, 11, 0.25); }
-:root[data-theme='light'] .swatch { background: rgba(255, 255, 255, 0.45); }
-:root[data-theme='light'] #stage::before { opacity: 0.5; }
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme]) #topbar,
-  :root:not([data-theme]) #statusbar { box-shadow: inset 0 -1px 0 var(--bev-hi), 0 4px 14px rgba(60, 40, 20, 0.12); }
-  :root:not([data-theme]) #topbar .title { text-shadow: 2px 2px 0 rgba(122, 63, 11, 0.25); }
-  :root:not([data-theme]) .swatch { background: rgba(255, 255, 255, 0.45); }
-  :root:not([data-theme]) #stage::before { opacity: 0.5; }
-}
-
 /* ==== IMMERSIVE MODE ====
    ui/immersive.ts: the canvas fills the window on black and the panels slide
    off-screen; each comes back as dark glass while the pointer is at its edge
-   (body.reveal-*). body carries .force-dark, so the glass is dark in either
-   theme; the :root prefix outranks the light theme's per-element rules. */
+   (body.reveal-*). */
 body.immersive #stage { padding: 0; background: #000; }
-body.immersive #stage::before { display: none; }
-body.immersive #bezel { padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
-body.immersive #screen-wrap { border-radius: 0; box-shadow: none; }
-:root body.immersive #topbar,
-:root body.immersive #toolbar,
-:root body.immersive #statusbar {
+body.immersive #viewport { border: 0; box-shadow: none; background: none; }
+body.immersive #toolbar,
+body.immersive #statusbar {
   position: fixed;
   z-index: 40;
   opacity: 0;
   pointer-events: none;
-  background: rgba(17, 14, 12, 0.84);
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.55);
-  transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 160ms ease-out;
+  background: rgba(17, 14, 12, 0.92);
+  transition: transform 220ms steps(5), opacity 160ms steps(3);
 }
-body.immersive #topbar { top: 0; left: 0; right: 0; transform: translateY(-100%); }
 body.immersive #toolbar { top: 0; bottom: 0; left: 0; transform: translateX(-100%); }
-body.immersive #statusbar { left: 0; right: 0; bottom: 0; height: var(--status-h); transform: translateY(100%); }
-body.immersive.reveal-top #topbar,
+body.immersive #statusbar { left: 0; right: 0; bottom: 0; height: var(--bar-h); transform: translateY(100%); }
 body.immersive.reveal-left #toolbar,
 body.immersive.reveal-bottom #statusbar { transform: none; opacity: 1; pointer-events: auto; }
-/* the light theme's paper swatches and shadows, put back to soot on glass */
-:root body.immersive .swatch { background: rgba(255, 255, 255, 0.04); }
-:root body.immersive #topbar .title { text-shadow: none; }
 @media (prefers-reduced-motion: reduce) {
-  body.immersive #topbar,
   body.immersive #toolbar,
   body.immersive #statusbar { transition: opacity 120ms linear; }
 }

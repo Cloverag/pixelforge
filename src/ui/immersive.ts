@@ -4,7 +4,7 @@
  *
  * The panels are not removed, only slid off-screen, and come back as dark
  * glass when the pointer reaches their edge - the left rail for tools, the
- * top for the controls, the bottom for the status strip. The page also asks
+ * bottom for the bar. The page also asks
  * the browser for real fullscreen; if it is refused (or the player leaves it
  * with the browser's own Esc), immersive mode follows rather than leaving a
  * half state behind.
@@ -28,10 +28,7 @@ export function setImmersive(want: boolean): boolean {
   on = want;
   const body = document.body;
   body.classList.toggle('immersive', on);
-  // the dark token set, whatever the theme: glass panels, toasts and
-  // dialogs over a dark canvas (toasts live outside #app, so on body)
-  body.classList.toggle('force-dark', on);
-  if (!on) body.classList.remove('reveal-top', 'reveal-left', 'reveal-bottom');
+  if (!on) body.classList.remove('reveal-left', 'reveal-bottom');
   const root = document.documentElement;
   if (on && !document.fullscreenElement && root.requestFullscreen) {
     root.requestFullscreen().catch(() => {
@@ -65,10 +62,8 @@ export function initImmersive(onChange: (on: boolean) => void): void {
       body.classList.toggle(cls, open ? within : near);
     };
     const rail = document.getElementById('toolbar')?.getBoundingClientRect();
-    const top = document.getElementById('topbar')?.getBoundingClientRect();
     const status = document.getElementById('statusbar')?.getBoundingClientRect();
     reveal('reveal-left', e.clientX <= EDGE, !!rail && e.clientX <= rail.width + SLACK);
-    reveal('reveal-top', e.clientY <= EDGE, !!top && e.clientY <= top.height + SLACK);
     reveal(
       'reveal-bottom',
       e.clientY >= window.innerHeight - EDGE,

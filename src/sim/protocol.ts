@@ -58,6 +58,10 @@ export type Req =
   | { t: 'input'; inp: NetInput }
   | { t: 'watch3d'; on: boolean }
   | { t: 'watchFluid'; on: boolean }
+  /** presentation only, never a NetInput: the colour the empty world is drawn in */
+  | { t: 'bg'; id: string }
+  /** draw the current frame again without stepping (a paused world after a presentation change) */
+  | { t: 'redraw'; buf: ArrayBuffer }
   /**
    * Step the world. In multiplayer `inputs` holds one batch per frame: each
    * is applied before its step, so a guest that fell behind catches up

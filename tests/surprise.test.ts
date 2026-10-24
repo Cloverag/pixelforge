@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { World } from '../src/sim/world';
-import { PG_BG } from '../src/sim/particles';
+import { DEFAULT_BACKGROUND, packAbgr } from '../src/sim/background';
 import { clearOfHoles, planSurprise } from '../src/sim/surprise';
 import { SIM_H, SIM_W } from '../src/sim/protocol';
 import { Mat } from '../src/sim/materials';
+
+/** the game's default empty colour (NIGHT): these tests draw on it */
+const PG_BG = packAbgr(DEFAULT_BACKGROUND);
 
 describe('SURPRISE ME', { timeout: 120_000 }, () => {
   it('a seed always makes the same scene, and different seeds differ', () => {

@@ -223,27 +223,39 @@ lava, plants, glass and wall.
 | `I` | Immersive: the canvas fills the window; push the pointer to an edge for the panels |
 | `B` | Grid view: chunky blocks, cycles 4 / 8 / 16 px then off |
 | `S` / `C` | Soft glow / CRT filter |
-| `T` | Theme: auto / light / dark |
-| `M` | Mute SFX |
-| `ESC` | Close the periodic table, leave immersive mode, then back to menu (asks first in a room) |
+| `M` | Mute everything (a toast says SOUND ON / OFF) |
+| `D` | FPS readout in the canvas corner (off by default) |
+| `ESC` | Close the periodic table, leave immersive mode, then the **pause menu** (alone it freezes the game; in a room it does not). QUIT TO TITLE asks first in a room |
 
-On a phone the top bar folds into one row with a **MORE** menu, the canvas
-goes full width and the materials become large buttons below it (beside it
-in landscape).
+On a phone (portrait) the canvas goes full width, the rail becomes a one-row
+strip of tiles that scrolls sideways under it, and the bar sits below; the pause
+button opens the pause menu. In landscape the rail stays beside the canvas, two
+tiles to a row. Every tap target is 44px or more. The title screen's demo fills
+the whole screen behind the list.
 
 ## Interface
 
 The UI is one CSS file and a handful of DOM builders - no component framework,
 no icon set, no images.
 
-- The canvas sits inside an **arcade-cabinet bezel** with a power lamp that turns
-  amber while paused. Explosions shake the cabinet, flash and boom.
-- **Light, dark and auto themes**, applied before first paint. The simulation
-  screen stays dark in both: fire and glow are additive light, which vanishes
-  on white.
-- Palette swatches paint themselves from each material's **real colour ramp**
-  and are grouped by kind (powder / life / liquid / gas / solid), so the
-  toolbar doubles as a legend. Solids are textured: bricks, wood grain,
+- **One look, always dark.** The game uses the title screen's palette: every
+  panel, button and the canvas wears the same pixel frame (a 2px border and a
+  hard 4px shadow), with no gradients, bevels or glows. Toggles show state by
+  fill (accent = on). Fire and glow are additive light, which vanishes on a
+  light field, so there is no light theme.
+- Explosions shake the canvas, flash and boom.
+- **BACKGROUND** (VIEW, and OPTIONS on the title screen): the colour of the
+  empty world, from eight presets (NIGHT is the original `#0b0b14`). It is
+  presentation only - never in a snapshot, a hash or a room, so every player
+  in a room sees their own - and is remembered in the browser. The worker draws
+  the frame, so it is told through a presentation message; a paused world is
+  redrawn at once.
+- The rail is **tiles**: a 56px square painted from each material's **real
+  colour ramp**, its name under it, three to a row, grouped by kind (powder /
+  life / liquid / gas / solid), so the rail doubles as a legend. The picked tile
+  has an accent outline and a marker. The brush is five dots of growing size
+  (the wheel and `[` `]` move the lit one); BUCKET and WIND are tiles beside
+  ERASE. Solids are textured: bricks, wood grain,
   cobbles, glass glints, ice fractures.
 - **SOFT** blends the simulation with a GPU fluid that carries smoke and glow
   through the wind field; water gets depth, caustics and surface glints.
@@ -289,12 +301,12 @@ solids stay put.
 ## Architecture tour
 
 ```
-index.html                 app shell, theme bootstrap, link-preview tags
+index.html                 app shell, link-preview tags
 public/og.jpg              link-preview card
 scripts/fetch-elements.mjs regenerates src/data/elements.json from PubChem (by hand)
 src/
   main.ts                  fixed-step loop, worker + room wiring, menu; asks the current mode
-  styles.css               all styling (themes, CRT, phone layout, dialogs)
+  styles.css               all styling (the one dark palette, the pixel frame, CRT, phone layout, dialogs)
   data/elements.json       the periodic table: 118 elements, trimmed PubChem data
   modes/
     types.ts               ModeController: what a game screen provides to main.ts
@@ -345,7 +357,7 @@ src/
     emotes.ts              reaction bar and pings
     dialog.ts              in-game confirm and name dialogs
     periodic.ts            the chem lab's periodic table (lazy)
-    theme.ts, help.ts, tooltips.ts, cursor.ts, share-panel.ts, widgets.ts
+    help.ts, tooltips.ts, cursor.ts, share-panel.ts, widgets.ts
 tests/                     vitest: world rules, TNT debris, rendering, playground,
                            scenes, surprise, lockstep, network simulation, RNG,
                            presence, snapshots, chem reactions + experiments,
