@@ -186,6 +186,10 @@ export class MathMode implements ModeController {
     }
   }
 
+  onPause(p: boolean): void {
+    this.view.setPaused(p);
+  }
+
   leave(): void {
     this.view.unmount();
     this.panel?.remove();

@@ -37,6 +37,8 @@ export class GardenView {
   private filter: AsciiFilter | null = null;
   private raf = 0;
   private t0 = performance.now();
+  /** when the game was paused (0: running): the clock stops and nothing is redrawn */
+  private pausedAt = 0;
   /** when the current scene began (the 3D lilies build from it) */
   private sceneT0 = 0;
   private mask: HTMLCanvasElement | null = null;
@@ -46,7 +48,16 @@ export class GardenView {
   constructor(private bodyClass: string) {}
 
   now(): number {
-    return (performance.now() - this.t0) / 1000;
+    return ((this.pausedAt || performance.now()) - this.t0) / 1000;
+  }
+
+  setPaused(on: boolean): void {
+    if (on && !this.pausedAt) this.pausedAt = performance.now();
+    if (!on && this.pausedAt) {
+      // the time spent paused never happened, as far as the scenes can tell
+      this.t0 += performance.now() - this.pausedAt;
+      this.pausedAt = 0;
+    }
   }
 
   get ascii(): boolean {
@@ -87,7 +98,7 @@ export class GardenView {
     window.addEventListener('pointermove', this.onMove);
     const loop = () => {
       this.raf = requestAnimationFrame(loop);
-      this.draw();
+      if (!this.pausedAt) this.draw();
     };
     this.raf = requestAnimationFrame(loop);
   }

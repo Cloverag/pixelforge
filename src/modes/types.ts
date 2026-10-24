@@ -58,6 +58,8 @@ export interface ModeController {
   tick?(frameNo: number): void;
   /** every frame from the worker */
   onFrame?(r: Res): void;
+  /** the game was paused or resumed: modes that animate on their own canvas freeze with it */
+  onPause?(paused: boolean): void;
   /** ESC in game: true if the mode used it (closed a panel of its own) */
   onEscape?(): boolean;
   /** a blast at this stereo pan, for mode-specific sound */

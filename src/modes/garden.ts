@@ -205,6 +205,10 @@ export class GardenMode implements ModeController {
     this.ctx.toast(`EYE: ${EYE_PALETTES[this.view.palette].name}`);
   }
 
+  onPause(p: boolean): void {
+    this.view.setPaused(p);
+  }
+
   leave(): void {
     this.view.unmount();
   }

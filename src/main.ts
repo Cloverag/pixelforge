@@ -835,6 +835,7 @@ function enterGame(): void {
   paused = false;
   resultOpen = false;
   hud.setPaused(false);
+  current.onPause?.(false);
   hud.showBars(true);
   hideOverlay();
   renderer.resize();
@@ -1253,6 +1254,7 @@ function maybeShowResult(result: import('./sim/protocol').ChallengeResult | null
 function setPaused(p: boolean): void {
   paused = p;
   hud.setPaused(p);
+  current.onPause?.(p);
   // paused: no frames arrive, so fade the playground's voices explicitly
   if (p) sfx.playground(null);
 }
@@ -1480,6 +1482,12 @@ function applyAscii(on: boolean): void {
   drawAscii();
 }
 
+/** T and the deck's ASCII: the solo modes have their own text filter (their A key), the rest share the world's. */
+function asciiKey(): void {
+  if (SOLO.includes(current.id)) current.keys.a?.();
+  else toggleAscii();
+}
+
 function toggleAscii(): void {
   applyAscii(!asciiFx);
   try {
@@ -1542,7 +1550,7 @@ hud.initDeck({
     } },
     { id: 'grid', label: 'GRID', title: 'Chunky block view, cycles size (B)', color: '#ffd23f', toggle: toggleGrid },
     { id: '3d', label: '3D', title: 'A 3D model of the world (3)', color: '#6ef07a', toggle: () => void toggle3d() },
-    { id: 'ascii', label: 'ASCII', title: 'The world drawn as coloured text (T)', color: '#ff9f43', toggle: toggleAscii },
+    { id: 'ascii', label: 'ASCII', title: 'The world drawn as coloured text (T)', color: '#ff9f43', toggle: () => asciiKey() },
     { id: 'ray', label: 'RAY', title: 'Path-traced light: bounces, coloured light, shadows from fire (lit skies only)', color: '#b48cff', toggle: toggleRay },
   ],
   skies: [
@@ -1632,7 +1640,7 @@ new Input(
         if (screen === 'game') toggleSoft();
         break;
       case 't':
-        if (screen === 'game') toggleAscii();
+        if (screen === 'game') asciiKey();
         break;
       default:
         // the rest belong to the mode being played
