@@ -1,4 +1,5 @@
-import { bgLift } from '../sim/background';
+import { BG, bgLift } from '../sim/background';
+import { daylightAt, timeOfDay, type SkyMode } from './daylight';
 import { FLAMES, MATS, Mat, NMATS, Cat } from '../sim/materials';
 import { CHUNKS_X, CHUNKS_Y, SIM_H, SIM_W } from '../sim/protocol';
 import { Blockifier, fitSize } from './blocks';
@@ -43,8 +44,41 @@ uniform sampler2D uMatInfo;
 // edge light and shadow on every cell (off in GRID view and in the playground)
 uniform float uShade;
 uniform float uCrt;
-// what glows: each light source's colour, nothing else (EMIT pass)
+// what glows: each light source's colour, nothing else (EMIT pass, mipmapped)
 uniform sampler2D uEmit;
+// the sky and its light (daylight.ts): off in the classic flat look
+uniform float uSky;
+uniform sampler2D uLit;
+uniform vec3 uSkyTop;
+uniform vec3 uSkyHor;
+uniform vec2 uSunPos;
+uniform vec2 uMoonPos;
+uniform float uNight;
+uniform vec3 uBgCol;
+
+float hash(vec2 p) {
+  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
+
+// The sky behind the world, drawn in cells so the sun, the moon and the
+// stars are pixel art like everything else.
+vec3 skyAt(vec2 cf) {
+  vec2 cell = floor(cf) + 0.5;
+  float h = cell.y / uSim.y;
+  vec3 c = mix(uSkyHor, uSkyTop, smoothstep(0.0, 0.85, h));
+  // stars, twinkling, only once it is dark
+  float s = hash(floor(cf));
+  if (s > 0.996) c += uNight * (0.55 + 0.45 * sin(uTime * 2.0 + s * 90.0)) * vec3(0.9, 0.92, 1.0);
+  vec2 sun = uSunPos * uSim;
+  float ds = length(cell - sun);
+  c += vec3(1.0, 0.85, 0.55) * 0.35 * smoothstep(48.0, 0.0, ds) * step(0.0, uSunPos.y);
+  if (ds < 11.0 && uSunPos.y >= 0.0) c = vec3(1.0, 0.94, 0.72);
+  vec2 moon = uMoonPos * uSim;
+  float dm = length(cell - moon);
+  c += vec3(0.6, 0.7, 1.0) * 0.12 * smoothstep(30.0, 0.0, dm) * step(0.0, uMoonPos.y);
+  if (dm < 8.0 && uMoonPos.y >= 0.0) c = hash(floor(cell / 2.0)) > 0.8 ? vec3(0.72, 0.75, 0.82) : vec3(0.88, 0.9, 0.95);
+  return c;
+}
 
 // A frame pixel's alpha is its cell's material id (materials.ts withMat), 255
 // where there is no cell. Read with texelFetch so filtering cannot blend ids.
@@ -125,6 +159,20 @@ void main() {
   if (uShade > 0.5 && uCellPx >= 2.0 && info.b > 0.5 && info.g < 0.5) c = cellShade(c, p, id, fract(cf));
   if (info.r > 0.5) c = waterFx(c, p);
 
+  if (uSky > 0.5) {
+    if (id == 255 && distance(px.rgb, uBgCol) < 0.01) {
+      // empty air: the sky
+      c = skyAt(cf);
+    } else if (info.g < 0.5) {
+      // everything else is lit: sun or moon (with shadows), the sky's own
+      // light, and the glow of fire, lava and torches - strongest at night
+      vec3 L = texture(uLit, vUv).rgb;
+      // three widths of the same glow: close, near and far (a torch lights the wood under it)
+      vec3 fire = textureLod(uEmit, vUv, 3.0).rgb * 1.5 + textureLod(uEmit, vUv, 4.5).rgb * 3.5 + textureLod(uEmit, vUv, 6.0).rgb * 5.0;
+      c *= L + fire * (0.3 + uNight);
+    }
+  }
+
   if (uSoft > 0.5) {
     // eight taps on two rings of the emission map: only light sources bleed
     // light (fire, lava, embers, flames, sparks), never sand or snow
@@ -192,6 +240,53 @@ void main() {
   // flying debris, whose sparks should glow
   float e = id < 128 ? texelFetch(uMatInfo, ivec2(id, 0), 0).g : 1.0;
   frag = vec4(px.rgb * e, 1.0);
+}`;
+
+/**
+ * Light at half the world's resolution: what reaches each spot from the sun
+ * (or the moon) - a ray marched toward it, stopped by any body on the way -
+ * plus the sky's own light, a little less where the spot is closed in
+ * (ambient occlusion). Sampled smoothly by the composite, so shadows have
+ * soft edges.
+ */
+const LIGHT = `#version 300 es
+precision highp float;
+precision highp sampler2D;
+in vec2 vUv;
+out vec4 frag;
+uniform sampler2D uFrame;
+uniform sampler2D uMatInfo;
+uniform vec2 uSim;
+uniform vec2 uDir;
+uniform vec3 uSun;
+uniform vec3 uAmb;
+bool body(vec2 q) {
+  if (q.x < 0.0 || q.y < 0.0 || q.x >= uSim.x || q.y >= uSim.y) return false;
+  int id = int(texelFetch(uFrame, ivec2(q), 0).a * 255.0 + 0.5);
+  return id < 128 && texelFetch(uMatInfo, ivec2(id, 0), 0).b > 0.5;
+}
+void main() {
+  vec2 cell = vUv * uSim;
+  float vis = 1.0;
+  vec2 q = cell;
+  for (int i = 0; i < 64; i++) {
+    q += uDir * 2.0;
+    if (q.x < 0.0 || q.y < 0.0 || q.x >= uSim.x || q.y >= uSim.y) break;
+    if (body(q)) { vis = 0.0; break; }
+  }
+  float occ = 0.0;
+  for (int i = 0; i < 8; i++) {
+    float a = float(i) * 0.7853982;
+    vec2 o = vec2(cos(a), sin(a));
+    occ += body(cell + o * 3.0) ? 1.0 : 0.0;
+    occ += body(cell + o * 8.0) ? 1.0 : 0.0;
+  }
+  occ /= 16.0;
+  // We see the front face of every material, which the sky always lights;
+  // closed-in spots get a little less. Direct sun or moon adds on top where
+  // nothing blocks it, and a shadowed spot keeps a little of it (bounce).
+  // Day: ~1.1 in the sun, ~0.6 in shadow, ~0.5 deep in a pile.
+  frag = vec4(uAmb * (0.9 - 0.4 * occ) + uSun * (0.15 + 0.45 * vis), 1.0);
 }`;
 
 /** Materials that give off light: their glow bleeds into the cells around them. */
@@ -287,6 +382,9 @@ export class GLRenderer implements SimRenderer {
   private composite: Program;
   private emitP: Program;
   private emit: Target;
+  private lightP: Program;
+  private lit: Target;
+  private sky: SkyMode = 'flat';
   private fluid: Fluid;
   private blocks = new Blockifier();
 
@@ -353,11 +451,22 @@ export class GLRenderer implements SimRenderer {
     this.composite = new Program(gl, COMPOSITE);
     this.emitP = new Program(gl, EMIT);
     this.emit = makeTarget(gl, SIM_W, SIM_H, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE);
+    // mipmapped: its small levels are the wide, soft light that fire throws
+    gl.bindTexture(gl.TEXTURE_2D, this.emit.tex);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    gl.generateMipmap(gl.TEXTURE_2D);
+    this.lightP = new Program(gl, LIGHT);
+    this.lit = makeTarget(gl, SIM_W >> 1, SIM_H >> 1, gl.RGBA16F, gl.RGBA, gl.HALF_FLOAT);
     this.fluid = new Fluid(gl, SIM_W, SIM_H);
     this.fluid.setEmissionTable(emissionTable());
 
     window.addEventListener('resize', () => this.resize());
     this.resize();
+  }
+
+  /** Day, night, the cycle, or 'flat' for the classic look. */
+  setSky(mode: SkyMode): void {
+    this.sky = mode;
   }
 
   setSoft(on: boolean): void {
@@ -444,10 +553,25 @@ export class GLRenderer implements SimRenderer {
       });
     }
 
-    if (this.soft) {
+    const sky = this.sky !== 'flat' && !this.cineOn;
+    const day = sky ? daylightAt(timeOfDay(this.sky, (performance.now() - this.t0) / 1000)) : null;
+    if (this.soft || sky) {
       this.emitP.use();
       this.emitP.tex('uFrame', this.frameTex, 0).tex('uMatInfo', this.matInfo, 1).v2('uSim', SIM_W, SIM_H);
       blit(gl, this.emit);
+      gl.bindTexture(gl.TEXTURE_2D, this.emit.tex);
+      gl.generateMipmap(gl.TEXTURE_2D);
+    }
+    if (day) {
+      this.lightP.use();
+      this.lightP
+        .tex('uFrame', this.frameTex, 0)
+        .tex('uMatInfo', this.matInfo, 1)
+        .v2('uSim', SIM_W, SIM_H)
+        .v2('uDir', day.dir[0], day.dir[1])
+        .v3('uSun', ...day.sun)
+        .v3('uAmb', ...day.ambient);
+      blit(gl, this.lit);
     }
 
     this.composite.use();
@@ -467,7 +591,18 @@ export class GLRenderer implements SimRenderer {
     this.composite
       .f('uCellPx', cine ? 1 : this.canvas.width / SIM_W)
       .f('uShade', cine || this.block ? 0 : 1)
+      .f('uSky', day ? 1 : 0)
+      .tex('uLit', this.lit.tex, 5)
+      .v3('uBgCol', BG.r / 255, BG.g / 255, BG.b / 255)
       .f('uCrt', document.body.classList.contains('crt-on') ? 1 : 0);
+    if (day) {
+      this.composite
+        .v3('uSkyTop', ...day.skyTop)
+        .v3('uSkyHor', ...day.skyHorizon)
+        .v2('uSunPos', day.sunPos[0], day.sunPos[1])
+        .v2('uMoonPos', day.moonPos[0], day.moonPos[1])
+        .f('uNight', day.night);
+    }
     const lift = bgLift();
     this.composite.v3('uBgLift', lift[0], lift[1], lift[2]);
     this.composite
@@ -482,6 +617,9 @@ export class GLRenderer implements SimRenderer {
     this.fluid.dispose();
     this.composite.dispose();
     this.emitP.dispose();
+    this.lightP.dispose();
+    this.gl.deleteFramebuffer(this.lit.fbo);
+    this.gl.deleteTexture(this.lit.tex);
     this.gl.deleteFramebuffer(this.emit.fbo);
     this.gl.deleteTexture(this.emit.tex);
     this.gl.deleteTexture(this.frameTex);

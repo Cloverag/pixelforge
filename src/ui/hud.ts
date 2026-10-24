@@ -138,7 +138,8 @@ export interface DeckLamp {
 /** The deck under the canvas: everything a player changes while playing, one press away. */
 export interface DeckCallbacks {
   lamps: DeckLamp[];
-  skies: { id: string; name: string; css: string }[];
+  /** the sky modes (cycle, day, night) and then the flat colours */
+  skies: { id: string; name: string; css: string; title: string }[];
   onSky(id: string): void;
   onVolume(bus: 'music' | 'sfx', v: number): void;
   onSave(): void;
@@ -418,7 +419,7 @@ export class Hud {
     for (const s of cbs.skies) {
       const b = h('button', 'sky') as HTMLButtonElement;
       b.type = 'button';
-      b.title = `Background: ${titleCase(s.name)}`;
+      b.title = s.title;
       b.setAttribute('aria-label', b.title);
       b.style.background = s.css;
       b.onclick = () => cbs.onSky(s.id);

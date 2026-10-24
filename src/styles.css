@@ -639,6 +639,8 @@ button.px.sq.toggled .ico { margin-left: 3px; clip-path: polygon(0 0, 100% 50%, 
   cursor: pointer;
 }
 .sky:hover { border-color: var(--ink-dim); }
+/* the three lit skies come first, a little apart from the flat colours */
+.sky:nth-child(3) { margin-right: 10px; }
 .sky.on { border-color: var(--gold); box-shadow: 0 0 0 2px var(--panel-2), 0 0 0 5px var(--gold); }
 .deck-sound .deck-row { flex-direction: column; align-items: flex-start; gap: 6px; }
 .vol { display: flex; align-items: center; gap: 2px; }

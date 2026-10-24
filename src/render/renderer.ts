@@ -30,6 +30,8 @@ export interface SimRenderer {
   refreshBackground(): void;
   /** Film look for the playground; only the WebGL renderer has one. */
   setCinematic?(on: boolean): void;
+  /** The sky and its light (day, night, the cycle); the 2D fallback keeps the flat background. */
+  setSky?(mode: import('./daylight').SkyMode): void;
 }
 
 /**

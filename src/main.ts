@@ -10,6 +10,7 @@ import { Hud } from './ui/hud';
 import { isPauseOpen, setMenuLive, showMenu, showPause, type MenuSound } from './ui/menu';
 import type { MenuEntry } from './ui/menu';
 import { pauseRule } from './game/pause';
+import { loadSkyMode, saveSkyMode, type SkyMode } from './render/daylight';
 import { BACKGROUNDS, BG, backgroundById, bgCss, loadBackgroundId, saveBackgroundId, setBackground, stepBackground } from './sim/background';
 import { hideOverlay, showResult, toast } from './ui/widgets';
 import { Mat, MATS } from './sim/materials';
@@ -453,6 +454,18 @@ function sendRedraw(): void {
   const buf = stepBuf;
   stepBuf = null;
   post({ t: 'redraw', buf }, [buf]);
+}
+
+/** The sky: the day cycle, day, night, or 'flat' (the SKY colours, no lighting). Drawing only, per player. */
+let skyMode: SkyMode = loadSkyMode();
+renderer.setSky?.(skyMode);
+
+function applySky(m: SkyMode): void {
+  skyMode = m;
+  saveSkyMode(m);
+  renderer.setSky?.(m);
+  sendRedraw();
+  syncDeck();
 }
 
 /** Pick a background: remembered, shown by every renderer, and told to the worker (never to a room). */
@@ -1240,7 +1253,7 @@ function syncDeck(): void {
       grid: renderer.getBlockSize() !== null,
       '3d': view3dOn,
     },
-    sky: BG.id,
+    sky: skyMode === 'flat' ? BG.id : `sky-${skyMode}`,
     music: v.mute.master || v.mute.music ? 0 : v.music,
     sfx: v.mute.master || v.mute.sfx ? 0 : v.sfx,
     canSave: current.saveable && !mp,
@@ -1306,9 +1319,17 @@ hud.initDeck({
     { id: 'grid', label: 'GRID', title: 'Chunky block view, cycles size (B)', color: '#ffd23f', toggle: toggleGrid },
     { id: '3d', label: '3D', title: 'A 3D model of the world (3)', color: '#6ef07a', toggle: () => void toggle3d() },
   ],
-  skies: BACKGROUNDS.map((b) => ({ id: b.id, name: b.name, css: `rgb(${b.r}, ${b.g}, ${b.b})` })),
+  skies: [
+    { id: 'sky-cycle', name: 'CYCLE', css: 'linear-gradient(135deg, #3d7fd6 0 50%, #10142e 50% 100%)', title: 'Day and night: the sun, the moon and shadows, turning' },
+    { id: 'sky-day', name: 'DAY', css: 'linear-gradient(180deg, #3d7fd6, #a9d4f2)', title: 'Always day: sunlight and shadows' },
+    { id: 'sky-night', name: 'NIGHT', css: 'linear-gradient(180deg, #070a1c, #16203e)', title: 'Always night: moonlight, stars, and fire lights the world' },
+    ...BACKGROUNDS.map((b) => ({ id: b.id, name: b.name, css: `rgb(${b.r}, ${b.g}, ${b.b})`, title: `Flat background: ${b.name.toLowerCase()}, no lighting` })),
+  ],
   onSky: (id) => {
     sfx.uiMove();
+    // the lit skies are 'sky-<mode>' (a flat colour is called night too)
+    if (id.startsWith('sky-')) return applySky(id.slice(4) as SkyMode);
+    applySky('flat');
     applyBackground(id);
   },
   onVolume: (bus, v) => {
