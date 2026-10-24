@@ -10,7 +10,7 @@ import { Hud } from './ui/hud';
 import { isPauseOpen, setMenuLive, showMenu, showPause, type MenuSound } from './ui/menu';
 import type { MenuEntry } from './ui/menu';
 import { pauseRule } from './game/pause';
-import { BG, backgroundById, bgCss, loadBackgroundId, saveBackgroundId, setBackground, stepBackground } from './sim/background';
+import { BACKGROUNDS, BG, backgroundById, bgCss, loadBackgroundId, saveBackgroundId, setBackground, stepBackground } from './sim/background';
 import { hideOverlay, showResult, toast } from './ui/widgets';
 import { Mat, MATS } from './sim/materials';
 import { MpSession, newRoomCode, roomFromUrl, roomUrl, type MpHooks } from './net/mp';
@@ -177,9 +177,16 @@ function close3d(): void {
   pgView?.hide();
   document.getElementById('screen')!.style.visibility = 'visible';
   post({ t: 'watch3d', on: false });
+  syncDeck();
 }
 
+/** The 3 key, VIEW's 3D and the deck's 3D lamp. */
 async function toggle3d(): Promise<void> {
+  await flip3d();
+  syncDeck();
+}
+
+async function flip3d(): Promise<void> {
   sfx.ui();
   if (current.view3d === 'scene') return togglePg3d();
   if (view3dOn) {
@@ -224,6 +231,7 @@ function toggleSoft(): void {
   }
   toast(renderer.isSoft() ? 'SOFT PARTICLES ON' : 'SOFT PARTICLES OFF');
   sfx.ui();
+  syncDeck();
 }
 
 function applySoft(on: boolean): void {
@@ -258,6 +266,7 @@ function toggleGrid(): void {
   }
   toast(next === null ? 'GRID OFF' : `GRID ${next}PX BLOCKS`);
   sfx.ui();
+  syncDeck();
 }
 
 function applyGrid(n: number | null): void {
@@ -456,6 +465,7 @@ function applyBackground(id: string): void {
   pgView?.refreshBackground();
   post({ t: 'bg', id: p.id });
   sendRedraw();
+  syncDeck();
 }
 
 function cycleBackground(d: number): void {
@@ -803,6 +813,7 @@ function showMode(m: ModeController): void {
   m.buildUI();
   hud.setMode(m.id, m.challengeId ? (CHALLENGES.find((c) => c.id === m.challengeId)?.name ?? null) : null);
   enterGame();
+  syncDeck();
 }
 
 /**
@@ -910,6 +921,7 @@ function openMenu(firstVisit = false): void {
     volume: (bus) => sfx.getVolumes()[bus],
     setVolume: (bus, v) => {
       sfx.setVolume(bus, v);
+      syncDeck();
     },
     onToggleBg: () => void cycleWallpaper(),
     backdrop: () => WALLPAPER_NAMES[bgIndex],
@@ -1215,6 +1227,24 @@ function stepOnce(): void {
 function toggleMaster(): void {
   sfx.toggleMute('master');
   toast(sfx.getVolumes().mute.master ? 'SOUND OFF' : 'SOUND ON');
+  syncDeck();
+}
+
+/** Bring the deck's lamps, sky, volumes and SAVE buttons in line with the game (cheap; called after any change). */
+function syncDeck(): void {
+  const v = sfx.getVolumes();
+  hud.syncDeck({
+    lit: {
+      soft: renderer.isSoft(),
+      crt: document.body.classList.contains('crt-on'),
+      grid: renderer.getBlockSize() !== null,
+      '3d': view3dOn,
+    },
+    sky: BG.id,
+    music: v.mute.master || v.mute.music ? 0 : v.music,
+    sfx: v.mute.master || v.mute.sfx ? 0 : v.sfx,
+    canSave: current.saveable && !mp,
+  });
 }
 
 // the CRT filter is on until the player turns it off
@@ -1222,6 +1252,7 @@ document.body.classList.add('crt-on');
 
 function toggleCrt(): void {
   document.body.classList.toggle('crt-on');
+  syncDeck();
 }
 
 /** The D key and VIEW's FPS: a small frames-per-second readout in the canvas corner, off by default. */
@@ -1264,6 +1295,32 @@ hud.initBar({
   onPause: () => (phone.matches ? openPause() : togglePause()),
   onMenu: openPause,
   onMode: (m) => void switchMode(m),
+});
+hud.initDeck({
+  lamps: [
+    { id: 'soft', label: 'SOFT', title: 'Smooth particles with trails and glow (S)', color: '#ff4fa3', toggle: toggleSoft },
+    { id: 'crt', label: 'CRT', title: 'Scanlines, like an old TV (C)', color: '#3fd0ff', toggle: () => {
+      sfx.ui();
+      toggleCrt();
+    } },
+    { id: 'grid', label: 'GRID', title: 'Chunky block view, cycles size (B)', color: '#ffd23f', toggle: toggleGrid },
+    { id: '3d', label: '3D', title: 'A 3D model of the world (3)', color: '#6ef07a', toggle: () => void toggle3d() },
+  ],
+  skies: BACKGROUNDS.map((b) => ({ id: b.id, name: b.name, css: `rgb(${b.r}, ${b.g}, ${b.b})` })),
+  onSky: (id) => {
+    sfx.uiMove();
+    applyBackground(id);
+  },
+  onVolume: (bus, v) => {
+    if (sfx.getVolumes().mute.master) sfx.toggleMute('master');
+    if (sfx.getVolumes().mute[bus]) sfx.toggleMute(bus);
+    sfx.setVolume(bus, v);
+    sfx.uiMove();
+    syncDeck();
+  },
+  onSave: () => requestSnapshot('store'),
+  onLoad: loadSaved,
+  onShare: () => requestSnapshot('share'),
 });
 
 // the saved block size and soft setting, now that the HUD exists

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-/** The in-game shell: always dark, the bar on top, the dock of colours below. Pins what was removed, so it stays gone. */
+/** The in-game shell: the arcade cabinet - marquee on top, materials panel left, control deck below. Pins what was removed, so it stays gone. */
 
 const root = join(__dirname, '..');
 const css = readFileSync(join(root, 'src', 'styles.css'), 'utf8');
@@ -24,7 +24,7 @@ describe('one look, always dark', () => {
   });
 });
 
-describe('the bar: the three modes, PAUSE and MENU', () => {
+describe('the marquee: the three modes, PAUSE and MENU', () => {
   const gone = /#topbar|topbar|btn-group|grp-label|grp-row|topbar-groups|more-btn|more-open|\.brand\b|brand-mark|mode-label|sb-key|sb-lamp|sb-run|sb-tool|sb-fps/;
 
   it('leaves no topbar, group, MORE drop-down or old status segment in the shell', () => {
@@ -33,16 +33,18 @@ describe('the bar: the three modes, PAUSE and MENU', () => {
     }
   });
 
-  it('puts the three modes, PAUSE and MENU on the bar, and FPS behind a key', () => {
-    expect(hud).toMatch(/\['sand', 'Sandbox'\],\n  \['playground', 'Playground'\],\n  \['chem', 'Chem lab'\],/);
+  it('puts the three modes, PAUSE and MENU on the marquee, and FPS behind a key', () => {
+    expect(hud).toMatch(/\['sand', 'SANDBOX'\],\n  \['playground', 'PLAYGROUND'\],\n  \['chem', 'CHEM LAB'\],/);
     expect(hud).toMatch(/Pause \(SPACE\)/);
-    expect(hud).toMatch(/mkBtn\('Menu'/);
-    expect(hud).not.toMatch(/mkBtn\('(STEP|SAVE|LOAD|SHARE|SOFT|CRT|GRID|3D|IMMERSE|BG|SFX|MUSIC)'/);
+    expect(hud).toMatch(/mkBtn\('MENU'/);
+    // the marquee keeps to modes, PAUSE and MENU; SAVE / LOAD / SHARE live on the deck
+    const bar = hud.slice(hud.indexOf('private buildBar('), hud.indexOf('setMode('));
+    expect(bar).not.toMatch(/mkBtn\('(STEP|SAVE|LOAD|SHARE|SOFT|CRT|GRID|3D|IMMERSE|BG|SFX|MUSIC)'/);
     expect(main).toMatch(/case 'd':/);
   });
 });
 
-describe('the dock: coloured buttons and five brush dots', () => {
+describe('the materials panel: coloured tiles and five brush dots', () => {
   it('has no brush slider, number, preview square or hint left', () => {
     expect(css).not.toMatch(/brushrow|brush-preview|brush-dot|input\[type=.range.\]/);
     expect(hud).not.toMatch(/type = 'range'|brushrow|brush-preview|Wheel or \[ \] to resize/);
@@ -75,16 +77,39 @@ describe('phones', () => {
   });
 
   it('keeps 44px touch targets on phones and no MORE drop-down', () => {
-    const portrait = css.slice(css.indexOf('@media (max-width: 900px) and (orientation: portrait)'));
-    const landscape = css.slice(css.indexOf('@media (max-height: 520px) and (orientation: landscape)'));
-    for (const [name, block] of [['portrait', portrait], ['landscape', landscape]]) {
-      const body = block.slice(0, block.indexOf('\n}\n'));
-      expect(body, name).toMatch(/\.swatch, #toolbar button\.px \{ height: 44px; min-height: 44px; \}/);
-      expect(body, name).toMatch(/\.bdot \{ width: \d+px; height: 44px; \}/);
-      expect(body, name).toMatch(/button\.px\.sq \{ width: 44px; height: 44px; \}/);
-    }
+    const block = (q: string) => {
+      const from = css.indexOf(q);
+      return css.slice(from, css.indexOf('\n}\n', from));
+    };
+    const portrait = block('@media (max-width: 900px) and (orientation: portrait)');
+    const landscape = block('@media (max-height: 520px) and (orientation: landscape)');
+    // every button is a 44px key, the brush dots too, everywhere
+    expect(css).toMatch(/button\.px \{[^}]*min-height: 44px;/);
+    expect(css).toMatch(/\.bdot \{[^}]*width: 44px;\n  height: 44px;/);
+    for (const [name, b] of [['portrait', portrait], ['landscape', landscape]]) expect(b, name).toMatch(/\.tab \{ [^}]*height: 44px;/);
+    // the deck's small controls grow to a finger's size where fingers are
+    expect(portrait).toMatch(/\.cell \{ height: 44px; \}/);
+    expect(landscape).toMatch(/\.lamp-cap \{ width: 44px; height: 44px; \}/);
+    expect(landscape).toMatch(/\.sky \{ width: 44px; height: 44px; \}/);
     expect(css).toMatch(/\.ts-item \{ min-height: 44px;/);
     expect(css + hud + main).not.toMatch(/\bMORE\b/);
+  });
+});
+
+describe('the control deck: what you change while playing is on screen', () => {
+  it('has VIEW, SKY, SOUND and WORLD, every one outside any menu', () => {
+    for (const g of ["group('VIEW'", "group('SKY'", "group('SOUND'", "group('WORLD'"]) expect(hud).toContain(g);
+    expect(html).toMatch(/<section id="deck"/);
+  });
+
+  it('lights SOFT, CRT, GRID and 3D from the same toggles the keys and the pause menu use', () => {
+    for (const [id, fn] of [['soft', 'toggleSoft'], ['crt', 'toggleCrt'], ['grid', 'toggleGrid'], ['3d', 'toggle3d']])
+      expect(main).toMatch(new RegExp(`id: '${id}'[^\\n]*\\n?[^}]*${fn}`));
+    // and every one of those toggles tells the deck
+    for (const fn of ['toggleSoft', 'toggleGrid', 'toggleCrt', 'toggle3d', 'applyBackground', 'toggleMaster']) {
+      const i = main.indexOf(`function ${fn}(`);
+      expect(main.slice(i, main.indexOf('\n}\n', i)), fn).toMatch(/syncDeck\(\)/);
+    }
   });
 });
 
@@ -117,8 +142,8 @@ describe('type: read for sentences and names, display for buttons and headings',
     expect(silk).toBe(2); // .ts-foot and .menu-live
   });
 
-  it('every heading is the read face, bold (pixel type is only for the title screen and the logo)', () => {
-    expect(css).toMatch(/\nh2 \{ font-family: var\(--font-read\); font-weight: 700;/);
+  it('every heading is display type', () => {
+    expect(css).toMatch(/\nh2 \{ font-family: var\(--font-display\);/);
   });
 
   it('the room badge is read type on one line, with 14px buttons', () => {

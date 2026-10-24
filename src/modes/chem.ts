@@ -87,6 +87,12 @@ export class ChemMode implements ModeController {
       return { id: String(m), label: d.name, chip, title: sym ? `${name} (${sym})` : d.name, info: [d.name, kind, lines, chip], sym, z: LAB_Z.get(m) };
     };
     const sections: PaletteSection[] = [
+      { label: 'TABLE', cls: 'toolbtns', buttons: [{ label: 'PERIODIC TABLE', title: 'Every element; the lit ones are in the lab (E)', onClick: () => void this.toggleTable() }] },
+      {
+        label: 'EXPERIMENTS',
+        cls: 'scenebtns',
+        buttons: CHEM_SCENES.map((s) => ({ label: s.label, title: s.tip, onClick: () => this.loadScene(s.id, s.label) })),
+      },
       { label: 'GASES', swatches: GASES.map(swatch), tiles: true },
       { label: 'METALS', swatches: METALS.map(swatch), tiles: true },
       { label: 'NON-METALS', swatches: NONMETALS.map(swatch), tiles: true },
@@ -95,12 +101,6 @@ export class ChemMode implements ModeController {
       {
         label: 'TOOLS',
         swatches: [{ id: '-1', label: 'ERASE', chip: 'var(--world-bg)', dashed: true, pin: true, title: 'Eraser (or hold right mouse button)', info: ['ERASE', '', 'Clears whatever the brush covers.', 'transparent'] }],
-      },
-      { label: 'TABLE', cls: 'toolbtns', buttons: [{ label: 'PERIODIC TABLE', title: 'Every element; the lit ones are in the lab (E)', onClick: () => void this.toggleTable() }] },
-      {
-        label: 'EXPERIMENTS',
-        cls: 'scenebtns',
-        buttons: CHEM_SCENES.map((s) => ({ label: s.label, title: s.tip, onClick: () => this.loadScene(s.id, s.label) })),
       },
     ];
     this.ctx.hud.buildPalette(

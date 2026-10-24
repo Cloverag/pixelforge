@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <meta name="theme-color" content="#16181f" />
+  <meta name="theme-color" content="#150f29" />
   <meta name="description" content="A pixel-art falling-sand forge in your browser: sand, fire, water, wire and light shows. Play together with friends - no install, free." />
   <title>PIXELFORGE</title>
   <!-- link previews (WhatsApp, Discord, X...): crawlers read these, they do not run the game -->
@@ -23,12 +23,13 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Crect width='8' height='8' fill='%230d0d16'/%3E%3Crect x='1' y='1' width='2' height='2' fill='%23f2a33c'/%3E%3Crect x='5' y='2' width='2' height='2' fill='%234fd1c5'/%3E%3Crect x='2' y='5' width='2' height='2' fill='%23e05252'/%3E%3C/svg%3E" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Silkscreen:wght@400;700&family=IBM+Plex+Mono:wght@400;500&family=Rubik:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Silkscreen:wght@400;700&family=IBM+Plex+Mono:wght@400;500&family=Pixelify+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
 </head>
 <body>
   <div id="app">
     <header id="hudbar" class="hidden"></header>
     <div id="workspace">
+      <aside id="toolbar" class="hidden" aria-label="Materials and tools"></aside>
       <main id="stage">
         <div id="viewport">
           <div id="screen-wrap">
@@ -36,14 +37,14 @@
             <div id="view3d" class="hidden"></div>
             <div id="pg3d" class="hidden"></div>
             <div id="crt"></div>
-            <div id="empty-hint" class="hidden" aria-hidden="true">Pick a material below, then draw here</div>
-            <div id="paused-badge" class="hidden" aria-live="polite">Paused</div>
+            <div id="empty-hint" class="hidden" aria-hidden="true"></div>
+            <div id="paused-badge" class="hidden" aria-live="polite">PAUSED</div>
             <div id="fps" aria-hidden="true"></div>
           </div>
         </div>
       </main>
     </div>
-    <aside id="toolbar" class="hidden" aria-label="Materials and tools"></aside>
+    <section id="deck" class="hidden" aria-label="View and sound"></section>
     <div id="overlay"></div>
   </div>
   <script>

@@ -111,19 +111,50 @@ export type PgTool =
   | 'portal'
   | 'erase';
 
-/** The bar's buttons: the three modes, PAUSE and MENU. */
+/** The marquee's buttons: the three modes, PAUSE and MENU. */
 interface BarCallbacks {
   onPause(): void;
   onMenu(): void;
   onMode(m: Mode): void;
 }
 
-/** The mode tabs, in the order the title screen lists them. */
+/** The mode buttons, in the order the title screen lists them. */
 const MODE_TABS: [Mode, string][] = [
-  ['sand', 'Sandbox'],
-  ['playground', 'Playground'],
-  ['chem', 'Chem lab'],
+  ['sand', 'SANDBOX'],
+  ['playground', 'PLAYGROUND'],
+  ['chem', 'CHEM LAB'],
 ];
+
+/** One VIEW lamp on the deck: what it is, and what pressing it does. */
+export interface DeckLamp {
+  id: string;
+  label: string;
+  title: string;
+  /** the lamp's colour while lit */
+  color: string;
+  toggle(): void;
+}
+
+/** The deck under the canvas: everything a player changes while playing, one press away. */
+export interface DeckCallbacks {
+  lamps: DeckLamp[];
+  skies: { id: string; name: string; css: string }[];
+  onSky(id: string): void;
+  onVolume(bus: 'music' | 'sfx', v: number): void;
+  onSave(): void;
+  onLoad(): void;
+  onShare(): void;
+}
+
+/** What the deck shows; main.ts sends it whenever any of it may have changed. */
+export interface DeckState {
+  lit: Record<string, boolean>;
+  sky: string;
+  music: number;
+  sfx: number;
+  /** SAVE / LOAD / SHARE: only the free sandbox has a world worth keeping */
+  canSave: boolean;
+}
 
 /** One pickable thing in the rail: a material, a tool, an element. */
 export interface Swatch {
@@ -236,6 +267,12 @@ export class Hud {
     nowSeg: HTMLElement;
     nowVal: HTMLElement;
   };
+  private deck: {
+    lamps: Map<string, HTMLButtonElement>;
+    skies: Map<string, HTMLButtonElement>;
+    vols: Map<'music' | 'sfx', HTMLButtonElement[]>;
+    file: HTMLButtonElement[];
+  } | null = null;
   /** the playground counts particles, not cells */
   private particleMode = false;
   private lamps = new Map<string, HTMLButtonElement>();
@@ -250,7 +287,7 @@ export class Hud {
 
   constructor(private toolbar: HTMLElement) {}
 
-  /** Light or dim a toggle in the dock (GRAVITY, SLOW-MO...). */
+  /** Light or dim a toggle in the panel (GRAVITY, SLOW-MO...). */
   setLamp(name: string, on: boolean): void {
     this.lamps.get(name)?.classList.toggle('toggled', on);
   }
@@ -261,7 +298,7 @@ export class Hud {
     this.showEmpty(n === 0);
   }
 
-  /** The bar along the top: the game's name, the three modes, what you hold, PAUSE and MENU. */
+  /** The marquee along the top: the logo, the three modes, what you hold, PAUSE and MENU. */
   initBar(cbs: BarCallbacks): void {
     this.fpsEl = document.getElementById('fps');
     this.pausedBadge = document.getElementById('paused-badge');
@@ -281,7 +318,7 @@ export class Hud {
 
     seg('sb-logo').appendChild(h('span', 'logo', 'PIXELFORGE'));
 
-    // the three modes, one click apart: the screen says what the game is
+    // the three modes as lit arcade buttons: the screen says what the game is
     const tabs = seg('sb-tabs modetabs');
     tabs.setAttribute('role', 'group');
     tabs.setAttribute('aria-label', 'Mode');
@@ -295,7 +332,7 @@ export class Hud {
       this.tabEls.set(m, b);
     }
     this.tabsEl = tabs;
-    // a challenge shows its name where the tabs were
+    // a challenge shows its name where the modes were
     this.challengeEl = seg('sb-challenge hidden');
 
     const matSeg = seg('sb-mat');
@@ -322,12 +359,12 @@ export class Hud {
     const ico = h('span', 'ico');
     ico.setAttribute('aria-hidden', 'true');
     this.pauseBtn.appendChild(ico);
-    const menuBtn = this.mkBtn('Menu', cbs.onMenu, 'Pause menu (ESC)');
+    const menuBtn = this.mkBtn('MENU', cbs.onMenu, 'Pause menu (ESC)');
     btns.append(this.pauseBtn, menuBtn);
     this.status = { chip, name, note, cells, cellsKey, rxSeg, rxVal, nowSeg, nowVal };
   }
 
-  /** Light the current mode's tab; a challenge (`challenge` set) shows its name instead. */
+  /** Light the current mode's button; a challenge (`challenge` set) shows its name instead. */
   setMode(m: Mode, challenge: string | null = null): void {
     for (const [id, b] of this.tabEls) {
       const on = id === m && !challenge;
@@ -337,8 +374,109 @@ export class Hud {
     this.tabsEl?.classList.toggle('hidden', !!challenge);
     if (this.challengeEl) {
       this.challengeEl.classList.toggle('hidden', !challenge);
-      this.challengeEl.textContent = challenge ? `Challenge: ${titleCase(challenge)}` : '';
+      this.challengeEl.textContent = challenge ? `CHALLENGE: ${challenge}` : '';
     }
+  }
+
+  // ---------- the deck ----------
+
+  /**
+   * The control deck under the canvas: VIEW lamps, the background colours,
+   * the two volumes, and SAVE / LOAD / SHARE. Nothing here hides behind a menu;
+   * the pause menu's VIEW and OPTIONS change the same things.
+   */
+  initDeck(cbs: DeckCallbacks): void {
+    const el = document.getElementById('deck');
+    if (!el) return;
+    el.innerHTML = '';
+    // each group: its name on top, its controls in one row under it
+    const group = (label: string, cls: string) => {
+      const g = h('div', `deck-group ${cls}`);
+      g.setAttribute('role', 'group');
+      g.setAttribute('aria-label', label);
+      const row = h('div', 'deck-row');
+      g.append(h('span', 'deck-label', label), row);
+      el.appendChild(g);
+      return row;
+    };
+
+    const lamps = new Map<string, HTMLButtonElement>();
+    const view = group('VIEW', 'deck-view');
+    for (const l of cbs.lamps) {
+      const b = h('button', 'lamp') as HTMLButtonElement;
+      b.type = 'button';
+      b.title = l.title;
+      b.style.setProperty('--lamp', l.color);
+      b.append(h('span', 'lamp-cap'), h('span', 'lamp-nm', l.label));
+      b.onclick = () => l.toggle();
+      view.appendChild(b);
+      lamps.set(l.id, b);
+    }
+
+    const skies = new Map<string, HTMLButtonElement>();
+    const sky = group('SKY', 'deck-sky');
+    for (const s of cbs.skies) {
+      const b = h('button', 'sky') as HTMLButtonElement;
+      b.type = 'button';
+      b.title = `Background: ${titleCase(s.name)}`;
+      b.setAttribute('aria-label', b.title);
+      b.style.background = s.css;
+      b.onclick = () => cbs.onSky(s.id);
+      sky.appendChild(b);
+      skies.set(s.id, b);
+    }
+
+    // two volumes as rows of ten cells: click a cell to set the level (the first again turns it off)
+    const vols = new Map<'music' | 'sfx', HTMLButtonElement[]>();
+    const sound = group('SOUND', 'deck-sound');
+    for (const [bus, label] of [['music', 'Music'], ['sfx', 'Effects']] as const) {
+      const row = h('div', 'vol');
+      row.appendChild(h('span', 'vol-nm', label));
+      const cells: HTMLButtonElement[] = [];
+      for (let i = 1; i <= 10; i++) {
+        const c = h('button', 'cell') as HTMLButtonElement;
+        c.type = 'button';
+        c.setAttribute('aria-label', `${label} volume ${i} of 10`);
+        c.onclick = () => {
+          const on = c.classList.contains('on') && !cells[i]?.classList.contains('on');
+          cbs.onVolume(bus, on && i === 1 ? 0 : i);
+        };
+        row.appendChild(c);
+        cells.push(c);
+      }
+      sound.appendChild(row);
+      vols.set(bus, cells);
+    }
+
+    const file = group('WORLD', 'deck-file');
+    const fileBtns = [
+      this.mkBtn('SAVE', cbs.onSave, 'Save this world in the browser'),
+      this.mkBtn('LOAD', cbs.onLoad, 'Load the saved world'),
+      this.mkBtn('SHARE', cbs.onShare, 'A link that opens this world'),
+    ];
+    fileBtns[2].classList.add('primary');
+    file.append(...fileBtns);
+    this.deck = { lamps, skies, vols, file: fileBtns };
+  }
+
+  /** Show the deck's state: which lamps are lit, the sky, the volumes, whether this world can be saved. */
+  syncDeck(st: DeckState): void {
+    const d = this.deck;
+    if (!d) return;
+    for (const [id, b] of d.lamps) {
+      const on = !!st.lit[id];
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-pressed', String(on));
+    }
+    for (const [id, b] of d.skies) {
+      b.classList.toggle('on', id === st.sky);
+      b.setAttribute('aria-pressed', String(id === st.sky));
+    }
+    for (const [bus, cells] of d.vols) {
+      const v = bus === 'music' ? st.music : st.sfx;
+      cells.forEach((c, i) => c.classList.toggle('on', i < v));
+    }
+    for (const b of d.file) b.disabled = !st.canSave;
   }
 
   private renderTool(): void {
@@ -397,9 +535,10 @@ export class Hud {
   showBars(v: boolean): void {
     this.toolbar.classList.toggle('hidden', !v);
     document.getElementById('hudbar')?.classList.toggle('hidden', !v);
+    document.getElementById('deck')?.classList.toggle('hidden', !v);
     document.body.classList.toggle('in-game', v);
     if (!v) this.showEmpty(false);
-    // the bars appearing change the stage's size; refit the canvas
+    // the panels appearing change the stage's size; refit the canvas
     window.dispatchEvent(new Event('resize'));
   }
 
@@ -410,13 +549,13 @@ export class Hud {
     this.emptyHint.classList.toggle('hidden', !empty || !this.hintText);
   }
 
-  // ---------- the dock ----------
+  // ---------- the materials panel ----------
 
   /**
-   * Build the dock under the canvas from a mode's sections: the brush and the
-   * always-there tools (ERASE, BUCKET, WIND) on the left, then every material
-   * as a button in its own colour, a small gap between groups, and the mode's
-   * own buttons (scenes, experiments...) after them.
+   * Build the panel left of the canvas from a mode's sections: the brush and
+   * the always-there tools (ERASE, BUCKET, WIND) on top, then each group under
+   * its name as square tiles in their own colours, and the mode's own buttons
+   * (scenes, experiments...) after them. The list scrolls; the tools never do.
    */
   buildPalette(spec: PaletteSpec, brush: number): void {
     this.toolbar.innerHTML = '';
@@ -441,22 +580,28 @@ export class Hud {
         const rest = sec.swatches.filter((sw) => !sw.pin);
         // a group left with nothing (the sandbox's TOOLS was only ERASE) goes with it
         if (rest.length === 0) continue;
-        const group = h('div', 'pgroup');
+        const group = h('div', 'matgroup');
         group.setAttribute('role', 'group');
         group.setAttribute('aria-label', titleCase(sec.label));
-        for (const sw of rest) group.appendChild(this.makeSwatch(sw, !!sec.tiles && sw.sym !== undefined));
+        group.appendChild(h('span', 'glabel', sec.label));
+        const grid = h('div', 'pgroup');
+        for (const sw of rest) grid.appendChild(this.makeSwatch(sw, !!sec.tiles && sw.sym !== undefined));
+        group.appendChild(grid);
         pal.appendChild(group);
       } else {
-        const group = h('div', 'pgroup acts');
+        const group = h('div', 'matgroup');
         group.setAttribute('role', 'group');
         group.setAttribute('aria-label', titleCase(sec.label));
+        group.appendChild(h('span', 'glabel', sec.label));
+        const row = h('div', 'acts');
         for (const b of sec.buttons) {
-          const btn = this.mkBtn(titleCase(b.label), b.onClick, b.title, b.lamp !== undefined);
+          const btn = this.mkBtn(b.label, b.onClick, b.title, b.lamp !== undefined);
           if (b.cls) btn.classList.add(b.cls);
           if (b.on) btn.classList.add('toggled');
           if (b.lamp) this.lamps.set(b.lamp, btn);
-          group.appendChild(btn);
+          row.appendChild(btn);
         }
+        group.appendChild(row);
         pal.appendChild(group);
       }
     }
@@ -481,11 +626,12 @@ export class Hud {
     this.renderTool();
   }
 
-  /** One button of the dock: a material in its own colour, or an element's symbol. */
+  /** One tile of the panel: a square in the material's colour with its name under it, or an element's symbol. */
   private makeSwatch(sw: Swatch, tile: boolean): HTMLElement {
     const el = h('button', tile ? 'swatch tile' : 'swatch') as HTMLButtonElement;
     el.type = 'button';
     const color = sw.dashed ? null : pillColor(sw.chip);
+    const chip = h('span', 'chip');
     if (color) {
       const { fill, ink } = pillPaint(color);
       el.style.setProperty('--c', fill);
@@ -494,9 +640,8 @@ export class Hud {
       this.swatchColor.set(sw.id, color);
     }
     if (sw.dashed) el.classList.add('dashed');
-    if (tile) el.appendChild(h('span', 'tsym', sw.sym));
-    // a tile's name is for the tooltips and screen readers; everywhere else it is the label
-    el.appendChild(h('span', 'nm', titleCase(sw.label)));
+    if (tile) chip.textContent = sw.sym ?? '';
+    el.append(chip, h('span', 'nm', titleCase(sw.label)));
     el.title = sw.title;
     el.onclick = () => this.pick(sw.id);
     this.swatchEls.set(sw.id, el);
@@ -509,8 +654,9 @@ export class Hud {
     const make = (kind: PaintKind, name: string, title: string): HTMLElement => {
       const el = h('button', 'swatch tooltile') as HTMLButtonElement;
       el.type = 'button';
-      el.appendChild(h('span', `ico ico-${kind}`));
-      el.appendChild(h('span', 'nm', titleCase(name)));
+      const chip = h('span', 'chip');
+      chip.appendChild(h('span', `ico ico-${kind}`));
+      el.append(chip, h('span', 'nm', titleCase(name)));
       el.title = title;
       el.onclick = () => {
         // clicking the lit tool turns it off rather than doing nothing
@@ -531,6 +677,7 @@ export class Hud {
     const row = h('div', 'brushdots');
     row.setAttribute('role', 'group');
     row.setAttribute('aria-label', 'Brush size');
+    row.appendChild(h('span', 'glabel', 'BRUSH'));
     this.brushDots = BRUSH_SIZES.map((n, i) => {
       const b = h('button', 'bdot') as HTMLButtonElement;
       b.type = 'button';
@@ -564,16 +711,11 @@ export class Hud {
     }
     const info = this.swatchInfo.get(id);
     if (info) this.showSelection(...info);
-    // the screen takes on the colour of what you hold: the brush ring, the bar's chip
+    // the brush ring takes the colour of what you hold
     const c = this.swatchColor.get(id);
     const root = document.documentElement.style;
-    if (c) {
-      root.setProperty('--pick', c);
-      root.setProperty('--pick-ink', inkFor(c));
-    } else {
-      root.removeProperty('--pick');
-      root.removeProperty('--pick-ink');
-    }
+    if (c) root.setProperty('--pick', c);
+    else root.removeProperty('--pick');
     this.onPick(id);
   }
 
