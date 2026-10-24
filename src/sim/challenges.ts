@@ -198,7 +198,7 @@ export const CHALLENGES: ChallengeDef[] = [
   {
     id: 'icebreaker',
     name: 'ICE BREAKER',
-    desc: 'Melt the glacier wall blocking the pass. Lava is rationed.',
+    desc: 'Melt a way through the glacier at ground level. Lava is rationed.',
     hint: 'Lava dies when it touches meltwater. Slow drips beat floods.',
     allowed: [Mat.LAVA],
     budget: { [Mat.LAVA]: 2600 },
@@ -207,13 +207,17 @@ export const CHALLENGES: ChallengeDef[] = [
     // star rating handled in starsFor() (needs used[])
     setup(w) {
       fillRect(w, 0, 346, 639, 359, Mat.STONE);
-      fillRect(w, 309, 126, 331, 345, Mat.ICE);
+      // 11 cells thick: at 23 no lava ration got through (measured: not one
+      // clear row); at 11 slow drips from both sides open the pass in ~45 s,
+      // one side just in time, and a flood fails - as the hint says
+      fillRect(w, 315, 126, 325, 345, Mat.ICE);
       // ledges so meltwater drains away from remaining ice
-      fillRect(w, 280, 253, 308, 257, Mat.STONE);
-      fillRect(w, 332, 197, 363, 201, Mat.STONE);
+      fillRect(w, 280, 253, 314, 257, Mat.STONE);
+      fillRect(w, 326, 197, 363, 201, Mat.STONE);
     },
     check(w) {
-      if (w.grid.counts[Mat.ICE] === 0) return 'win';
+      // the pass is open when the bottom 30 rows of the glacier are gone
+      if (countIn(w, 315, 316, 325, 345, Mat.ICE) === 0) return 'win';
       return 'running';
     },
   },
@@ -222,9 +226,10 @@ export const CHALLENGES: ChallengeDef[] = [
 export function starsFor(def: ChallengeDef, w: World, frame: number, used: Int32Array): number {
   switch (def.id) {
     case 'icebreaker': {
-      const spare = used[Mat.LAVA];
-      if (spare >= 900) return 3;
-      if (spare >= 350) return 2;
+      // every good plan uses the whole ration, so stars go to speed
+      // (it counted the lava used as 'spare', so more lava meant more stars)
+      if (frame < 3800) return 3;
+      if (frame < 4800) return 2;
       return 1;
     }
     case 'containment': {

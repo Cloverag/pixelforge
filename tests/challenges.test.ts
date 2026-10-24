@@ -168,3 +168,20 @@ describe('DEMOLITION', { timeout: 300_000 }, () => {
   });
 });
 
+describe('ICE BREAKER', { timeout: 300_000 }, () => {
+  const drip = (both: boolean, size: number, every: number) => (w: World, f: number) => {
+    if (f % every !== 0) return;
+    w.paint([309, 300], Mat.LAVA, size);
+    if (both) w.paint([331, 300], Mat.LAVA, size);
+  };
+
+  it('can be won: slow drips at both feet melt the pass open (issue #3)', () => {
+    expect(play('icebreaker', drip(true, 6, 30))).toMatchObject({ status: 'win', stars: 3 });
+  });
+
+  it('is not won by a flood, or by doing nothing', () => {
+    expect(play('icebreaker', drip(false, 10, 4))?.status).toBe('lose');
+    expect(play('icebreaker', idle)?.status).toBe('lose');
+  });
+});
+

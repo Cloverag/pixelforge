@@ -65,7 +65,7 @@ get their own layout.
 |---|------|------|
 | 1 | AQUEDUCT | Route the spring into the basin before the valley floods. |
 | 2 | FIRE WATCH | Extinguish the grove fire before the wooden village burns down. |
-| 3 | ICE BREAKER | Melt the glacier wall with a limited lava ration. |
+| 3 | ICE BREAKER | Melt a way through the glacier at ground level with a lava ration - slow drips beat floods. |
 | 4 | CONTAINMENT | Patch the reservoir crack before lava reaches the reactor. |
 | 5 | GARDENER | Sow seeds and water them into a living meadow. |
 | 6 | DEMOLITION | Bring the tower down: a torch, a limited fuse and TNT - stack it up the pillars. |
@@ -561,7 +561,7 @@ tests/                     vitest: world rules, TNT debris, rendering, playgroun
 
 ### Testing
 
-353 tests. Beyond the material rules: two worlds fed the same inputs must
+362 tests. Beyond the material rules: two worlds fed the same inputs must
 match for 1200 frames; a world restored mid-game into a different seed must
 stay identical; host and two guests over a simulated network with random
 delays, reordering and a late joiner must agree at every frame; a corrupted
