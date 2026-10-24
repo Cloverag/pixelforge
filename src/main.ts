@@ -39,6 +39,7 @@ import { PlaygroundMode } from './modes/playground';
 import { ChemMode } from './modes/chem';
 import { GardenMode } from './modes/garden';
 import { GardenView } from './garden/view';
+import { AsciiFilter } from './garden/ascii';
 
 const STEP_MS = 1000 / 60;
 
@@ -336,6 +337,7 @@ worker.onmessage = (e: MessageEvent<Res>) => {
       r.wind ? new Float32Array(r.wind) : null,
     );
     renderer.present(r.buf);
+    drawAscii(r.buf);
     if (snap && view3dOn && view3d) view3d.update(snap, r.snapW!, r.snapH!);
     if (r.pg3d && pgView?.visible) pgView.update(new Float32Array(r.pg3d), r.pgN ?? 0, r.pgForces ?? []);
     if (r.pgWalls && pgView) pgView.setWalls(new Uint8Array(r.pgWalls));
@@ -1348,6 +1350,7 @@ function syncDeck(): void {
       grid: renderer.getBlockSize() !== null,
       '3d': view3dOn,
       ray: !!renderer.isRayTraced?.(),
+      ascii: asciiFx !== null,
     },
     sky: skyMode === 'flat' ? BG.id : `sky-${skyMode}`,
     music: v.mute.master || v.mute.music ? 0 : v.music,
@@ -1361,6 +1364,77 @@ document.body.classList.add('crt-on');
 
 function toggleCrt(): void {
   document.body.classList.toggle('crt-on');
+  syncDeck();
+}
+
+// ---- ASCII view: the world as coloured text, through the garden's filter ----
+
+const ASCII_KEY = 'pf.ascii';
+let asciiFx: AsciiFilter | null = null;
+const asciiCover = new Uint8Array(SIM_W * SIM_H);
+
+/** In game only (the menu keeps its blocks), not over the 3D view, and the garden has its own. */
+function asciiShown(): boolean {
+  return asciiFx !== null && screen === 'game' && !view3dOn && current.id !== 'garden';
+}
+
+/**
+ * Redraw the text from the world's canvas: called right after each present,
+ * while its picture is still there. `frame` (a world frame, material id in
+ * alpha) marks what is there, so only that turns to text and the sky stays.
+ */
+function drawAscii(frame?: ArrayBuffer): void {
+  const on = asciiShown();
+  document.body.classList.toggle('ascii-on', on);
+  if (!on || !asciiFx) return;
+  if (frame) {
+    const px = new Uint8Array(frame);
+    // alpha: a material id (< 128), the playground's wall tag (253), or 255 for nothing
+    for (let i = 0; i < asciiCover.length; i++) {
+      const a = px[i * 4 + 3];
+      asciiCover[i] = a < 128 || a === 253 ? 255 : 0;
+    }
+    asciiFx.setMask(asciiCover, SIM_W, SIM_H);
+  }
+  const c = asciiFx.canvas;
+  if (c.width !== canvas.width || c.height !== canvas.height) {
+    c.width = canvas.width;
+    c.height = canvas.height;
+  }
+  c.style.width = `${canvas.clientWidth}px`;
+  c.style.height = `${canvas.clientHeight}px`;
+  asciiFx.cell = 8 * Math.min(window.devicePixelRatio || 1, 2);
+  asciiFx.render(canvas);
+}
+
+function applyAscii(on: boolean): void {
+  if (on && !asciiFx) {
+    const c = document.createElement('canvas');
+    c.className = 'ascii-canvas';
+    try {
+      asciiFx = new AsciiFilter(c);
+    } catch {
+      toast('THE TEXT VIEW NEEDS WEBGL2', true);
+      return;
+    }
+    document.getElementById('screen-wrap')?.appendChild(c);
+  } else if (!on && asciiFx) {
+    asciiFx.dispose();
+    asciiFx.canvas.remove();
+    asciiFx = null;
+  }
+  drawAscii();
+}
+
+function toggleAscii(): void {
+  applyAscii(!asciiFx);
+  try {
+    if (asciiFx) localStorage.setItem(ASCII_KEY, '1');
+    else localStorage.removeItem(ASCII_KEY);
+  } catch {
+    /* private mode: the setting just will not persist */
+  }
+  sfx.ui();
   syncDeck();
 }
 
@@ -1414,6 +1488,7 @@ hud.initDeck({
     } },
     { id: 'grid', label: 'GRID', title: 'Chunky block view, cycles size (B)', color: '#ffd23f', toggle: toggleGrid },
     { id: '3d', label: '3D', title: 'A 3D model of the world (3)', color: '#6ef07a', toggle: () => void toggle3d() },
+    { id: 'ascii', label: 'ASCII', title: 'The world drawn as coloured text (T)', color: '#ff9f43', toggle: toggleAscii },
     { id: 'ray', label: 'RAY', title: 'Path-traced light: bounces, coloured light, shadows from fire (lit skies only)', color: '#b48cff', toggle: toggleRay },
   ],
   skies: [
@@ -1444,6 +1519,11 @@ hud.initDeck({
 // the saved block size and soft setting, now that the HUD exists
 restoreGrid();
 restoreSoft();
+try {
+  if (localStorage.getItem(ASCII_KEY) === '1') applyAscii(true);
+} catch {
+  /* ignore */
+}
 
 new Input(
   canvas,
@@ -1496,6 +1576,9 @@ new Input(
         break;
       case 's':
         if (screen === 'game') toggleSoft();
+        break;
+      case 't':
+        if (screen === 'game') toggleAscii();
         break;
       default:
         // the rest belong to the mode being played

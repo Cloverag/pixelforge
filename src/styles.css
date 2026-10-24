@@ -1621,3 +1621,8 @@ body.immersive.reveal-bottom #deck { transform: none; opacity: 1; pointer-events
 .garden-canvas { position: absolute; left: 0; top: 0; z-index: 3; touch-action: none; pointer-events: none; }
 /* hidden by opacity, not visibility: the world canvas still takes the clicks */
 body.garden-on #screen, body.garden-preview #screen { opacity: 0; }
+
+/* the ASCII view in the other modes: the world's picture as text, over its canvas (main.ts) */
+.ascii-canvas { position: absolute; left: 0; top: 0; z-index: 3; pointer-events: none; display: none; }
+body.ascii-on .ascii-canvas { display: block; }
+body.ascii-on #screen { opacity: 0; }

@@ -21,6 +21,9 @@ uniform vec2 uRes;
 uniform float uCell;
 uniform float uGlyphs;
 uniform float uAscii;
+uniform sampler2D uMask;
+uniform float uMasked;
+uniform float uMaskW;
 void main() {
   vec2 px = vUv * uRes;
   if (uAscii < 0.5) {
@@ -29,6 +32,14 @@ void main() {
   }
   vec2 cell = floor(px / uCell);
   vec2 centre = (cell + 0.5) * uCell / uRes;
+  // with a mask, only what is there turns to text: the rest (the sky) shows as it is
+  if (uMasked > 0.5) {
+    float cover = textureLod(uMask, vec2(centre.x, 1.0 - centre.y), log2(max(1.0, uCell * uMaskW / uRes.x))).r;
+    if (cover < 0.3) {
+      frag = vec4(texture(uPic, vUv).rgb, 1.0);
+      return;
+    }
+  }
   // the cell's average colour: the mip level about one cell across
   vec3 c = textureLod(uPic, centre, log2(uCell)).rgb;
   float lum = dot(c, vec3(0.2126, 0.7152, 0.0722));
@@ -49,11 +60,13 @@ export class AsciiFilter {
   private prog: Program;
   private pic: WebGLTexture;
   private atlas: WebGLTexture;
+  private mask: WebGLTexture;
+  private maskW = 0;
   ascii = true;
   /** a character cell's size in screen pixels */
   cell = 8;
 
-  constructor(private canvas: HTMLCanvasElement) {
+  constructor(readonly canvas: HTMLCanvasElement) {
     const gl = canvas.getContext('webgl2', { alpha: false, antialias: false });
     if (!gl) throw new Error('no webgl2');
     this.gl = gl;
@@ -61,7 +74,24 @@ export class AsciiFilter {
     this.prog = new Program(gl, FRAG);
     this.pic = gl.createTexture()!;
     this.atlas = gl.createTexture()!;
+    this.mask = gl.createTexture()!;
     this.buildAtlas();
+  }
+
+  /** Which parts of the picture are things (255) and which are background (0), one byte each, rows top down; null: all of it is text. */
+  setMask(cover: Uint8Array | null, w: number, h: number): void {
+    this.maskW = cover ? w : 0;
+    if (!cover) return;
+    const gl = this.gl;
+    gl.bindTexture(gl.TEXTURE_2D, this.mask);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, w, h, 0, gl.RED, gl.UNSIGNED_BYTE, cover);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.generateMipmap(gl.TEXTURE_2D);
   }
 
   /** One row of the ramp's characters, white on black, each 32 x 48. */
@@ -102,6 +132,9 @@ export class AsciiFilter {
     this.prog
       .tex('uPic', this.pic, 0)
       .tex('uAtlas', this.atlas, 1)
+      .tex('uMask', this.mask, 2)
+      .f('uMasked', this.maskW > 0 ? 1 : 0)
+      .f('uMaskW', this.maskW)
       .v2('uRes', this.canvas.width, this.canvas.height)
       .f('uCell', this.cell)
       .f('uGlyphs', RAMP.length)
