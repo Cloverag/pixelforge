@@ -38,6 +38,7 @@ import { SandMode } from './modes/sand';
 import { PlaygroundMode } from './modes/playground';
 import { ChemMode } from './modes/chem';
 import { GardenMode } from './modes/garden';
+import { MathMode } from './modes/math';
 import { GardenView } from './garden/view';
 import { AsciiFilter } from './garden/ascii';
 
@@ -129,8 +130,11 @@ const sandbox = new SandMode(modeCtx);
 const playground = new PlaygroundMode(modeCtx);
 const chemLab = new ChemMode(modeCtx);
 const garden = new GardenMode(modeCtx);
+const mathLab = new MathMode(modeCtx);
 /** each world's free-play screen; a challenge is a SandMode of its own */
-const MODE_CTRL: Record<Mode, ModeController> = { sand: sandbox, playground, chem: chemLab, garden };
+const MODE_CTRL: Record<Mode, ModeController> = { sand: sandbox, playground, chem: chemLab, garden, math: mathLab };
+/** modes drawn on their own canvas, not the world's: no rooms, no RAY, no ASCII lamp of the world's */
+const SOLO: readonly Mode[] = ['garden', 'math'];
 /** the screen being played (the menu keeps the last one) */
 let current: ModeController = sandbox;
 
@@ -746,8 +750,8 @@ function leaveRoom(reason?: string, bad = false): void {
 roomPill.onCopy = () => mp && copyRoomLink(mp.code);
 /** The mode after this one, in MODES order: the host's room button offers it. */
 function nextRoomMode(): ModeController {
-  // the garden is not shared, so a room never goes there
-  const shared: Mode[] = MODES.filter((m) => m !== 'garden');
+  // the solo modes are not shared, so a room never goes there
+  const shared: Mode[] = MODES.filter((m) => !SOLO.includes(m));
   return MODE_CTRL[shared[(shared.indexOf(current.id) + 1) % shared.length]];
 }
 
@@ -868,8 +872,8 @@ async function switchMode(id: Mode): Promise<void> {
       toast('ONLY THE HOST CAN CHANGE THE MODE');
       return;
     }
-    if (id === 'garden') {
-      toast('THE ASCII GARDEN IS SOLO FOR NOW', true);
+    if (SOLO.includes(id)) {
+      toast(`THE ${MODE_CTRL[id].roomName} IS SOLO FOR NOW`, true);
       return;
     }
     const next = MODE_CTRL[id];
@@ -1119,6 +1123,16 @@ const MENU: MenuEntry[] = [
     },
   },
   {
+    name: 'MATH LAB',
+    sub: 'watch maths draw: a heart curve, spirals, a globe, a recursive tree - and change the numbers',
+    hotkey: 'a',
+    run: () => {
+      sfx.ensure();
+      leaveRoom('YOU LEFT THE ROOM');
+      startMode(mathLab);
+    },
+  },
+  {
     name: 'SURPRISE ME',
     preview: 'pg',
     sub: 'a brand-new light show, made up on the spot',
@@ -1335,7 +1349,7 @@ function toggleRay(): void {
  * say so; the player can turn it back on from VIEW.
  */
 function watchRayCost(fps: number): void {
-  if (rayAutoOff || screen !== 'game' || paused || skyMode === 'flat' || current.id === 'garden' || !renderer.isRayTraced?.()) {
+  if (rayAutoOff || screen !== 'game' || paused || skyMode === 'flat' || SOLO.includes(current.id) || !renderer.isRayTraced?.()) {
     slowReadings = 0;
     return;
   }
@@ -1380,9 +1394,9 @@ const ASCII_KEY = 'pf.ascii';
 let asciiFx: AsciiFilter | null = null;
 const asciiCover = new Uint8Array(SIM_W * SIM_H);
 
-/** In game only (the menu keeps its blocks), not over the 3D view, and the garden has its own. */
+/** In game only (the menu keeps its blocks), not over the 3D view, and the solo modes have their own. */
 function asciiShown(): boolean {
-  return asciiFx !== null && screen === 'game' && !view3dOn && current.id !== 'garden';
+  return asciiFx !== null && screen === 'game' && !view3dOn && !SOLO.includes(current.id);
 }
 
 /**

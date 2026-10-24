@@ -124,6 +124,7 @@ const MODE_TABS: [Mode, string][] = [
   ['playground', 'PLAYGROUND'],
   ['chem', 'CHEM LAB'],
   ['garden', 'GARDEN'],
+  ['math', 'MATH'],
 ];
 
 /** One VIEW lamp on the deck: what it is, and what pressing it does. */
@@ -201,7 +202,7 @@ export interface PaletteSpec {
   /** BUCKET and WIND under the brush */
   bucket: boolean;
   /** what the bar counts */
-  counts: 'cells' | 'particles';
+  counts: 'cells' | 'particles' | 'strokes';
   /** said on the canvas while the world is empty */
   hint?: string;
 }
@@ -622,8 +623,8 @@ export class Hud {
     tools.appendChild(pinned);
     this.toolbar.append(tools, pal);
     this.pick(spec.initial);
-    this.particleMode = spec.counts === 'particles';
-    if (this.status) this.status.cellsKey.textContent = this.particleMode ? 'particles' : 'cells';
+    this.particleMode = spec.counts !== 'cells';
+    if (this.status) this.status.cellsKey.textContent = spec.counts;
   }
 
   /** BUCKET and WIND are the same one-of-three choice, so they light as one. */

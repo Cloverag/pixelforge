@@ -3,8 +3,9 @@ import { drawGarden } from './draw';
 import { drawEye, EYE_PALETTES, eyeTextMask } from './eye';
 import { bouquet, type Flower } from './flowers';
 import { buildLilies, drawLilies, type LilyScene } from './lily3d';
+import type { MathRun } from '../mathlab/run';
 
-export type GardenScene = 'flowers' | 'eye' | 'lily3d';
+export type GardenScene = 'flowers' | 'eye' | 'lily3d' | 'math';
 
 /**
  * The garden's picture: its own canvas laid over the world's, sized to it,
@@ -19,6 +20,12 @@ export class GardenView {
   gaze = { x: 0, y: 0 };
   palette = 0;
   cellPx = 8;
+  /** MATH LAB's drawing, and the share of the width it gets (the code panel has the rest) */
+  math: MathRun | null = null;
+  mathWidth = 1;
+  /** told the code line being drawn whenever it changes (-1: finished) */
+  onLine: ((line: number) => void) | null = null;
+  private line = -2;
   private canvas: HTMLCanvasElement | null = null;
   private pic = document.createElement('canvas');
   private filter: AsciiFilter | null = null;
@@ -130,6 +137,9 @@ export class GardenView {
         this.mask.dataset.size = String(size);
       }
       drawEye(g, this.mask, bw, bh, now - this.sceneT0, this.gaze.x, this.gaze.y, EYE_PALETTES[this.palette % EYE_PALETTES.length]);
+    } else if (this.scene === 'math' && this.math) {
+      const line = this.math.draw(g, bw, bh, bw * this.mathWidth);
+      if (line !== this.line) this.onLine?.((this.line = line));
     } else if (this.scene === 'lily3d' && this.lilies) {
       drawLilies(g, this.lilies, bw, bh, now - this.sceneT0);
     } else {

@@ -54,6 +54,7 @@ get their own layout.
 | **PLAY TOGETHER (beta)** | A room for friends: open one, send the link, and everyone builds in the same world - the sandbox or the playground. See [Playing together](#playing-together). |
 | **PARTICLE PLAYGROUND** | Light shows instead of materials: emitters, forces, bumpers that play notes, portals - with a film-look renderer, a full 3D view and sound design. See [The playground](#the-playground). |
 | **ASCII GARDEN** | Flowers, an eye made of words and 3D lilies, drawn as coloured text. Solo only. See [The ASCII garden](#the-ascii-garden). |
+| **MATH LAB** | Watch maths draw itself: a parametric heart, a spiral rosette, a globe of ellipses, a recursive tree. The code sits beside the drawing and lights the line drawing now; sliders change its numbers. Solo only. See [The math lab](#the-math-lab). |
 | **CHEM LAB** | Pick elements off a periodic table and drop them into water, acid, fire or each other: 30 elements, 70 reactions, 3 ready-made experiments. See [The chem lab](#the-chem-lab). |
 | **SURPRISE ME** | A brand-new generated playground scene every click (`R`). |
 | **CHALLENGES** | 7 goal-based puzzles with material budgets, time limits, win/lose checks and a 3-star rating. Levels unlock in order; stars persist in `localStorage`. |
@@ -224,6 +225,8 @@ one shader and a glyph atlas drawn once with the browser's monospace font.
   draws itself as a wireframe first, then the surfaces fade in.
 - **ASCII** (`A`) switches the text off to show the drawings; GLYPH SIZE
   cycles 6 / 8 / 11 / 15 px characters.
+- **COPY LINK** puts the flower bed in a link (`#g=`, 12 bytes a flower):
+  whoever opens it lands in the garden and watches the same flowers open.
 
 The eye and the 3D lily are our own takes on two Python sketches
 ([eye_python](https://github.com/mishratanya2311/eye_python),
@@ -234,6 +237,25 @@ plays the three scenes behind the list.
 The other modes have an **ASCII** lamp on the deck (`T`): the same filter over
 the world, masked by the frame's material ids, so only what is there turns to
 text and the sky shows as it is.
+
+## The math lab
+
+A place to see what code and maths do. Pick a drawing and it is drawn stroke
+by stroke while its program, in a code window beside it, lights the line that
+is drawing. Every number you can change is a slider; moving one rewrites the
+code and starts the drawing again.
+
+| Drawing | The idea | Sliders |
+|---|---|---|
+| **HEART** | A parametric curve: `x = 16 sin³t`, `y = 13 cos t - 5 cos 2t - 2 cos 3t - cos 4t`; thousands of short strokes pointing away from the centre | STROKES, SPREAD, LENGTH |
+| **ROSETTE** | Polar coordinates: `x = r cos a`, `y = r sin a`; each arm is a spiral of shrinking circles | ARMS, STEPS, TWIST |
+| **SPHERE** | A circle seen at an angle is an ellipse: rings turned around the axis, `width = R cos(turn)`, make a globe | RINGS, LATITUDES, TILT |
+| **TREE** | Recursion: a branch is a line with two smaller branches on its end, until they are tiny | TRUNK, ANGLE, RATIO, SMALLEST |
+
+AGAIN (`R`) redraws, FINISH (`F`) skips to the end, ASCII (`A`) draws it as
+coloured text. The drawings are pure functions (`src/mathlab/drawings.ts`):
+each stroke carries the code line that made it, which is how the window knows
+what to light. They are our own versions of classic Python-turtle sketches.
 
 ## Light and sky
 
@@ -267,6 +289,8 @@ text and the sky shows as it is.
 | `L` | Chem lab (menu); 3D LILY (garden) |
 | `G` | ASCII garden (menu) |
 | `F` / `E` / `A` / `X` | Bouquet / eye of words / text on-off / clear (garden) |
+| `A` | Math lab (menu) |
+| `R` / `F` | Draw again / finish (math lab) |
 | `E` | Periodic table (chem lab) |
 | `O` | Open a room (menu) |
 | `Z` | Ping where your cursor is (in a room) |
@@ -279,7 +303,7 @@ text and the sky shows as it is.
 | `D` | FPS readout in the canvas corner (off by default) |
 | `ESC` | Close the periodic table, leave immersive mode, then the **pause menu** (alone it freezes the game; in a room it does not). QUIT TO TITLE asks first in a room |
 
-The SANDBOX / PLAYGROUND / CHEM LAB / GARDEN buttons on the marquee switch mode in one
+The SANDBOX / PLAYGROUND / CHEM LAB / GARDEN / MATH buttons on the marquee switch mode in one
 press; the sandbox comes back from its autosave. In a room only the host can
 switch, after a confirm, and everyone goes along.
 
@@ -384,6 +408,7 @@ src/
     playground.ts          the particle playground
     chem.ts                the chem lab
     garden.ts              the ASCII garden: scenes, planting, the panel
+    math.ts                the math lab: the drawing, its code window and sliders
     stroke.ts              brush strokes, shared by every mode
   garden/
     flowers.ts             flower kinds, planting, the bouquet generator (seeded)
@@ -392,6 +417,9 @@ src/
     lily3d.ts              3D LILY: parametric petals, projection, painter's sort
     ascii.ts               the WebGL text filter (also the ASCII lamp in other modes)
     view.ts                the garden's own canvas over the world's; the title preview
+  mathlab/
+    drawings.ts            the math lab's drawings: parameters -> strokes, each with its code line (pure)
+    run.ts                 draws a drawing a batch of strokes a frame onto a kept canvas
   core/
     input.ts               pointer + keyboard -> simulation coords
     rng.ts                 seeded PRNG (32-bit state)
@@ -459,7 +487,7 @@ tests/                     vitest: world rules, TNT debris, rendering, playgroun
 
 ### Testing
 
-322 tests. Beyond the material rules: two worlds fed the same inputs must
+328 tests. Beyond the material rules: two worlds fed the same inputs must
 match for 1200 frames; a world restored mid-game into a different seed must
 stay identical; host and two guests over a simulated network with random
 delays, reordering and a late joiner must agree at every frame; a corrupted

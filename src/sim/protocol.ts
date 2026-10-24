@@ -1,6 +1,6 @@
 /** Every world the simulation can run. A mode's index is its byte in a
  *  packed snapshot, so append new modes - never reorder. */
-export const MODES = ['sand', 'playground', 'chem', 'garden'] as const;
+export const MODES = ['sand', 'playground', 'chem', 'garden', 'math'] as const;
 export type Mode = (typeof MODES)[number];
 
 /** What a brush stroke does: place material, flood a region, or blow air. */

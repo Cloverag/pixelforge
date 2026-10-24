@@ -1628,3 +1628,32 @@ body.garden-on #screen, body.garden-preview #screen { opacity: 0; }
 .ascii-canvas { position: absolute; left: 0; top: 0; z-index: 3; pointer-events: none; display: none; }
 body.ascii-on .ascii-canvas { display: block; }
 body.ascii-on #screen { opacity: 0; }
+
+/* MATH LAB: the drawing on the garden's canvas, its code in a window on the right (modes/math.ts) */
+body.math-on #screen { opacity: 0; }
+.math-code {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 44%;
+  z-index: 4;
+  overflow-y: auto;
+  padding: 14px 16px;
+  background: rgba(14, 11, 30, 0.9);
+  border-left: 2px solid #2a2350;
+  color: #e8e2ff;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: clamp(11px, 0.85vw, 14px);
+}
+.math-title { font-family: var(--font-display); font-size: 14px; color: var(--gold); margin-bottom: 6px; }
+.math-idea { margin: 0 0 10px; line-height: 1.45; color: #b9b0de; font-family: var(--font-read); font-size: 1.05em; }
+.math-lines { margin: 0 0 12px; padding: 8px 0 8px 2.6em; background: #07060f; border-radius: 6px; line-height: 1.55; }
+.math-lines li { white-space: pre; padding-right: 8px; color: #cfc8ef; }
+.math-lines li::marker { color: #5c5480; }
+.math-lines li.on { background: rgba(255, 210, 63, 0.18); color: #fff; box-shadow: inset 3px 0 0 var(--gold); }
+.math-sliders { display: grid; gap: 8px; }
+.math-slider { display: grid; grid-template-columns: 7.5em 1fr 3.5em; align-items: center; gap: 8px; font-family: var(--font-read); }
+.math-key { font-size: 0.95em; letter-spacing: 0.06em; color: #b9b0de; }
+.math-slider input { accent-color: var(--gold); width: 100%; min-height: 28px; }
+.math-val { text-align: right; color: var(--gold); font-variant-numeric: tabular-nums; }

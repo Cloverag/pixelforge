@@ -11,13 +11,17 @@ Live: https://cloverag.github.io/pixelforge/ (deployed from `main` by CI).
 | 2026-10-24 | Redesign R1-R3: arcade title screen, CC0 sound + adaptive music, pause menu |
 | 2026-10-24 | Arcade cabinet UI: marquee with modes, materials panel, control deck (VIEW, SKY, SOUND, WORLD) |
 | 2026-10-24 | Pixel and light engine: crisp cells, cell shading, sun and moon shadows, day/night cycle, clear water, path-traced light (RAY) |
+| 2026-10-24 | MATH LAB: heart, rosette, sphere, tree drawn stroke by stroke beside their code, with sliders |
 | 2026-10-24 | ASCII Garden: flowers, EYE OF WORDS, 3D LILY as coloured text; title-screen preview; ASCII lamp in every mode; README with new GIFs |
 
 ## Next
 
-1. **Garden 2** - draw your own bouquet shape, a vase, falling petals, save and
-   share a bouquet as a link, play together in a garden room.
-2. **Lighting tune-up** - from real-device FPS: quality levels for RAY
+1. **Garden 2** - share a garden as a link (done); next: falling petals, a
+   vase, draw your own bouquet shape, play together in a garden room.
+2. **Make it educational** - MATH LAB is the first step (drawings with their
+   code and sliders). Next: more drawings (spirograph, Fibonacci spiral,
+   Lissajous), a chem-lab "what happened" card per reaction, simple lessons.
+3. **Lighting tune-up** - from real-device FPS: quality levels for RAY
    (rays per texel, resolution), light from the playground's particles,
    coloured shadows through glass.
 
