@@ -113,7 +113,7 @@ export class Voxel3D {
   /** true between an orbit-control 'start' and its 'end' */
   private dragging = false;
   private bloomOn = true;
-  /** the in-view control pill; lives in the 3D container, not the topbar */
+  /** the in-view control pill; lives in the 3D container, not the bottom bar */
   private ui!: HTMLElement;
   private spinBtn!: HTMLButtonElement;
   private glowBtn!: HTMLButtonElement;
@@ -241,8 +241,7 @@ export class Voxel3D {
 
   /**
    * Camera / render controls, drawn inside the 3D container rather than the
-   * topbar. The topbar is already twelve buttons wide, and these five only
-   * mean anything while the diorama is on screen.
+   * bottom bar: these five only mean anything while the diorama is on screen.
    */
   private buildControls(): void {
     const bar = document.createElement('div');

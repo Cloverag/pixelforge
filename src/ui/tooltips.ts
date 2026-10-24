@@ -1,5 +1,5 @@
 /**
- * Hover tooltips for every tool, swatch and topbar button.
+ * Hover tooltips for every tool, swatch and bar button.
  *
  * Owned by MANAGER lane. Installed automatically by initHelp(); no builder
  * wiring needed. Uses event delegation on .swatch / button.px elements so it

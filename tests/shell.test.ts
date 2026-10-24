@@ -59,3 +59,28 @@ describe('the rail is tiles and five brush dots', () => {
     expect(touched.filter((sel) => /swatch|sb-|scenebtns|toolbtns|#toolbar|button\.px/.test(sel))).toEqual([]);
   });
 });
+
+describe('phones', () => {
+  it('the title screen demo covers the screen, cropped, at any shape', async () => {
+    const { coverSize } = await import('../src/render/blocks');
+    for (const [w, h] of [[390, 844], [844, 390], [1920, 1080], [2560, 1080], [1024, 1366]]) {
+      const c = coverSize(w, h);
+      expect(c.w, `${w}x${h} wide enough`).toBeGreaterThanOrEqual(w);
+      expect(c.h, `${w}x${h} tall enough`).toBeGreaterThanOrEqual(h);
+      expect(Math.abs(c.w / c.h - 16 / 9), `${w}x${h} still 16:9`).toBeLessThan(0.02);
+    }
+    // a tall phone crops the sides, never letterboxes: the canvas is taller than the screen's 16:9 strip
+    expect(coverSize(390, 844).w).toBeGreaterThan(390);
+  });
+
+  it('keeps the rail strip, 44px touch targets and no MORE drop-down', () => {
+    const from = css.indexOf('@media (max-width: 900px) and (orientation: portrait)');
+    const portrait = css.slice(from, css.indexOf('@media (max-width: 560px)', from));
+    const landscape = css.slice(css.indexOf('@media (max-height: 520px) and (orientation: landscape)'));
+    expect(landscape).toMatch(/\.bdot \{ width: 44px; \}/);
+    expect(portrait).toMatch(/\.bdot \{ width: 44px; \}/);
+    expect(css).toMatch(/#statusbar button\.px \{ min-height: 44px; \}/);
+    expect(css).toMatch(/\.ts-item \{ min-height: 44px;/);
+    expect(css + hud + main).not.toMatch(/\bMORE\b/);
+  });
+});

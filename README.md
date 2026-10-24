@@ -227,9 +227,11 @@ lava, plants, glass and wall.
 | `D` | FPS readout in the canvas corner (off by default) |
 | `ESC` | Close the periodic table, leave immersive mode, then the **pause menu** (alone it freezes the game; in a room it does not). QUIT TO TITLE asks first in a room |
 
-On a phone the top bar folds into one row with a **MORE** menu, the canvas
-goes full width and the materials become large buttons below it (beside it
-in landscape).
+On a phone (portrait) the canvas goes full width, the rail becomes a one-row
+strip of tiles that scrolls sideways under it, and the bar sits below; the pause
+button opens the pause menu. In landscape the rail stays beside the canvas, two
+tiles to a row. Every tap target is 44px or more. The title screen's demo fills
+the whole screen behind the list.
 
 ## Interface
 

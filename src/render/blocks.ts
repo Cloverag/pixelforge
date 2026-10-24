@@ -79,6 +79,12 @@ export function chrome(el: HTMLElement): { w: number; h: number } {
   };
 }
 
+/** The canvas size that covers a w x h box and crops the overflow: the title screen's demo fills a tall phone. */
+export function coverSize(w: number, h: number): { w: number; h: number } {
+  const s = Math.max(w / SIM_W, h / SIM_H);
+  return { w: Math.ceil(SIM_W * s), h: Math.ceil(SIM_H * s) };
+}
+
 /**
  * CSS size the canvas should take to fill the stage.
  *
@@ -91,6 +97,10 @@ export function fitSize(stage: HTMLElement, frame: HTMLElement | null): { w: num
   // immersive mode fills the window edge to edge, so no margin and no
   // snapping to a whole scale (snapping left 1440x900 at 2x with wide bars)
   const immersive = document.body.classList.contains('immersive');
+  // the title screen's demo fills the whole screen, cropped, instead of a 16:9
+  // strip in the middle of a tall phone (or bars on a wide window)
+  const cover = !document.body.classList.contains('in-game');
+  if (cover) return coverSize(rect.width, rect.height);
   const margin = immersive ? 0 : 16;
   const availW = rect.width - margin - pad.w;
   const availH = rect.height - margin - pad.h;

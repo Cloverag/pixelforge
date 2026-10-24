@@ -1233,7 +1233,10 @@ function setBrush(n: number): void {
 
 // ---- input wiring ----
 
-hud.initBar({ onPause: togglePause, onMenu: openPause });
+// A phone has no SPACE and no room on the bar for two controls: there the pause
+// button is the way into the pause menu (which freezes the game, and RESUME unfreezes it)
+const phone = matchMedia('(max-width: 900px) and (orientation: portrait), (max-height: 520px) and (orientation: landscape)');
+hud.initBar({ onPause: () => (phone.matches ? openPause() : togglePause()), onMenu: openPause });
 
 // the saved block size and soft setting, now that the HUD exists
 restoreGrid();

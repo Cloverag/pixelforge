@@ -169,13 +169,18 @@ button.px:disabled:active {
   min-height: 0;
   /* room for the canvas frame's 4px shadow */
   padding: 8px 12px 12px 8px;
+  overflow: hidden;
   background: var(--bg);
 }
+/* under the title screen the demo is the whole backdrop: no frame, no padding */
+body:not(.in-game) #stage { padding: 0; }
+body:not(.in-game) #viewport { border: 0; box-shadow: none; }
 body.has-wallpaper #stage { background: transparent; }
 
 /* the canvas wears the one frame; the 16:9 sim letterboxes in the dark around it */
 #viewport {
   position: relative;
+  flex: none;
   border: var(--frame-line);
   box-shadow: var(--frame-shadow);
   background: #000;
@@ -337,6 +342,7 @@ body.crt-on #crt {
 @media (max-width: 1100px) { .sb-rx { display: none; } }
 @media (max-width: 900px) { .sb-note { display: none; } }
 
+#statusbar button.px { min-height: 44px; }
 button.px.sq {
   width: 44px;
   height: 44px;
@@ -622,6 +628,10 @@ body:not(.in-game) #paused-badge { display: none; }
   background: radial-gradient(ellipse at center, rgba(8, 6, 5, 0) 50%, rgba(8, 6, 5, 0.85) 100%);
   backdrop-filter: none;
 }
+/* the pause menu dims the game under it evenly (the rail and the bar are busy behind the list), darker at the edges */
+#overlay:has(.title-screen[data-kind='pause']) {
+  background: radial-gradient(ellipse at center, rgba(8, 6, 5, 0.76) 30%, rgba(8, 6, 5, 0.92) 100%);
+}
 /* reduced motion runs no demo: a plain dark backdrop instead of a frozen frame
    (the pause menu keeps the vignette: the game under it is the point) */
 #overlay:has(.title-screen[data-kind='title']):not(.attract) {
@@ -767,6 +777,12 @@ body.crt-on .title-screen::after {
   text-shadow: 2px 2px 0 #0a0706, -1px -1px 0 #0a0706, 0 0 8px rgba(0, 0, 0, 0.8);
   pointer-events: none;
 }
+/* the pause menu is a game screen: its key hints keep the 14px floor */
+.title-screen[data-kind='pause'] .ts-foot { font-size: 14px; }
+/* a finger needs 44px: list rows are at least that tall on touch screens and phones */
+@media (pointer: coarse), (max-width: 720px) {
+  .ts-item { min-height: 44px; display: flex; align-items: center; justify-content: center; line-height: 1.25; }
+}
 @keyframes ts-blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
 @keyframes ts-bob { 0%, 49% { transform: translateY(0); } 50%, 100% { transform: translateY(-2px); } }
 @keyframes ts-fade { from { opacity: 0; } to { opacity: 1; } }
@@ -907,11 +923,11 @@ body.crt-on .title-screen::after {
 @media (max-width: 900px) and (orientation: portrait) {
   /* the rail comes first in the DOM: reversed, the canvas sits on top */
   #workspace { flex-direction: column-reverse; justify-content: flex-end; }
-  #stagecol { order: 3; flex: 0 0 auto; }
+  body.in-game #stagecol { order: 3; flex: 0 0 auto; }
   #workspace .react-bar { order: 2; flex-direction: row; justify-content: center; padding: 6px; border-left: 0; border-top: var(--frame-line); }
   #workspace .react-btn.ping { margin: 0 0 0 6px; }
   /* exactly tall enough for a full-width 16:9 canvas plus its frame */
-  #stage { flex: 0 0 auto; height: calc((100vw - 20px) * 0.5625 + 20px); }
+  body.in-game #stage { flex: 0 0 auto; height: calc((100vw - 20px) * 0.5625 + 20px); }
   #toolbar {
     order: 1;
     flex: 0 0 auto;
@@ -929,6 +945,8 @@ body.crt-on .title-screen::after {
   .toolcol { margin-top: 0; flex-direction: row; align-items: center; gap: 10px; border-top: 0; padding-top: 0; }
   .bdot { width: 44px; }
   .sb-seg { padding: 0 8px; }
+  /* the pause button opens the pause menu here, so MENU would only repeat it */
+  #statusbar .sb-btns button.px:not(.sq) { display: none; }
 }
 @media (max-width: 560px) { .sb-cells { display: none; } }
 
@@ -937,7 +955,9 @@ body.crt-on .title-screen::after {
   #toolbar { padding: 6px 8px 8px; }
   .gswatches { grid-template-columns: repeat(2, auto); }
   .toolcol .glabel { display: none; }
-  .bdot { width: 30px; }
+  .brushdots { flex-wrap: wrap; justify-content: flex-start; }
+  .bdot { width: 44px; }
+  #statusbar .sb-btns button.px:not(.sq) { display: none; }
   #workspace .react-btn { width: 44px; height: 44px; font-size: 20px; }
   #stage { padding: 4px 8px 8px 4px; }
   .sb-seg { padding: 0 8px; }
