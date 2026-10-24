@@ -178,7 +178,7 @@ const sandbox: TrackDef = {
 };
 
 // ----------------------------------------------------------- playground
-// spacey: sparse bells in a long delay, an airy note now and then, no drums.
+// spacey: a soft low bell about once a bar in a slow echo, over a continuous airy bed, no drums.
 // A major, the key of the playground's own ambient pad.
 const playground: TrackDef = {
   id: 'playground',
@@ -186,7 +186,7 @@ const playground: TrackDef = {
   scaleRoot: 57, // A3
   scale: MAJOR,
   delay: true,
-  trim: 1.7,
+  trim: 1.3,
   chords: [
     { root: 45, tones: [69, 73, 76, 71] }, // A add9
     { root: 42, tones: [66, 69, 73, 76] }, // F#m7
@@ -197,14 +197,14 @@ const playground: TrackDef = {
     {
       name: 'bell', kind: 'bell', layer: 'base',
       notes: (c) => {
-        if (![0, 3, 6, 8, 11, 14].includes(c.step) || hash01(c.bar, c.step) > 0.42) return [];
+        if (![0, 8].includes(c.step) || hash01(c.bar, c.step) > 0.5) return [];
         const i = Math.floor(hash01(c.step, c.bar + 11) * c.chord.tones.length);
-        return [chordNote('bell', 'bell', chordTone(c.chord, i) + (hash01(c.bar + 3, c.step) > 0.6 ? 12 : 0), 3, 0.35)];
+        return [chordNote('bell', 'bell', chordTone(c.chord, i) - 12, 3, 0.35)];
       },
     },
     {
       name: 'air', kind: 'air', layer: 'base',
-      notes: (c) => (c.step === 0 && c.bar % 2 === 1 ? [scaleVoice('air', 'air', scaleNote(c.track, [4, 5, 2, 1][c.bar % 4]), 6, 0.2)] : []),
+      notes: (c) => (c.step === 0 ? [scaleVoice('air', 'air', scaleNote(c.track, [4, 5, 2, 1][c.bar % 4]), 6, 0.2)] : []),
     },
   ],
 };

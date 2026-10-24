@@ -116,16 +116,16 @@ export class MusicEngine {
     input.connect(filter).connect(gain).connect(this.bus);
     let send: GainNode | null = null;
     if (track.delay) {
-      // a long, dark feedback delay: the bells' "reverb"
+      // a slow, dark echo tail (not a pulse): the bells' "reverb"
       send = c.createGain();
       send.gain.value = 0.6;
       const d = c.createDelay(1.5);
-      d.delayTime.value = 0.43;
+      d.delayTime.value = 0.7;
       const fb = c.createGain();
-      fb.gain.value = 0.5;
+      fb.gain.value = 0.3;
       const lp = c.createBiquadFilter();
       lp.type = 'lowpass';
-      lp.frequency.value = 2200;
+      lp.frequency.value = 1400;
       send.connect(d);
       d.connect(fb).connect(d);
       d.connect(lp).connect(input);
@@ -206,9 +206,9 @@ export class MusicEngine {
         this.tone(dest, 'triangle', f, t, 0.008, 0, len * 0.6, n.vel * 0.02, -5);
         break;
       case 'bell': {
-        this.tone(dest, 'sine', f, t, 0.006, 0, 2.4, n.vel * 0.1, 0, 0, 0, i.send);
-        this.tone(dest, 'sine', f * 3.99, t, 0.004, 0, 0.5, n.vel * 0.025, 0, 0, 0, i.send);
-        this.tone(dest, 'sine', f * 2, t, 0.006, 0, 1.2, n.vel * 0.03, 0, 0, 0, i.send);
+        // a soft mallet on glass: a slow attack, a quiet octave partial, a long release
+        this.tone(dest, 'sine', f, t, 0.035, 0, 3, n.vel * 0.1, 0, 0, 0, i.send);
+        this.tone(dest, 'sine', f * 2, t, 0.035, 0, 1.5, n.vel * 0.012, 0, 0, 0, i.send);
         break;
       }
       case 'air':
