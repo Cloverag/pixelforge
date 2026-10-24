@@ -78,4 +78,46 @@ const volcano: SandDemo = {
   ],
 };
 
-export const SAND_DEMOS: SandDemo[] = [ponds, volcano];
+/** A torch at one end of a long fuse, TNT under a wooden hut at the other: it burns down, then the blast. */
+const tnt: SandDemo = {
+  name: 'TNT DEMOLITION',
+  strokes: [
+    line(Mat.STONE, 24, 0, 352, 640, 352),
+    line(Mat.SAND, 20, 0, 336, 640, 336),
+    line(Mat.SAND, 14, 0, 322, 200, 324, 640, 322),
+    // the hut: walls, a roof, the charges in its floor
+    // the walls stand just clear of the fuse, which runs in under them
+    line(Mat.WOOD, 4, 400, 304, 400, 262),
+    line(Mat.WOOD, 4, 500, 304, 500, 262),
+    line(Mat.WOOD, 4, 392, 260, 450, 236, 508, 260),
+    line(Mat.TNT, 8, 412, 310, 488, 310),
+    // the fuse runs along the ground from the torch to the charges (about 10 s of burning)
+    line(Mat.TORCH, 6, 292, 308, 298, 308),
+    line(Mat.FUSE, 3, 301, 310, 408, 310),
+    // a pond beside it to catch the debris
+    line(Mat.STONE, 5, 540, 316, 540, 296),
+    line(Mat.WATER, 10, 548, 312, 632, 312),
+  ],
+};
+
+/** A lake held up on a cliff spills over the edge into the valley, where seeds wait. */
+const waterfall: SandDemo = {
+  name: 'WATERFALL',
+  strokes: [
+    line(Mat.STONE, 24, 0, 352, 640, 352),
+    line(Mat.SAND, 16, 0, 338, 640, 338),
+    // the cliff on the left, its lake behind a lip on the edge
+    ...Array.from({ length: 9 }, (_, i) => line(Mat.STONE, 12, 0, 330 - i * 14, 250 - i * 6, 330 - i * 14)),
+    line(Mat.STONE, 6, 0, 210, 0, 120),
+    line(Mat.WATER, 14, 8, 200, 190, 200),
+    line(Mat.WATER, 14, 8, 186, 190, 186),
+    line(Mat.WATER, 14, 8, 172, 190, 172),
+    line(Mat.WATER, 12, 8, 158, 190, 158),
+    // the valley: a stone basin to collect it, and seeds on its floor
+    line(Mat.STONE, 6, 300, 330, 600, 330),
+    line(Mat.STONE, 6, 600, 330, 600, 300),
+    ...Array.from({ length: 10 }, (_, i) => line(Mat.SEED, 4, 320 + i * 28, 322, 322 + i * 28, 322)),
+  ],
+};
+
+export const SAND_DEMOS: SandDemo[] = [ponds, volcano, tnt, waterfall];

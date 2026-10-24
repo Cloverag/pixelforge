@@ -41,4 +41,21 @@ describe('sandbox demos behind the title screen', { timeout: 120_000 }, () => {
     }
     expect(steam + (w.grid.counts[Mat.STONE] - stone0)).toBeGreaterThan(20);
   });
+
+  it('TNT DEMOLITION: the torch lights the fuse and the charges go off', () => {
+    const w = demo('TNT DEMOLITION');
+    const tnt0 = w.grid.counts[Mat.TNT];
+    expect(tnt0).toBeGreaterThan(50);
+    for (let f = 0; f < 1500 && w.grid.counts[Mat.TNT] > 0; f++) w.step();
+    expect(w.grid.counts[Mat.TNT]).toBeLessThan(tnt0 * 0.1);
+  });
+
+  it('WATERFALL: the lake spills into the valley and the seeds grow', () => {
+    const w = demo('WATERFALL');
+    for (let f = 0; f < 1500; f++) w.step();
+    let low = 0;
+    for (let y = 290; y < 330; y++) for (let x = 300; x < 600; x++) if (w.grid.get(x, y) === Mat.WATER) low++;
+    expect(low).toBeGreaterThan(300);
+    expect(w.grid.counts[Mat.FLORA] + w.grid.counts[Mat.PLANT]).toBeGreaterThan(30);
+  });
 });

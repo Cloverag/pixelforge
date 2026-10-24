@@ -1054,9 +1054,12 @@ function startAttract(kind: PreviewKind): void {
     for (const s of SAND_DEMOS[i].strokes) post({ t: 'input', inp: { k: 'paint', pts: s.pts, mat: s.mat, size: s.size, kind: 'brush' } });
     name = SAND_DEMOS[i].name;
   } else {
+    // each experiment in turn, flame tests first
+    const order = [...CHEM_SCENES].sort((p, q) => Number(q.id === 'flames') - Number(p.id === 'flames'));
+    const i = attract?.kind === 'chem' ? (order.findIndex((c) => c.label === attract!.name) + 1) % order.length : 0;
     post({ t: 'input', inp: { k: 'mode', m: 'chem' } });
-    post({ t: 'input', inp: { k: 'chemScene', id: 'flames' } });
-    name = CHEM_SCENES.find((s) => s.id === 'flames')!.label;
+    post({ t: 'input', inp: { k: 'chemScene', id: order[i].id } });
+    name = order[i].label;
   }
   attract = { kind, name };
   overlay.classList.add('attract');
