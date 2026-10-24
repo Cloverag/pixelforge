@@ -7,9 +7,9 @@ elements off a periodic table and watch them react in the chem lab; or solve
 7 goal-based challenges. Everything is simulated in a Web Worker at a fixed
 60 Hz on a 640x360 grid and rendered with WebGL.
 
-No game assets, no UI framework: TypeScript + Vite + WebGL + WebAudio,
-everything procedural. three.js and Trystero load only when the 3D views or
-multiplayer are used.
+No UI framework: TypeScript + Vite + WebGL + WebAudio. The graphics and the
+music are procedural; the only assets are 31 CC0 sound effects from Kenney.
+three.js and Trystero load only when the 3D views or multiplayer are used.
 
 **▶ Play it: https://cloverag.github.io/pixelforge/**
 
@@ -227,36 +227,54 @@ lava, plants, glass and wall.
 | `D` | FPS readout in the canvas corner (off by default) |
 | `ESC` | Close the periodic table, leave immersive mode, then the **pause menu** (alone it freezes the game; in a room it does not). QUIT TO TITLE asks first in a room |
 
-On a phone (portrait) the canvas goes full width, the rail becomes a one-row
-strip of tiles that scrolls sideways under it, and the bar sits below; the pause
-button opens the pause menu. In landscape the rail stays beside the canvas, two
-tiles to a row. Every tap target is 44px or more. The title screen's demo fills
-the whole screen behind the list.
+The SANDBOX / PLAYGROUND / CHEM LAB buttons on the marquee switch mode in one
+press; the sandbox comes back from its autosave. In a room only the host can
+switch, after a confirm, and everyone goes along.
+
+On a phone (portrait) the marquee keeps only the three modes and the pause
+button (which opens the pause menu), the screen runs full width, the materials
+panel fills the middle (brush and tools pinned on top, tiles scrolling), and the
+deck is one row that scrolls sideways. In landscape the cabinet stays as on a
+desktop, only tighter. Every tap target is 44px or more. The title screen's demo
+fills the whole screen behind the list.
 
 ## Interface
 
 The UI is one CSS file and a handful of DOM builders - no component framework,
 no icon set, no images.
 
-- **One look, always dark.** The game uses the title screen's palette: every
-  panel, button and the canvas wears the same pixel frame (a 2px border and a
-  hard 4px shadow), with no gradients, bevels or glows. Toggles show state by
-  fill (accent = on). Fire and glow are additive light, which vanishes on a
-  light field, so there is no light theme.
+- **An arcade cabinet, always dark.** The game screens match the title
+  screen. Along the top runs the **marquee**: the gold logo, the three modes as
+  lit buttons, the material you hold, the cell count (and in the chem lab the
+  reactions per second and what is reacting most), PAUSE and MENU. The screen
+  sits in a bezel. Along the bottom runs the **control deck**, which holds
+  everything you change while playing: VIEW lamps (SOFT, CRT, GRID, 3D), the
+  SKY colours, Music and Effects volume (0-10), and SAVE / LOAD / SHARE (free
+  sandbox only). Every toggle reports to the deck, so the keys, the pause menu
+  and the deck always agree. Fire and glow are additive light, which vanishes
+  on a light field, so there is no light theme.
+- The **title screen** is a cursor list over a live demo: PRESS START (first
+  visit only, which also unlocks audio), then the main list with CHALLENGES
+  and OPTIONS submenus. Arrow keys / Enter / ESC drive it, or the mouse.
 - Explosions shake the canvas, flash and boom.
-- **BACKGROUND** (VIEW, and OPTIONS on the title screen): the colour of the
-  empty world, from eight presets (NIGHT is the original `#0b0b14`). It is
-  presentation only - never in a snapshot, a hash or a room, so every player
-  in a room sees their own - and is remembered in the browser. The worker draws
-  the frame, so it is told through a presentation message; a paused world is
-  redrawn at once.
-- The rail is **tiles**: a 56px square painted from each material's **real
-  colour ramp**, its name under it, three to a row, grouped by kind (powder /
-  life / liquid / gas / solid), so the rail doubles as a legend. The picked tile
-  has an accent outline and a marker. The brush is five dots of growing size
-  (the wheel and `[` `]` move the lit one); BUCKET and WIND are tiles beside
-  ERASE. Solids are textured: bricks, wood grain,
-  cobbles, glass glints, ice fractures.
+- **SKY** (the deck, VIEW in the pause menu, OPTIONS on the title screen): the
+  colour of the empty world, from eight presets (NIGHT is the original
+  `#0b0b14`). It only changes how the world is drawn. It never goes into a
+  snapshot, a hash or a room, so each player in a room sees their own, and the
+  browser remembers it. The worker draws the frame, so it gets the colour in a
+  presentation message, and a paused world is redrawn at once.
+- The **materials panel** on the left is **tiles**. Each is painted from the
+  material's **real colour ramp** with its name under it, and they are grouped
+  by kind (powder / life / liquid / gas / solid), so the panel doubles as a
+  legend. Names never break mid-word. The brush (five dots of growing size;
+  the wheel and `[` `]` move the lit one) and ERASE / BUCKET / WIND are pinned
+  above the tiles, so they never scroll away. Solids are textured: bricks, wood
+  grain, cobbles, glass glints, ice fractures.
+- **Sound:** one AudioContext with master / music / effects buses, remembered in
+  the browser. Each screen (title, sandbox, playground, chem lab) has its own
+  procedural adaptive track, and the tracks crossfade when you switch. Effects
+  are Kenney CC0 one-shots (`public/sfx`), with a synth fallback while they
+  load.
 - **SOFT** blends the simulation with a GPU fluid that carries smoke and glow
   through the wind field; water gets depth, caustics and surface glints.
 - Every animation is decorative and switched off under `prefers-reduced-motion`.
@@ -329,6 +347,7 @@ src/
     challenges.ts          declarative challenge definitions
     reactions.ts           the chem lab's reaction table, compiled to a pair lookup
     chemscenes.ts          the chem lab's ready-made experiments
+    background.ts          the SKY colour of the empty world (presentation only)
     worker.ts              Web Worker entry: steps and renders off the main thread
   net/
     lockstep.ts            host-sequenced lockstep (HostCore / GuestCore)
@@ -344,14 +363,17 @@ src/
     renderer.ts, blocks.ts 2D fallback, grid view, canvas fitting
   game/
     audio.ts               procedural SFX and playground sound design
-    music.ts               procedural chiptune loop
+    music.ts, music-engine.ts, tracks.ts  adaptive soundtrack: controller, scheduler, tracks as data
+    samples.ts, sample-slots.ts, volume.ts  CC0 one-shots and the three volume buses
+    pause.ts               what the pause menu does to the simulation (pure)
     juice.ts               screen shake + flash on explosions
     share.ts, rle.ts       share links and save slots
     progress.ts            star progress
     wallpapers.ts          background wallpapers
   ui/
-    hud.ts                 top bar, palettes, brush column, status bar
-    menu.ts                main menu
+    hud.ts                 marquee, materials panel, brush, control deck
+    menu.ts, menucursor.ts title screen and pause menu; their cursor navigation (pure)
+    immersive.ts           immersive mode
     roompill.ts            room badge: roster, rename, copy link, leave
     cursors.ts             remote cursors and reaction bubbles
     emotes.ts              reaction bar and pings
@@ -376,7 +398,7 @@ tests/                     vitest: world rules, TNT debris, rendering, playgroun
 
 ### Testing
 
-197 tests. Beyond the material rules: two worlds fed the same inputs must
+305 tests. Beyond the material rules: two worlds fed the same inputs must
 match for 1200 frames; a world restored mid-game into a different seed must
 stay identical; host and two guests over a simulated network with random
 delays, reordering and a late joiner must agree at every frame; a corrupted
