@@ -111,6 +111,62 @@ const heart: Drawing = {
   },
 };
 
+/** Mix two [r, g, b] colours (0-1) by k, as a CSS colour. */
+function mixRgb(a: number[], b: number[], k: number): string {
+  const c = a.map((v, i) => Math.round((v + (b[i] - v) * k) * 255));
+  return `rgb(${c[0]},${c[1]},${c[2]})`;
+}
+
+const butterfly: Drawing = {
+  id: 'butterfly',
+  name: 'BUTTERFLY',
+  idea: "Temple Fay's butterfly curve, in polar form: r = e^cos(t) - 2cos(4t) + sin(t/12)^5. Drawn from the middle out, the colour follows the size.",
+  params: [
+    { key: 'n', label: 'STROKES', min: 500, max: 9000, step: 500, value: 5500 },
+    { key: 'turns', label: 'TURNS', min: 1, max: 12, step: 1, value: 1 },
+    { key: 'len', label: 'LENGTH', min: 2, max: 20, step: 1, value: 8 },
+  ],
+  code: (p) => [
+    'def butterfly(t, s):',
+    '    r = (exp(cos(t)) - 2*cos(4*t) + sin(t/12)**5) * s',
+    '    return r*sin(t), r*cos(t)',
+    '',
+    `points = [(random(0, ${p.turns} * 2*pi), random(3, 92))`,
+    `          for i in range(${p.n})]`,
+    'for t, s in sorted(points, key=size):   # small first',
+    '    x, y = butterfly(t, s)',
+    '    angle = atan2(y, x) + random(-0.18, 0.18)',
+    `    length = random(3, ${p.len})`,
+    '    pencolor(cyan -> blue -> magenta -> purple by s)',
+    '    line(x, y, angle, length)',
+  ],
+  strokes(p) {
+    const r = rng(12);
+    const pts: [number, number][] = [];
+    for (let i = 0; i < p.n; i++) pts.push([r() * TAU * p.turns, 3 + r() * 89]);
+    pts.sort((a, b) => a[1] - b[1]);
+    const CYAN = [0.32, 0.95, 1];
+    const BLUE = [0.22, 0.42, 1];
+    const MAGENTA = [0.88, 0.2, 1];
+    const PURPLE = [0.24, 0.025, 0.42];
+    return pts.map(([t, s]) => {
+      const rr = (Math.exp(Math.cos(t)) - 2 * Math.cos(4 * t) + Math.sin(t / 12) ** 5) * s;
+      const x = rr * Math.sin(t);
+      const y = rr * Math.cos(t);
+      const ang = Math.atan2(y, x) + (r() * 2 - 1) * 0.18;
+      const len = 3 + r() * Math.max(0, p.len - 3);
+      let col: string;
+      if (s < 41) col = mixRgb(CYAN, BLUE, s / 41);
+      else if (s < 74) col = mixRgb(BLUE, MAGENTA, (s - 41) / 33);
+      else {
+        const k = (s - 74) / 18;
+        col = mixRgb(MAGENTA, PURPLE, k * k * (3 - 2 * k));
+      }
+      return { x1: x, y1: y, x2: x + Math.cos(ang) * len, y2: y + Math.sin(ang) * len, col, w: 0.7 + r() * 0.6, line: 11 };
+    });
+  },
+};
+
 const rosette: Drawing = {
   id: 'rosette',
   name: 'ROSETTE',
@@ -237,7 +293,7 @@ const tree: Drawing = {
   },
 };
 
-export const DRAWINGS: Drawing[] = [heart, rosette, sphere, tree];
+export const DRAWINGS: Drawing[] = [heart, butterfly, rosette, sphere, tree];
 
 /** A drawing's parameters at their starting values. */
 export function defaults(d: Drawing): Record<string, number> {

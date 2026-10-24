@@ -8,6 +8,7 @@ import type { CursorLook, ModeController, ModeCtx } from './types';
 /** The drawings' chips on the rail. */
 const CHIPS: Record<string, string> = {
   heart: 'linear-gradient(135deg,#ff9fd0 0 50%,#e8417e 50% 100%)',
+  butterfly: 'linear-gradient(135deg,#52f2ff 0 50%,#e033ff 50% 100%)',
   rosette: 'linear-gradient(135deg,#ffffff 0 50%,#9aa6c8 50% 100%)',
   sphere: 'linear-gradient(135deg,#e9d5ff 0 50%,#7c3aed 50% 100%)',
   tree: 'linear-gradient(135deg,#ffc0d8 0 50%,#7a2a1a 50% 100%)',
