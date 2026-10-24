@@ -35,7 +35,7 @@ export class GardenMode implements ModeController {
   readonly view3d = 'voxel';
   readonly challengeId = null;
   readonly keys: Record<string, () => void> = {
-    b: () => this.makeBouquet(),
+    f: () => this.makeBouquet(),
     x: () => this.clear(),
     a: () => this.toggleAscii(),
     e: () => this.show('eye'),
@@ -59,7 +59,7 @@ export class GardenMode implements ModeController {
         label: 'SCENES',
         cls: 'scenebtns',
         buttons: [
-          { label: 'BOUQUET', title: 'A whole new bouquet of flowers (B)', onClick: () => this.makeBouquet(), cls: 'surprise' },
+          { label: 'BOUQUET', title: 'A whole new bouquet of flowers (F)', onClick: () => this.makeBouquet(), cls: 'surprise' },
           { label: 'EYE OF WORDS', title: 'A giant eye made of words: it blinks and follows the pointer (E)', onClick: () => this.show('eye') },
           { label: '3D LILY', title: 'A lily bouquet that builds itself in 3D (L)', onClick: () => this.show('lily3d') },
         ],
