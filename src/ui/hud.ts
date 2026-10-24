@@ -123,6 +123,7 @@ const MODE_TABS: [Mode, string][] = [
   ['sand', 'SANDBOX'],
   ['playground', 'PLAYGROUND'],
   ['chem', 'CHEM LAB'],
+  ['garden', 'GARDEN'],
 ];
 
 /** One VIEW lamp on the deck: what it is, and what pressing it does. */

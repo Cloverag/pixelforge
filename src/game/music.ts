@@ -22,7 +22,7 @@ const TICK_MS = 25;
 
 /** Which track plays for a mode (a challenge is a sandbox). */
 export function trackForMode(modeId: string): TrackId {
-  return modeId === 'playground' ? 'playground' : modeId === 'chem' ? 'chem' : 'sandbox';
+  return modeId === 'playground' || modeId === 'garden' ? 'playground' : modeId === 'chem' ? 'chem' : 'sandbox';
 }
 
 export function initMusic(sfx: Sfx): MusicController {

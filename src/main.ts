@@ -37,6 +37,7 @@ import type { ModeController, ModeCtx } from './modes/types';
 import { SandMode } from './modes/sand';
 import { PlaygroundMode } from './modes/playground';
 import { ChemMode } from './modes/chem';
+import { GardenMode } from './modes/garden';
 
 const STEP_MS = 1000 / 60;
 
@@ -125,8 +126,9 @@ const modeCtx: ModeCtx = {
 const sandbox = new SandMode(modeCtx);
 const playground = new PlaygroundMode(modeCtx);
 const chemLab = new ChemMode(modeCtx);
+const garden = new GardenMode(modeCtx);
 /** each world's free-play screen; a challenge is a SandMode of its own */
-const MODE_CTRL: Record<Mode, ModeController> = { sand: sandbox, playground, chem: chemLab };
+const MODE_CTRL: Record<Mode, ModeController> = { sand: sandbox, playground, chem: chemLab, garden };
 /** the screen being played (the menu keeps the last one) */
 let current: ModeController = sandbox;
 
@@ -735,7 +737,9 @@ function leaveRoom(reason?: string, bad = false): void {
 roomPill.onCopy = () => mp && copyRoomLink(mp.code);
 /** The mode after this one, in MODES order: the host's room button offers it. */
 function nextRoomMode(): ModeController {
-  return MODE_CTRL[MODES[(MODES.indexOf(current.id) + 1) % MODES.length]];
+  // the garden is not shared, so a room never goes there
+  const shared: Mode[] = MODES.filter((m) => m !== 'garden');
+  return MODE_CTRL[shared[(shared.indexOf(current.id) + 1) % shared.length]];
 }
 
 /** The host takes the whole room to the next mode (the world starts empty). */
@@ -827,6 +831,8 @@ function startMode(m: ModeController): void {
 
 /** A mode's screen, without touching the world (a room switch). */
 function showMode(m: ModeController): void {
+  // the mode we are leaving lets go of what it holds (the garden: its own canvas)
+  if (current !== m) current.leave();
   close3d();
   renderer.setCinematic?.(m.cinematic);
   // a mode switch would otherwise leave the last composite ghosting
@@ -850,6 +856,10 @@ async function switchMode(id: Mode): Promise<void> {
   if (mp) {
     if (!mp.host) {
       toast('ONLY THE HOST CAN CHANGE THE MODE');
+      return;
+    }
+    if (id === 'garden') {
+      toast('THE ASCII GARDEN IS SOLO FOR NOW', true);
       return;
     }
     const next = MODE_CTRL[id];
@@ -1064,6 +1074,16 @@ const MENU: MenuEntry[] = [
     run: () => {
       sfx.ensure();
       startChemLab();
+    },
+  },
+  {
+    name: 'ASCII GARDEN',
+    sub: 'plant lilies, tulips and roses - drawn in coloured text',
+    hotkey: 'g',
+    run: () => {
+      sfx.ensure();
+      leaveRoom('YOU LEFT THE ROOM');
+      startMode(garden);
     },
   },
   {
@@ -1283,7 +1303,7 @@ function toggleRay(): void {
  * say so; the player can turn it back on from VIEW.
  */
 function watchRayCost(fps: number): void {
-  if (rayAutoOff || screen !== 'game' || paused || skyMode === 'flat' || !renderer.isRayTraced?.()) {
+  if (rayAutoOff || screen !== 'game' || paused || skyMode === 'flat' || current.id === 'garden' || !renderer.isRayTraced?.()) {
     slowReadings = 0;
     return;
   }
