@@ -8,7 +8,7 @@ import { Sfx } from './game/audio';
 import { Juice } from './game/juice';
 import { Hud } from './ui/hud';
 import { isPauseOpen, setMenuLive, showMenu, showPause, type MenuSound } from './ui/menu';
-import type { MenuEntry } from './ui/menu';
+import type { MenuEntry, PreviewKind } from './ui/menu';
 import { pauseRule } from './game/pause';
 import { loadSkyMode, saveSkyMode, type SkyMode } from './render/daylight';
 import { BACKGROUNDS, BG, backgroundById, bgCss, loadBackgroundId, saveBackgroundId, setBackground, stepBackground } from './sim/background';
@@ -39,6 +39,9 @@ import { PlaygroundMode } from './modes/playground';
 import { ChemMode } from './modes/chem';
 import { GardenMode } from './modes/garden';
 import { MathMode } from './modes/math';
+import { defaults, DRAWINGS } from './mathlab/drawings';
+import { MathRun } from './mathlab/run';
+import { SAND_DEMOS } from './game/sanddemos';
 import { GardenView } from './garden/view';
 import { AsciiFilter } from './garden/ascii';
 
@@ -993,7 +996,7 @@ const ATTRACT_MS = 25000;
 const PREVIEW_DELAY_MS = 300;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 /** what the menu is showing behind itself; null = nothing (or reduced motion) */
-let attract: { kind: 'pg' | 'chem' | 'garden'; name: string } | null = null;
+let attract: { kind: PreviewKind; name: string } | null = null;
 /** the ASCII garden, playing behind the title screen while its entry is hovered */
 const gardenPreview = new GardenView('garden-preview');
 let attractTimer = 0;
@@ -1001,30 +1004,52 @@ let previewTimer = 0;
 /** particles (playground) or cells (chem lab) in the last frame, for dev checks */
 let lastLive = 0;
 
-function startAttract(kind: 'pg' | 'chem' | 'garden'): void {
+function startAttract(kind: PreviewKind): void {
   window.clearTimeout(attractTimer);
   if (screen !== 'menu' || reducedMotion.matches) return;
+  if (kind === 'math') {
+    // the drawings drawing themselves, full width, one after another
+    if (!gardenPreview.mounted()) gardenPreview.mount();
+    const i = attract?.kind === 'math' ? (DRAWINGS.findIndex((d) => d.name === attract!.name) + 1) % DRAWINGS.length : 1;
+    const d = DRAWINGS[i];
+    gardenPreview.ascii = false;
+    gardenPreview.mathWidth = 1;
+    gardenPreview.math = new MathRun(d.strokes(defaults(d)), 7);
+    gardenPreview.setScene('math');
+    attract = { kind, name: d.name };
+    overlay.classList.add('attract');
+    setMenuLive(d.name);
+    attractTimer = window.setTimeout(() => startAttract('math'), 11000);
+    return;
+  }
   if (kind === 'garden') {
     // its own canvas over the demo; a new scene each time round
     if (!gardenPreview.mounted()) gardenPreview.mount();
     const scenes = ['flowers', 'lily3d', 'bloom', 'eye'] as const;
     const i = attract?.kind === 'garden' ? (scenes.indexOf(gardenPreview.scene as (typeof scenes)[number]) + 1) % scenes.length : 0;
     gardenPreview.flowers = [];
+    gardenPreview.ascii = true;
     gardenPreview.setScene(scenes[i], (Math.random() * 1e6) | 0);
-    attract = { kind, name: ['ASCII BOUQUET', '3D LILY', 'EYE OF WORDS'][i] };
+    attract = { kind, name: ['ASCII BOUQUET', '3D LILY', 'BLOOM', 'EYE OF WORDS'][i] };
     overlay.classList.add('attract');
     setMenuLive(attract.name);
     attractTimer = window.setTimeout(() => startAttract('garden'), ATTRACT_MS / 2);
     return;
   }
   gardenPreview.unmount();
-  const m = kind === 'pg' ? playground : chemLab;
+  const m = kind === 'pg' ? playground : kind === 'sand' ? sandbox : chemLab;
   renderer.setCinematic?.(m.cinematic);
   renderer.reset();
   let name: string;
   if (kind === 'pg') {
     post({ t: 'input', inp: { k: 'mode', m: 'playground' } });
     name = playground.surprise(true);
+  } else if (kind === 'sand') {
+    // a world of ordinary brush strokes; the sandbox's own rules do the rest
+    const i = attract?.kind === 'sand' ? (SAND_DEMOS.findIndex((d) => d.name === attract!.name) + 1) % SAND_DEMOS.length : 0;
+    post({ t: 'input', inp: { k: 'mode', m: 'sand' } });
+    for (const s of SAND_DEMOS[i].strokes) post({ t: 'input', inp: { k: 'paint', pts: s.pts, mat: s.mat, size: s.size, kind: 'brush' } });
+    name = SAND_DEMOS[i].name;
   } else {
     post({ t: 'input', inp: { k: 'mode', m: 'chem' } });
     post({ t: 'input', inp: { k: 'chemScene', id: 'flames' } });
@@ -1047,11 +1072,11 @@ function stopAttract(): void {
 }
 
 /** Hover or focus on a mode card: preview it, once the mouse settles. */
-function previewAttract(kind: 'pg' | 'chem' | 'garden'): void {
+function previewAttract(kind: PreviewKind): void {
   window.clearTimeout(previewTimer);
   previewTimer = window.setTimeout(() => {
     // the chem lab's scene is fixed: no need to rebuild what is already on
-    if (screen === 'menu' && !((kind === 'chem' || kind === 'garden') && attract?.kind === kind)) startAttract(kind);
+    if (screen === 'menu' && !(kind !== 'pg' && attract?.kind === kind)) startAttract(kind);
   }, PREVIEW_DELAY_MS);
 }
 
@@ -1085,6 +1110,7 @@ const PLACEABLE = MATS.filter((m) => m?.placeable).length;
 const MENU: MenuEntry[] = [
   {
     name: 'SANDBOX',
+    preview: 'sand',
     sub: `paint ${PLACEABLE} materials - no rules, no timer`,
     run: () => {
       sfx.ensure();
@@ -1124,6 +1150,7 @@ const MENU: MenuEntry[] = [
   },
   {
     name: 'MATH LAB',
+    preview: 'math',
     sub: 'watch maths draw: a heart curve, spirals, a globe, a recursive tree - and change the numbers',
     hotkey: 'a',
     run: () => {

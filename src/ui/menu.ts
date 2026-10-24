@@ -6,6 +6,9 @@ import { cycleVolume, stepVolume, volumeBar, type Bus } from '../game/volume';
 import { back, initialNav, move, moveTo, open, start, type MenuHome, type Nav } from './menucursor';
 import { h } from './widgets';
 
+/** what an entry plays behind the title screen while the cursor rests on it */
+export type PreviewKind = 'pg' | 'chem' | 'garden' | 'sand' | 'math';
+
 /** An item of the title screen's MAIN list; main.ts owns the list and its hotkeys. */
 export interface MenuEntry {
   name: string;
@@ -14,7 +17,7 @@ export interface MenuEntry {
   /** the key as Input reports it ('p', 'l'); works on MAIN */
   hotkey?: string;
   /** moving the cursor here previews this on the background */
-  preview?: 'pg' | 'chem' | 'garden';
+  preview?: PreviewKind;
   /** opens a submenu instead of running */
   opens?: 'challenges' | 'options';
   run?(): void;
@@ -45,7 +48,7 @@ export interface MenuCallbacks extends CommonCallbacks {
   /** PRESS START was pressed: the user gesture that unlocks audio */
   onStart(): void;
   onChallenge(id: string): void;
-  onPreview(kind: 'pg' | 'chem' | 'garden'): void;
+  onPreview(kind: PreviewKind): void;
 }
 
 /** The view toggles of the pause menu's VIEW screen: each acts, and `state` reads them back. */
