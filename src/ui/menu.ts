@@ -48,7 +48,8 @@ export interface MenuCallbacks extends CommonCallbacks {
   /** PRESS START was pressed: the user gesture that unlocks audio */
   onStart(): void;
   onChallenge(id: string): void;
-  onPreview(kind: PreviewKind): void;
+  /** the cursor is on main-list entry `entry`, which previews `kind` (null: none) */
+  onPreview(kind: PreviewKind | null, entry: number): void;
 }
 
 /** The view toggles of the pause menu's VIEW screen: each acts, and `state` reads them back. */
@@ -322,8 +323,7 @@ function paint(): void {
   itemEls[cur]?.focus({ preventScroll: true });
   if (descEl) descEl.textContent = rows[cur]?.desc ?? '';
   if (nav.screen === 'main' && title) {
-    const kind = title.entries[cur]?.preview;
-    if (kind) title.onPreview(kind);
+    title.onPreview(title.entries[cur]?.preview ?? null, cur);
   }
 }
 

@@ -970,6 +970,7 @@ function openMenu(firstVisit = false): void {
   sfx.playground(null); // the menu's demo is silent
   screen = 'menu';
   remember('menu');
+  previewEntry = -1; // a fresh title screen: the first entry the cursor lands on plays
   // a new player's title screen is drawn in 4px blocks, the retro look; once
   // they pick a grid in game (none included), the title screen follows it
   const g = savedGrid();
@@ -1100,12 +1101,22 @@ function stopAttract(): void {
   setMenuLive(null);
 }
 
-/** Hover or focus on a mode card: preview it, once the mouse settles. */
-function previewAttract(kind: PreviewKind): void {
+/** the main-list entry the cursor was last on: arriving at one (not a repaint) is a new hover */
+let previewEntry = -1;
+
+/**
+ * The cursor arrived on a title-screen entry: once the mouse settles, play
+ * its preview - its next scene, even if that mode was already showing (the
+ * cursor went away and came back). An entry with no preview leaves the
+ * current one playing.
+ */
+function previewAttract(kind: PreviewKind | null, entry: number): void {
+  if (entry === previewEntry) return; // a repaint, not a move
+  previewEntry = entry;
   window.clearTimeout(previewTimer);
+  if (!kind) return;
   previewTimer = window.setTimeout(() => {
-    // the chem lab's scene is fixed: no need to rebuild what is already on
-    if (screen === 'menu' && !(kind !== 'pg' && attract?.kind === kind)) startAttract(kind);
+    if (screen === 'menu') startAttract(kind);
   }, PREVIEW_DELAY_MS);
 }
 
