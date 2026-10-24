@@ -43,6 +43,7 @@ import { defaults, DRAWINGS } from './mathlab/drawings';
 import { MathRun } from './mathlab/run';
 import { SURFACES, SurfaceRun } from './mathlab/surface';
 import { SAND_DEMOS } from './game/sanddemos';
+import { bootPlace } from './game/boot';
 import { GardenView } from './garden/view';
 import { AsciiFilter } from './garden/ascii';
 
@@ -848,8 +849,20 @@ function startMode(m: ModeController): void {
   showMode(m);
 }
 
+/** Where the player is - the title screen or a mode - so a reload comes back there. */
+const WHERE_KEY = 'pf.where';
+function remember(where: Mode | 'menu'): void {
+  try {
+    localStorage.setItem(WHERE_KEY, where);
+  } catch {
+    /* private mode: a reload starts as a first visit would */
+  }
+}
+
 /** A mode's screen, without touching the world (a room switch). */
 function showMode(m: ModeController): void {
+  // a challenge reloads to the title screen: it cannot resume halfway
+  remember(m.challengeId ? 'menu' : m.id);
   // the mode we are leaving lets go of what it holds (the garden: its own canvas)
   if (current !== m) current.leave();
   close3d();
@@ -956,6 +969,7 @@ function openMenu(firstVisit = false): void {
   autosaveNow();
   sfx.playground(null); // the menu's demo is silent
   screen = 'menu';
+  remember('menu');
   // a new player's title screen is drawn in 4px blocks, the retro look; once
   // they pick a grid in game (none included), the title screen follows it
   const g = savedGrid();
@@ -1733,12 +1747,25 @@ if (urlRoom && hostingCode() === urlRoom) {
   // A returning player gets their sandbox back instead of an empty world: the
   // save used to be reachable only through the LOAD button, so any reload or
   // tab close looked like the game had reset itself.
+  // back where the player was: the title screen, the sandbox with its world, or another lab
+  let where: string | null = null;
+  try {
+    where = localStorage.getItem(WHERE_KEY);
+  } catch {
+    /* ignore */
+  }
   const boot = readSave();
   const bootWorld = boot ? rleDecode(boot, SIM_W * SIM_H) : null;
-  if (bootWorld) {
+  const place = bootPlace(where, bootWorld !== null);
+  if (place === 'sand') {
+    // the sandbox, with its world if it has one
     startSandbox();
-    adoptWorld(bootWorld);
-    toast('WORLD RESTORED');
+    if (bootWorld) {
+      adoptWorld(bootWorld);
+      toast('WORLD RESTORED');
+    }
+  } else if (place !== 'menu') {
+    startMode(MODE_CTRL[place]);
   } else {
     openMenu(true);
   }
