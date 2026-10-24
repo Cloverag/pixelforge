@@ -1,3 +1,4 @@
+import { bgShifted } from '../sim/background';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
@@ -140,8 +141,8 @@ export class Voxel3D {
     this.renderer.domElement.style.display = 'block';
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x07070f);
-    this.scene.fog = new THREE.Fog(0x07070f, 300, 720);
+    this.scene.background = new THREE.Color(bgShifted(0x07070f));
+    this.scene.fog = new THREE.Fog(bgShifted(0x07070f), 300, 720);
 
     this.camera = new THREE.PerspectiveCamera(
       48,
@@ -439,6 +440,12 @@ export class Voxel3D {
     this.solid.instanceColor!.needsUpdate = true;
     this.glow.instanceMatrix.needsUpdate = true;
     this.glow.instanceColor!.needsUpdate = true;
+  }
+
+  /** the player picked another background colour */
+  refreshBackground(): void {
+    (this.scene.background as THREE.Color).setHex(bgShifted(0x07070f));
+    (this.scene.fog as THREE.Fog).color.setHex(bgShifted(0x07070f));
   }
 
   show(): void {

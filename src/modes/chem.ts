@@ -106,7 +106,7 @@ export class ChemMode implements ModeController {
       { label: 'BENCH', swatches: BENCH.map(swatch) },
       {
         label: 'TOOLS',
-        swatches: [{ id: '-1', label: 'ERASE', chip: '#0b0b14', dashed: true, title: 'Eraser (or hold right mouse button)', info: ['ERASE', '', 'Clears whatever the brush covers.', 'transparent'] }],
+        swatches: [{ id: '-1', label: 'ERASE', chip: 'var(--world-bg)', dashed: true, title: 'Eraser (or hold right mouse button)', info: ['ERASE', '', 'Clears whatever the brush covers.', 'transparent'] }],
       },
     ];
     this.ctx.hud.buildPalette(

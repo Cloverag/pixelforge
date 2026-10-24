@@ -10,10 +10,10 @@ import {
 import { CHEM, COMPILED, DECAY, HOT, KEEP, RULES, RX, type Compiled } from './reactions';
 import { CHUNK, CHUNK_SHIFT, CHUNKS_X, CHUNKS_Y, SIM_H, SIM_W, Stats, ChallengeResult, Mode, PaintKind, SimEvents, emptyEvents, NetInput, Snapshot } from './protocol';
 import { PSys } from './particles';
+import { BG } from './background';
 import { Wind } from './wind';
 import { CHALLENGES, ChallengeDef, starsFor } from './challenges';
 
-const BG = MATS[Mat.EMPTY].ramp[0];
 /** frames from fire touching TNT to the blast: long enough to see it blink
  *  and back away, short enough that it still reads as cause and effect */
 export const TNT_FUSE = 70;
@@ -2222,7 +2222,7 @@ export class World {
     const g = this.grid;
     const dirty = g.chunks.dirty;
     if (forceFull) {
-      pix.fill(BG);
+      pix.fill(BG.u32);
       const n = g.W * g.H;
       for (let i = 0; i < n; i++) {
         const m = g.cells[i];
@@ -2233,6 +2233,7 @@ export class World {
       return;
     }
     const W = g.W;
+    const bg = BG.u32;
     const windy = this.wind.isMoving;
     for (let cy = 0; cy < CHUNKS_Y; cy++) {
       for (let cx = 0; cx < CHUNKS_X; cx++) {
@@ -2253,9 +2254,9 @@ export class World {
             if (m !== Mat.EMPTY) {
               pix[i] = this.shadeCell(i, x, y, m);
             } else if (specks === 0) {
-              pix[i] = BG;
+              pix[i] = bg;
             } else {
-              pix[i] = this.windSpeck(x, y, vx, vy, specks);
+              pix[i] = this.windSpeck(x, y, vx, vy, specks, bg);
             }
           }
         }
@@ -2307,11 +2308,11 @@ export class World {
    * backwards along the wind vector - the pattern is static, the sampling
    * window moves, and the eye reads the result as air travelling.
    */
-  private windSpeck(x: number, y: number, vx: number, vy: number, specks: number): number {
+  private windSpeck(x: number, y: number, vx: number, vy: number, specks: number, bg: number): number {
     const drift = this.f * 0.5;
     const sx = (x - vx * drift) | 0;
     const sy = (y - vy * drift) | 0;
-    return (hash2d(sx, sy) & 1023) < specks ? WIND_DUST : BG;
+    return (hash2d(sx, sy) & 1023) < specks ? WIND_DUST : bg;
   }
 
   stats(): Stats {

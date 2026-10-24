@@ -1,3 +1,4 @@
+import { bgShifted } from '../sim/background';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
@@ -76,8 +77,8 @@ export class PG3D {
     container.appendChild(r.domElement);
     this.renderer = r;
 
-    this.scene.background = new THREE.Color(0x05060c);
-    this.scene.fog = new THREE.FogExp2(0x05060c, 0.0016);
+    this.scene.background = new THREE.Color(bgShifted(0x05060c));
+    this.scene.fog = new THREE.FogExp2(bgShifted(0x05060c), 0.0016);
 
     this.camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 1, 3000);
     this.camera.position.set(0, 60, 430);
@@ -375,6 +376,12 @@ export class PG3D {
     this.quality++;
     this.nextStepAt = now + 2500;
     if (this.quality === 1 && this.reflector) this.reflector.visible = false;
+  }
+
+  /** the player picked another background colour */
+  refreshBackground(): void {
+    (this.scene.background as THREE.Color).setHex(bgShifted(0x05060c));
+    (this.scene.fog as THREE.FogExp2).color.setHex(bgShifted(0x05060c));
   }
 
   show(): void {

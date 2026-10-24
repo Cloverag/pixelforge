@@ -190,7 +190,7 @@ body.has-wallpaper #stage { background: transparent; }
 
 #screen {
   display: block;
-  background: #0b0a09;
+  background: var(--world-bg, #0b0b14);
   touch-action: none;
   cursor: crosshair;
   image-rendering: auto;

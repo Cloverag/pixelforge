@@ -1,8 +1,6 @@
-import { MATS, Mat } from '../sim/materials';
+import { BG } from '../sim/background';
 import { SIM_H, SIM_W } from '../sim/protocol';
 
-/** The colour the worker fills empty cells with (see World.renderInto). */
-const EMPTY = MATS[Mat.EMPTY].ramp[0];
 /** Grout between tiles in block mode. ABGR for #050509. */
 const GAP = 0xff090505;
 
@@ -34,6 +32,8 @@ export class Blockifier {
       this.rowTpl = new Uint32Array(SIM_W);
     }
     const src = new Uint32Array(buf);
+    /** the colour the worker fills empty cells with: the player's background */
+    const EMPTY = BG.u32;
     const out = this.pix!;
     const tpl = this.rowTpl!;
     const gap = b >= 16 ? 2 : 1;

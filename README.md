@@ -242,6 +242,12 @@ no icon set, no images.
   fill (accent = on). Fire and glow are additive light, which vanishes on a
   light field, so there is no light theme.
 - Explosions shake the canvas, flash and boom.
+- **BACKGROUND** (VIEW, and OPTIONS on the title screen): the colour of the
+  empty world, from eight presets (NIGHT is the original `#0b0b14`). It is
+  presentation only - never in a snapshot, a hash or a room, so every player
+  in a room sees their own - and is remembered in the browser. The worker draws
+  the frame, so it is told through a presentation message; a paused world is
+  redrawn at once.
 - The rail is **tiles**: a 56px square painted from each material's **real
   colour ramp**, its name under it, three to a row, grouped by kind (powder /
   life / liquid / gas / solid), so the rail doubles as a legend. The picked tile

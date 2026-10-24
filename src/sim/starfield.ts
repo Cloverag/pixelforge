@@ -1,3 +1,4 @@
+import { BG } from './background';
 import { SIM_H, SIM_W } from './protocol';
 import { hash2d } from '../core/rng';
 
@@ -27,10 +28,6 @@ export interface Bender {
   y: number;
 }
 
-const BG_R = 0x0b;
-const BG_G = 0x0b;
-const BG_B = 0x14;
-const BG = ((255 << 24) | (BG_B << 16) | (BG_G << 8) | BG_R) >>> 0;
 
 /** the black hole's Einstein radius: lensed light crowds into a ring here */
 const EINSTEIN = 22;
@@ -60,19 +57,28 @@ function noise(x: number, y: number, cell: number, salt: number): number {
   return a + (b - a) * uy;
 }
 
-/** the unbent clouds, built once: dim purple and teal where they are dense */
+/**
+ * The unbent clouds: dim purple and teal where they are dense, over the
+ * background colour. Rebuilt (lazily, in skyLayer) when the player picks
+ * another background; the noise itself is the same.
+ */
 const NEB = new Uint32Array(SIM_W * SIM_H);
-for (let y = 0; y < SIM_H; y++) {
-  for (let x = 0; x < SIM_W; x++) {
-    const d = noise(x, y, 160, 1) * 0.55 + noise(x, y, 80, 2) * 0.3 + noise(x, y, 32, 3) * 0.15;
-    const hue = noise(x, y, 213, 4);
-    // only the denser parts glow; the rest stays open sky
-    const k = Math.max(0, d - 0.36) / 0.64;
-    const v = k * k * 72;
-    const r = BG_R + v * (0.55 + 0.35 * hue);
-    const g = BG_G + v * (0.25 + 0.45 * (1 - hue));
-    const b = BG_B + v * 0.95;
-    NEB[y * SIM_W + x] = ((255 << 24) | (Math.min(255, b | 0) << 16) | (Math.min(255, g | 0) << 8) | Math.min(255, r | 0)) >>> 0;
+/** the background NEB was last built over (ABGR); 0 = never */
+let nebOver = 0;
+function buildNebula(): void {
+  nebOver = BG.u32;
+  for (let y = 0; y < SIM_H; y++) {
+    for (let x = 0; x < SIM_W; x++) {
+      const d = noise(x, y, 160, 1) * 0.55 + noise(x, y, 80, 2) * 0.3 + noise(x, y, 32, 3) * 0.15;
+      const hue = noise(x, y, 213, 4);
+      // only the denser parts glow; the rest stays open sky
+      const k = Math.max(0, d - 0.36) / 0.64;
+      const v = k * k * 72;
+      const r = BG.r + v * (0.55 + 0.35 * hue);
+      const g = BG.g + v * (0.25 + 0.45 * (1 - hue));
+      const b = BG.b + v * 0.95;
+      NEB[y * SIM_W + x] = ((255 << 24) | (Math.min(255, b | 0) << 16) | (Math.min(255, g | 0) << 8) | Math.min(255, r | 0)) >>> 0;
+    }
   }
 }
 
@@ -173,7 +179,7 @@ function rebuildAround(f: Bender, forces: readonly Bender[], frame: number): voi
   for (let y = y0; y <= y1; y++)
     for (let x = x0; x <= x1; x++, m++) {
       if (!inside[m]) continue;
-      let v = BG;
+      let v = BG.u32;
       if (!dark[m]) {
         const sx = Math.round(bx[m]);
         const sy = Math.round(by[m]);
@@ -192,6 +198,11 @@ export function skyLayer(frame: number, forces: readonly Bender[]): Uint32Array 
   for (const f of forces) if (!born.has(f)) born.set(f, frame);
   let sig = '';
   for (const f of forces) sig += `${f.kind}${f.x | 0},${f.y | 0};`;
+  // another background colour: the clouds and the bent sky are built over it again
+  if (nebOver !== BG.u32) {
+    buildNebula();
+    lastSig = '\0';
+  }
   if (sig !== lastSig) {
     lastSig = sig;
     sky.set(NEB);
@@ -317,9 +328,9 @@ export function drawStars(pix: Uint32Array, frame: number, forces: readonly Bend
       pix,
       out[0] | 0,
       out[1] | 0,
-      Math.min(255, BG_R + v * tintR[i]) | 0,
-      Math.min(255, BG_G + v * tintG[i]) | 0,
-      Math.min(255, BG_B + v * tintB[i]) | 0,
+      Math.min(255, BG.r + v * tintR[i]) | 0,
+      Math.min(255, BG.g + v * tintG[i]) | 0,
+      Math.min(255, BG.b + v * tintB[i]) | 0,
     );
   }
   shootingStar(pix, frame);
@@ -343,6 +354,6 @@ function shootingStar(pix: Uint32Array, frame: number): void {
   const fade = t < 6 ? t / 6 : 1 - (t - 6) / (STREAK - 6);
   for (let j = 0; j < 14; j++) {
     const v = 230 * fade * (1 - j / 14);
-    plot(pix, (hx + j * 2.6) | 0, (hy - j * 1.05) | 0, (BG_R + v) | 0, (BG_G + v * 0.96) | 0, (BG_B + v * 0.9) | 0);
+    plot(pix, (hx + j * 2.6) | 0, (hy - j * 1.05) | 0, (BG.r + v) | 0, (BG.g + v * 0.96) | 0, (BG.b + v * 0.9) | 0);
   }
 }

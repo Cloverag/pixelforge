@@ -33,6 +33,9 @@ export interface CommonCallbacks {
   backdrop(): string;
   onToggleCrt(): void;
   onHelp(): void;
+  /** the empty world's colour (a preset's name) and a step along the presets (+1 next, -1 previous) */
+  backgroundName(): string;
+  stepBackground(d: number): void;
 }
 
 export interface MenuCallbacks extends CommonCallbacks {
@@ -190,10 +193,26 @@ function buildRows(c: CommonCallbacks): Row[] {
     volumeRow('MUSIC VOLUME', 'music', 'The soundtrack.'),
     volumeRow('EFFECTS VOLUME', 'sfx', 'Clicks, blasts and fizzes.'),
     toggleRow(`BACKDROP: ${c.backdrop()}`, 'The picture around the game screen.', c.onToggleBg),
+    backgroundRow(c),
     toggleRow(`CRT FILTER: ${onOff(document.body.classList.contains('crt-on'))}`, 'Scanlines and a soft vignette over the game.', c.onToggleCrt),
     { label: 'CONTROLS', desc: 'Keys, brushes and how to play.', go: () => { c.sound('select'); c.onHelp(); } },
     { label: 'BACK', desc: 'Back to the main list.', go: () => goBack(c) },
   ];
+}
+
+/** BACKGROUND: the colour of the empty world; Left/Right step either way, Enter goes on */
+function backgroundRow(c: CommonCallbacks): Row {
+  const step = (d: number): void => {
+    c.stepBackground(d);
+    c.sound('select');
+    repaintLabels();
+  };
+  return {
+    label: `BACKGROUND: ${c.backgroundName()}`,
+    desc: 'The colour of the empty world. Only you see it.',
+    adjust: step,
+    go: () => step(1),
+  };
 }
 
 /** the pause menu's list: RESUME, the file keys (dim outside the sandbox), the submenus, QUIT */
@@ -249,6 +268,7 @@ function viewRows(p: PauseOps): Row[] {
     row('FPS', onOff(st.fps), 'A frames-per-second readout in the corner of the screen.', v.fps),
     row('3D', onOff(st.view3d), 'Look at the world as a 3D diorama.', v.view3d),
     row('BACKDROP', st.backdrop, 'The picture around the game screen.', v.backdrop),
+    backgroundRow(p),
     { label: 'BACK', desc: 'Back to the pause menu.', go: () => goBack(p) },
   ];
 }

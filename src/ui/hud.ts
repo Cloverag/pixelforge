@@ -142,7 +142,7 @@ export function materialSections(allowed: number[] | null): PaletteSection[] {
       {
         id: '-1',
         label: 'ERASE',
-        chip: '#0b0b14',
+        chip: 'var(--world-bg)',
         dashed: true,
         title: 'Eraser (or hold right mouse button)',
         info: ['ERASE', '', 'Clears whatever the brush covers. Right-drag erases too.', 'transparent'],

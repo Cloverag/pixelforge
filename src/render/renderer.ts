@@ -1,3 +1,4 @@
+import { bgCss } from '../sim/background';
 import { SIM_H, SIM_W } from '../sim/protocol';
 import { Blockifier, fitSize } from './blocks';
 
@@ -25,6 +26,8 @@ export interface SimRenderer {
   ): void;
   /** Clears accumulated visual state, e.g. on world clear or a level load. */
   reset(): void;
+  /** The player picked another background colour: repaint what is cleared with it. */
+  refreshBackground(): void;
   /** Film look for the playground; only the WebGL renderer has one. */
   setCinematic?(on: boolean): void;
 }
@@ -98,8 +101,12 @@ export class Renderer implements SimRenderer {
     this.ctx.globalCompositeOperation = 'source-over';
     this.ctx.globalAlpha = 1;
     this.ctx.filter = 'none';
-    this.ctx.fillStyle = '#0b0b14';
+    this.ctx.fillStyle = bgCss();
     this.ctx.fillRect(0, 0, SIM_W, SIM_H);
+  }
+
+  refreshBackground(): void {
+    this.reset();
   }
 
   /** null restores the 1:1 pixel view; a number is the block edge in cells. */

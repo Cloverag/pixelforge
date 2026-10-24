@@ -10,6 +10,7 @@ import { Hud } from './ui/hud';
 import { isPauseOpen, setMenuLive, showMenu, showPause, type MenuSound } from './ui/menu';
 import type { MenuEntry } from './ui/menu';
 import { pauseRule } from './game/pause';
+import { BG, backgroundById, bgCss, loadBackgroundId, saveBackgroundId, setBackground, stepBackground } from './sim/background';
 import { hideOverlay, showResult, toast } from './ui/widgets';
 import { Mat, MATS } from './sim/materials';
 import { MpSession, newRoomCode, roomFromUrl, roomUrl, type MpHooks } from './net/mp';
@@ -307,6 +308,7 @@ worker.onmessage = (e: MessageEvent<Res>) => {
     // is wired up further down this file - so any watch flags set during boot
     // were dropped. Re-send them now that there is something listening.
     if (hasFluid) post({ t: 'watchFluid', on: renderer.isSoft() });
+    post({ t: 'bg', id: BG.id });
     requestAnimationFrame(loop);
     return;
   }
@@ -358,6 +360,7 @@ worker.onmessage = (e: MessageEvent<Res>) => {
     }
     maybeShowResult(r.result ?? null);
     fpsFrames++;
+    if (redrawWanted) sendRedraw();
     return;
   }
   if (r.t === 'error') {
@@ -420,6 +423,43 @@ function adoptWorld(d: { a: Uint8Array; b: Uint8Array }): void {
     t: 'load',
     data: { w: SIM_W, h: SIM_H, cells: d.a, meta: d.b, frame: 0 },
   });
+}
+
+// ---- the empty world's colour (sim/background.ts): drawing only ----
+
+// the saved choice, live before the first frame is drawn
+setBackground(loadBackgroundId());
+document.documentElement.style.setProperty('--world-bg', bgCss());
+/** a presentation change is waiting for the worker to be free to redraw */
+let redrawWanted = false;
+
+/** Ask for the current frame again, in the new colours, without stepping: a paused world has no next frame. */
+function sendRedraw(): void {
+  if (!stepBuf || inFlight) {
+    redrawWanted = true;
+    return;
+  }
+  redrawWanted = false;
+  inFlight = true;
+  const buf = stepBuf;
+  stepBuf = null;
+  post({ t: 'redraw', buf }, [buf]);
+}
+
+/** Pick a background: remembered, shown by every renderer, and told to the worker (never to a room). */
+function applyBackground(id: string): void {
+  const p = setBackground(id);
+  saveBackgroundId(p.id);
+  document.documentElement.style.setProperty('--world-bg', bgCss());
+  renderer.refreshBackground();
+  view3d?.refreshBackground();
+  pgView?.refreshBackground();
+  post({ t: 'bg', id: p.id });
+  sendRedraw();
+}
+
+function cycleBackground(d: number): void {
+  applyBackground(stepBackground(BG.id, d).id);
 }
 
 // ---- sim ticking ----
@@ -849,6 +889,8 @@ function openMenu(firstVisit = false): void {
     },
     onToggleBg: () => void cycleWallpaper(),
     backdrop: () => WALLPAPER_NAMES[bgIndex],
+    backgroundName: () => backgroundById(BG.id).name,
+    stepBackground: cycleBackground,
     onToggleCrt: toggleCrt,
     onHelp: () => toggleHelp(),
   });
@@ -1111,6 +1153,8 @@ function openPause(): void {
     },
     onToggleBg: () => void cycleWallpaper(),
     backdrop: () => WALLPAPER_NAMES[bgIndex],
+    backgroundName: () => backgroundById(BG.id).name,
+    stepBackground: cycleBackground,
     onToggleCrt: toggleCrt,
     onHelp: () => toggleHelp(),
   });
