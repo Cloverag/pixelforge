@@ -29,7 +29,6 @@ import { applyWallpaper, loadBgIndex, WALLPAPER_NAMES } from './game/wallpapers'
 import { initHelp, toggleHelp } from './ui/help';
 import { initImmersive, isImmersive, setImmersive, toggleImmersive } from './ui/immersive';
 import { initMusic, trackForMode } from './game/music';
-import { applyTheme, cycleTheme, loadTheme } from './ui/theme';
 import type { ModeController, ModeCtx } from './modes/types';
 import { SandMode } from './modes/sand';
 import { PlaygroundMode } from './modes/playground';
@@ -73,11 +72,11 @@ if (!renderer) {
   hasFluid = false;
 }
 const sfx = new Sfx();
-// the flash sits over the screen inside the cabinet, so it shakes with it
+// the flash sits over the screen inside its frame, so it shakes with it
 const flashEl = document.createElement('div');
 flashEl.id = 'blast-flash';
 document.getElementById('screen-wrap')!.appendChild(flashEl);
-const juice = new Juice(document.getElementById('bezel') ?? canvas, flashEl);
+const juice = new Juice(document.getElementById('viewport') ?? canvas, flashEl);
 const hud = new Hud(topbar, toolbar);
 
 const worker = new Worker(new URL('./sim/worker.ts', import.meta.url), {
@@ -854,8 +853,6 @@ function openMenu(firstVisit = false): void {
       sfx.setVolume(bus, v);
       syncAudioHud();
     },
-    onCycleTheme: () => void nextTheme(),
-    theme: loadTheme,
     onToggleBg: () => void cycleWallpaper(),
     backdrop: () => WALLPAPER_NAMES[bgIndex],
     onToggleCrt: toggleCrt,
@@ -1007,7 +1004,7 @@ const MENU: MenuEntry[] = [
   {
     name: 'OPTIONS',
     opens: 'options',
-    sub: 'sound, music, theme, backdrop, controls',
+    sub: 'sound, music, backdrop, controls',
   },
 ];
 
@@ -1091,16 +1088,6 @@ function toggleMaster(): void {
   syncAudioHud();
 }
 
-applyTheme(loadTheme());
-
-function nextTheme(): string {
-  const t = cycleTheme();
-  hud.setThemeLabel(t);
-  sfx.ui();
-  toast(`THEME: ${t.toUpperCase()}`);
-  return t;
-}
-
 function toggleCrt(): void {
   hud.setCrt(document.body.classList.toggle('crt-on'));
 }
@@ -1167,13 +1154,11 @@ hud.initTopbar({
   onToggle3d: () => void toggle3d(),
   onToggleGrid: toggleGrid,
   onToggleSoft: toggleSoft,
-  onCycleTheme: () => void nextTheme(),
   onToggleImmersive: () => {
     sfx.ui();
     toggleImmersive();
   },
 });
-hud.setThemeLabel(loadTheme());
 
 // the GRID and SOFT buttons exist only after initTopbar, so restore here
 restoreGrid();
@@ -1191,9 +1176,6 @@ new Input(
         break;
       case 'n':
         stepOnce();
-        break;
-      case 't':
-        nextTheme();
         break;
       case 'm':
         toggleMaster();

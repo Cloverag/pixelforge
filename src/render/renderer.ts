@@ -43,8 +43,8 @@ const GLOW_BLUR = 2.2;
 export class Renderer implements SimRenderer {
   private ctx: CanvasRenderingContext2D;
   private stage: HTMLElement;
-  /** cabinet bezel around the screen; null if the shell markup is absent */
-  private bezel: HTMLElement | null;
+  /** the framed box around the screen; null if the shell markup is absent */
+  private frame: HTMLElement | null;
 
   /** block size in sim cells, or null for the normal 1:1 pixel view */
   private block: number | null = null;
@@ -71,7 +71,7 @@ export class Renderer implements SimRenderer {
     this.canBlur = this.ctx.filter === 'blur(1px)';
     this.ctx.filter = 'none';
     this.stage = document.getElementById('stage')!;
-    this.bezel = document.getElementById('bezel');
+    this.frame = document.getElementById('viewport');
     window.addEventListener('resize', () => this.resize());
     this.resize();
   }
@@ -112,7 +112,7 @@ export class Renderer implements SimRenderer {
   }
 
   resize(): void {
-    const { w, h } = fitSize(this.stage, this.bezel);
+    const { w, h } = fitSize(this.stage, this.frame);
     this.canvas.style.width = `${w}px`;
     this.canvas.style.height = `${h}px`;
   }

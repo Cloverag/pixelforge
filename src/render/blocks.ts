@@ -85,9 +85,9 @@ export function chrome(el: HTMLElement): { w: number; h: number } {
  * Snaps to an integer scale only when that costs less than ~12% of the
  * available area, which keeps pixels even without leaving a wide letterbox.
  */
-export function fitSize(stage: HTMLElement, bezel: HTMLElement | null): { w: number; h: number } {
+export function fitSize(stage: HTMLElement, frame: HTMLElement | null): { w: number; h: number } {
   const rect = stage.getBoundingClientRect();
-  const pad = bezel ? chrome(bezel) : { w: 0, h: 0 };
+  const pad = frame ? chrome(frame) : { w: 0, h: 0 };
   // immersive mode fills the window edge to edge, so no margin and no
   // snapping to a whole scale (snapping left 1440x900 at 2x with wide bars)
   const immersive = document.body.classList.contains('immersive');

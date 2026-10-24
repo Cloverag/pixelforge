@@ -34,9 +34,6 @@ export interface MenuCallbacks {
   // OPTIONS: a setting acts, and the view reads the new value back
   volume(bus: Bus): number;
   setVolume(bus: Bus, v: number): void;
-  /** cycle the theme */
-  onCycleTheme(): void;
-  theme(): string;
   /** cycle the backdrop */
   onToggleBg(): void;
   backdrop(): string;
@@ -149,7 +146,6 @@ function buildRows(c: MenuCallbacks): Row[] {
     volumeRow('MASTER VOLUME', 'master', 'Everything at once. M mutes it.'),
     volumeRow('MUSIC VOLUME', 'music', 'The soundtrack.'),
     volumeRow('EFFECTS VOLUME', 'sfx', 'Clicks, blasts and fizzes.'),
-    toggleRow(`THEME: ${c.theme().toUpperCase()}`, 'Light, dark or follow your system - for the game screens.', c.onCycleTheme),
     toggleRow(`BACKDROP: ${c.backdrop()}`, 'The picture around the game screen.', c.onToggleBg),
     toggleRow(`CRT FILTER: ${onOff(document.body.classList.contains('crt-on'))}`, 'Scanlines and a soft vignette over the game.', c.onToggleCrt),
     { label: 'CONTROLS', desc: 'Keys, brushes and how to play.', go: () => { c.sound('select'); c.onHelp(); } },

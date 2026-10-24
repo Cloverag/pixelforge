@@ -28,9 +28,6 @@ export function setImmersive(want: boolean): boolean {
   on = want;
   const body = document.body;
   body.classList.toggle('immersive', on);
-  // the dark token set, whatever the theme: glass panels, toasts and
-  // dialogs over a dark canvas (toasts live outside #app, so on body)
-  body.classList.toggle('force-dark', on);
   if (!on) body.classList.remove('reveal-top', 'reveal-left', 'reveal-bottom');
   const root = document.documentElement;
   if (on && !document.fullscreenElement && root.requestFullscreen) {

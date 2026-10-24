@@ -72,7 +72,6 @@ function buildContent(box: HTMLElement): void {
     ['W', 'wind brush - drag to blow, click for a puff (sandbox, chem lab)'],
     ['E', 'periodic table (chem lab)'],
     ['L', 'chem lab (menu)'],
-    ['T', 'theme: auto / light / dark'],
     ['1-9', 'quick-pick palette swatch'],
     ['SPACE', 'pause / resume'],
     ['N', 'single step while paused'],

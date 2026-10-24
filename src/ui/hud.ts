@@ -63,7 +63,6 @@ interface TopbarCallbacks {
   onToggle3d(): void;
   onToggleGrid(): void;
   onToggleSoft(): void;
-  onCycleTheme(): void;
   onToggleImmersive(): void;
 }
 
@@ -88,7 +87,7 @@ export interface RailButton {
   label: string;
   title: string;
   onClick(): void;
-  /** a toggle with an indicator lamp, addressed by setLamp(lamp, on) */
+  /** a toggle, addressed by setLamp(lamp, on) */
   lamp?: string;
   on?: boolean;
   cls?: string;
@@ -161,7 +160,6 @@ export class Hud {
   private brushDot!: HTMLElement;
   private swatchEls = new Map<string, HTMLElement>();
   private status!: {
-    lamp: HTMLElement;
     run: HTMLElement;
     chip: HTMLElement;
     name: HTMLElement;
@@ -224,7 +222,6 @@ export class Hud {
     this.view3dBtn = this.mkBtn('3D', cbs.onToggle3d, 'Toggle 3D voxel view (3)', true);
     this.immersiveBtn = this.mkBtn('IMMERSE', cbs.onToggleImmersive, 'Fill the window, hide the panels (I)', true);
     const bgBtn = this.mkBtn('BG', cbs.onToggleBg, 'Backdrop: the picture around the game screen');
-    this.themeBtn = this.mkBtn('THEME', cbs.onCycleTheme, 'Light / dark / follow system (T)');
     this.muteBtn = this.mkBtn('SFX', cbs.onToggleMute, 'Mute the sound effects (M mutes everything)', true);
     this.musicBtn = this.mkBtn('MUSIC', cbs.onToggleMusic, 'Mute the music', true);
     const helpBtn = this.mkBtn('?', cbs.onHelp, 'How to play');
@@ -235,7 +232,7 @@ export class Hud {
     const groups: [string, HTMLButtonElement[]][] = [
       ['Run', [this.pauseBtn, stepBtn]],
       ['File', [this.saveBtn, this.loadBtn, this.shareBtn]],
-      ['View', [this.immersiveBtn, this.softBtn, crtBtn, this.gridBtn, this.view3dBtn, bgBtn, this.themeBtn]],
+      ['View', [this.immersiveBtn, this.softBtn, crtBtn, this.gridBtn, this.view3dBtn, bgBtn]],
       ['Sound', [this.muteBtn, this.musicBtn]],
     ];
     // On a phone these fold into a drop-down behind the MORE button (CSS);
@@ -294,9 +291,8 @@ export class Hud {
       return el;
     };
     const runSeg = seg('sb-run');
-    const lamp = h('span', 'sb-lamp');
     const run = h('span', 'sb-val', 'RUNNING');
-    runSeg.append(lamp, run);
+    runSeg.append(run);
 
     const matSeg = seg('sb-mat');
     const chip = h('span', 'sb-chip');
@@ -320,7 +316,7 @@ export class Hud {
     this.fpsEl = h('span', 'sb-val num', '');
     this.fpsEl.id = 'fps';
     seg('sb-fps').append(this.fpsEl);
-    this.status = { lamp, run, chip, name, note, tool, cells, cellsKey, rxSeg, rxVal, nowSeg, nowVal };
+    this.status = { run, chip, name, note, tool, cells, cellsKey, rxSeg, rxVal, nowSeg, nowVal };
   }
 
   private renderTool(): void {
@@ -341,14 +337,8 @@ export class Hud {
   private mkBtn(label: string, onClick: () => void, title?: string, toggle = false): HTMLButtonElement {
     const b = h('button', 'px') as HTMLButtonElement;
     b.type = 'button';
-    // an indicator lamp instead of a recoloured key: one accent, and state
-    // reads the same for every toggle
-    if (toggle) {
-      b.classList.add('has-led');
-      const led = h('span', 'led');
-      led.setAttribute('aria-hidden', 'true');
-      b.appendChild(led);
-    }
+    // a toggle shows its state by fill (CSS): on = accent, off = clear
+    if (toggle) b.classList.add('tog');
     b.appendChild(h('span', 'lbl', label));
     if (title) {
       b.title = title;
@@ -393,8 +383,6 @@ export class Hud {
     this.setLabel(this.pauseBtn, p ? 'RESUME' : 'PAUSE');
     this.pauseBtn.classList.toggle('toggled', p);
     if (this.status) this.status.run.textContent = p ? 'PAUSED' : 'RUNNING';
-    // drives the amber cabinet lamp
-    document.body.classList.toggle('sim-paused', p);
   }
 
   /**
@@ -414,7 +402,7 @@ export class Hud {
     }
   }
 
-  /** The SFX lamp means "sound on", like every other lamp. */
+  /** The SFX toggle is lit when sound is on. */
   setMuted(m: boolean): void {
     this.muteBtn.classList.toggle('toggled', !m);
   }
@@ -507,11 +495,6 @@ export class Hud {
   private shareBtn!: HTMLButtonElement;
   private softBtn!: HTMLButtonElement;
   private crtBtn!: HTMLButtonElement;
-  private themeBtn!: HTMLButtonElement;
-
-  setThemeLabel(t: string): void {
-    this.setLabel(this.themeBtn, t === 'auto' ? 'AUTO' : t.toUpperCase());
-  }
   private gridBtn!: HTMLButtonElement;
 
   /** null = off; a number shows the active block edge, e.g. "GRID 8". */

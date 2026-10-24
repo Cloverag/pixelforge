@@ -183,7 +183,7 @@ function emissionTable(): Uint8Array {
 export class GLRenderer implements SimRenderer {
   private gl: WebGL2RenderingContext;
   private stage: HTMLElement;
-  private bezel: HTMLElement | null;
+  private frame: HTMLElement | null;
 
   private frameTex: WebGLTexture;
   private composite: Program;
@@ -222,7 +222,7 @@ export class GLRenderer implements SimRenderer {
     this.gl = gl;
     bindDummyVao(gl);
     this.stage = document.getElementById('stage')!;
-    this.bezel = document.getElementById('bezel');
+    this.frame = document.getElementById('viewport');
 
     canvas.width = SIM_W;
     canvas.height = SIM_H;
@@ -271,7 +271,7 @@ export class GLRenderer implements SimRenderer {
   }
 
   resize(): void {
-    const { w, h } = fitSize(this.stage, this.bezel);
+    const { w, h } = fitSize(this.stage, this.frame);
     this.canvas.style.width = `${w}px`;
     this.canvas.style.height = `${h}px`;
   }
