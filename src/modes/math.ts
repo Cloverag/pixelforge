@@ -1,6 +1,8 @@
 import { GardenView } from '../garden/view';
 import { defaults, DRAWINGS, type Drawing } from '../mathlab/drawings';
 import { MathRun } from '../mathlab/run';
+import { SURFACES, SurfaceRun, type Surface } from '../mathlab/surface';
+import type { PointerEvt } from '../core/input';
 import type { PaletteSection, Swatch } from '../ui/hud';
 import { h } from '../ui/widgets';
 import type { CursorLook, ModeController, ModeCtx } from './types';
@@ -12,7 +14,15 @@ const CHIPS: Record<string, string> = {
   rosette: 'linear-gradient(135deg,#ffffff 0 50%,#9aa6c8 50% 100%)',
   sphere: 'linear-gradient(135deg,#e9d5ff 0 50%,#7c3aed 50% 100%)',
   tree: 'linear-gradient(135deg,#ffc0d8 0 50%,#7a2a1a 50% 100%)',
+  rose: 'linear-gradient(135deg,#ff6a8a 0 50%,#d0103a 50% 100%)',
+  ripple: 'linear-gradient(135deg,#fde725 0 50%,#3b528b 50% 100%)',
+  saddle: 'linear-gradient(135deg,#5ec962 0 50%,#440154 50% 100%)',
+  waves: 'linear-gradient(135deg,#21918c 0 50%,#fde725 50% 100%)',
 };
+
+/** Everything on the rail: drawings drawn stroke by stroke, and 3D graphs. */
+type Item = Drawing | Surface;
+const ITEMS: Item[] = [...DRAWINGS, ...SURFACES];
 
 /**
  * MATH LAB: maths you can watch. Pick a drawing - a parametric heart, a
@@ -37,7 +47,9 @@ export class MathMode implements ModeController {
     f: () => this.view.math?.finish(),
   };
   private view = new GardenView('math-on');
-  private drawing: Drawing = DRAWINGS[0];
+  private drawing: Item = DRAWINGS[0];
+  /** a drag on a 3D graph turns it */
+  private drag: { x: number; y: number } | null = null;
   private params: Record<string, number> = defaults(DRAWINGS[0]);
   private panel: HTMLElement | null = null;
   private lines: HTMLElement[] = [];
@@ -49,9 +61,10 @@ export class MathMode implements ModeController {
   }
 
   buildUI(): void {
-    const swatches: Swatch[] = DRAWINGS.map((d) => ({ id: d.id, label: d.name, chip: CHIPS[d.id], title: d.idea, info: [d.name, '', d.idea, CHIPS[d.id]] }));
+    const swatch = (d: Item): Swatch => ({ id: d.id, label: d.name, chip: CHIPS[d.id], title: d.idea, info: [d.name, '', d.idea, CHIPS[d.id]] });
     const sections: PaletteSection[] = [
-      { label: 'DRAWINGS', swatches },
+      { label: 'DRAWINGS', swatches: DRAWINGS.map(swatch) },
+      { label: '3D GRAPHS', swatches: SURFACES.map(swatch) },
       {
         label: 'DRAW',
         cls: 'toolbtns',
@@ -67,7 +80,7 @@ export class MathMode implements ModeController {
       {
         sections,
         initial: this.drawing.id,
-        onPick: (id) => this.pick(DRAWINGS.find((d) => d.id === id) ?? DRAWINGS[0], false),
+        onPick: (id) => this.pick(ITEMS.find((d) => d.id === id) ?? DRAWINGS[0], false),
         bucket: false,
         counts: 'strokes',
         hint: '',
@@ -89,7 +102,7 @@ export class MathMode implements ModeController {
   }
 
   /** Show a drawing: its code and sliders, and start drawing it. */
-  private pick(d: Drawing, reset: boolean): void {
+  private pick(d: Item, reset: boolean): void {
     if (d !== this.drawing || reset) this.params = defaults(d);
     this.drawing = d;
     this.ctx.sfx.ui();
@@ -134,10 +147,16 @@ export class MathMode implements ModeController {
   }
 
   private redraw(): void {
-    const run = new MathRun(this.drawing.strokes(this.params));
-    this.view.math = run;
+    const d = this.drawing;
+    if ('strokes' in d) {
+      const run = new MathRun(d.strokes(this.params));
+      this.view.math = run;
+      this.ctx.hud.setParticles(run.strokes.length);
+    } else {
+      this.view.math = new SurfaceRun(d, this.params);
+      this.ctx.hud.setParticles(0);
+    }
     this.view.setScene('math');
-    this.ctx.hud.setParticles(run.strokes.length);
   }
 
   /** Light the code line being drawn; none once the drawing is finished. */
@@ -155,7 +174,17 @@ export class MathMode implements ModeController {
     this.ctx.sfx.ui();
   }
 
-  onPointer(): void {}
+  /** Drag a 3D graph to turn it round and tip it. */
+  onPointer(e: PointerEvt): void {
+    const run = this.view.math;
+    if (!(run instanceof SurfaceRun)) return;
+    if (e.phase === 'down') this.drag = { x: e.x, y: e.y };
+    else if (e.phase === 'up') this.drag = null;
+    else if (this.drag) {
+      run.turn((e.x - this.drag.x) * 0.012, (e.y - this.drag.y) * 0.012);
+      this.drag = { x: e.x, y: e.y };
+    }
+  }
 
   leave(): void {
     this.view.unmount();

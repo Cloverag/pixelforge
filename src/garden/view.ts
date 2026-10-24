@@ -4,7 +4,12 @@ import { drawGarden } from './draw';
 import { drawEye, EYE_PALETTES, eyeTextMask } from './eye';
 import { bouquet, type Flower } from './flowers';
 import { buildLilies, drawLilies, type LilyScene } from './lily3d';
-import type { MathRun } from '../mathlab/run';
+/** what MATH LAB puts on the canvas: a drawing being drawn, or a 3D surface */
+export interface MathPicture {
+  /** draw on g (w x h), fitted into the left aw pixels; returns the code line to light, -1 for none */
+  draw(g: CanvasRenderingContext2D, w: number, h: number, aw: number): number;
+  finish(): void;
+}
 
 export type GardenScene = 'flowers' | 'eye' | 'lily3d' | 'bloom' | 'math';
 
@@ -22,7 +27,7 @@ export class GardenView {
   palette = 0;
   cellPx = 8;
   /** MATH LAB's drawing, and the share of the width it gets (the code panel has the rest) */
-  math: MathRun | null = null;
+  math: MathPicture | null = null;
   mathWidth = 1;
   /** told the code line being drawn whenever it changes (-1: finished) */
   onLine: ((line: number) => void) | null = null;

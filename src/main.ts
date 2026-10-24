@@ -41,6 +41,7 @@ import { GardenMode } from './modes/garden';
 import { MathMode } from './modes/math';
 import { defaults, DRAWINGS } from './mathlab/drawings';
 import { MathRun } from './mathlab/run';
+import { SURFACES, SurfaceRun } from './mathlab/surface';
 import { SAND_DEMOS } from './game/sanddemos';
 import { GardenView } from './garden/view';
 import { AsciiFilter } from './garden/ascii';
@@ -1010,11 +1011,13 @@ function startAttract(kind: PreviewKind): void {
   if (kind === 'math') {
     // the drawings drawing themselves, full width, one after another
     if (!gardenPreview.mounted()) gardenPreview.mount();
-    const i = attract?.kind === 'math' ? (DRAWINGS.findIndex((d) => d.name === attract!.name) + 1) % DRAWINGS.length : 1;
-    const d = DRAWINGS[i];
+    // drawings and 3D graphs taking turns: butterfly, rose, rosette, ripple...
+    const all = DRAWINGS.flatMap((d, k) => (SURFACES[k] ? [d, SURFACES[k]] : [d]));
+    const i = attract?.kind === 'math' ? (all.findIndex((d) => d.name === attract!.name) + 1) % all.length : 2;
+    const d = all[i];
     gardenPreview.ascii = false;
     gardenPreview.mathWidth = 1;
-    gardenPreview.math = new MathRun(d.strokes(defaults(d)), 7);
+    gardenPreview.math = 'strokes' in d ? new MathRun(d.strokes(defaults(d)), 7) : new SurfaceRun(d, defaults(d));
     gardenPreview.setScene('math');
     attract = { kind, name: d.name };
     overlay.classList.add('attract');

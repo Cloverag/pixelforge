@@ -295,7 +295,7 @@ const tree: Drawing = {
 
 export const DRAWINGS: Drawing[] = [heart, butterfly, rosette, sphere, tree];
 
-/** A drawing's parameters at their starting values. */
-export function defaults(d: Drawing): Record<string, number> {
+/** A drawing's (or a 3D graph's) parameters at their starting values. */
+export function defaults(d: { params: Param[] }): Record<string, number> {
   return Object.fromEntries(d.params.map((q) => [q.key, q.value]));
 }

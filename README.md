@@ -54,7 +54,7 @@ get their own layout.
 | **PLAY TOGETHER (beta)** | A room for friends: open one, send the link, and everyone builds in the same world - the sandbox or the playground. See [Playing together](#playing-together). |
 | **PARTICLE PLAYGROUND** | Light shows instead of materials: emitters, forces, bumpers that play notes, portals - with a film-look renderer, a full 3D view and sound design. See [The playground](#the-playground). |
 | **ASCII GARDEN** | Flowers, an eye made of words and 3D lilies, drawn as coloured text. Solo only. See [The ASCII garden](#the-ascii-garden). |
-| **MATH LAB** | Watch maths draw itself: a parametric heart, a neon butterfly, a spiral rosette, a globe of ellipses, a recursive tree. The code sits beside the drawing and lights the line drawing now; sliders change its numbers. Solo only. See [The math lab](#the-math-lab). |
+| **MATH LAB** | Watch maths draw itself: a parametric heart, a neon butterfly, a spiral rosette, a globe of ellipses, a recursive tree - and 3D graphs (a rose surface, ripple, saddle, waves) you can turn. The code sits beside the drawing and lights the line drawing now; sliders change its numbers. Solo only. See [The math lab](#the-math-lab). |
 | **CHEM LAB** | Pick elements off a periodic table and drop them into water, acid, fire or each other: 30 elements, 70 reactions, 3 ready-made experiments. See [The chem lab](#the-chem-lab). |
 | **SURPRISE ME** | A brand-new generated playground scene every click (`R`). |
 | **CHALLENGES** | 7 goal-based puzzles with material budgets, time limits, win/lose checks and a 3-star rating. Levels unlock in order; stars persist in `localStorage`. |
@@ -259,6 +259,17 @@ code and starts the drawing again.
 | **SPHERE** | A circle seen at an angle is an ellipse: rings turned around the axis, `width = R cos(turn)`, make a globe | RINGS, LATITUDES, TILT |
 | **TREE** | Recursion: a branch is a line with two smaller branches on its end, until they are tiny | TRUNK, ANGLE, RATIO, SMALLEST |
 
+**3D GRAPHS** sit under the drawings: surfaces sampled on a grid and drawn as
+shaded quads back to front, with x/y/z axes and the mesh lines, building row
+by row while they turn; drag to turn them by hand.
+
+| Graph | The formula | Sliders |
+|---|---|---|
+| **ROSE** | "A rose for you": `φ = π/2·e^(−t/8π)`, `X = 1 − ½(5/4(1 − (3.6t mod 2π)/π)² − ¼)²`, then `(r sin t, r cos t, X(x cos φ − y sin φ))` | PETALS, TURNS, OPEN |
+| **RIPPLE** | `z = sin(r)/r`, r the distance from the middle (1 at r = 0, the limit) | FREQUENCY, HEIGHT |
+| **SADDLE** | `z = k(x² − y²)`, a saddle point in the middle | CURVE |
+| **WAVES** | `z = sin(ax)·cos(by)`, an egg box | A, B |
+
 AGAIN (`R`) redraws, FINISH (`F`) skips to the end, ASCII (`A`) draws it as
 coloured text. The drawings are pure functions (`src/mathlab/drawings.ts`):
 each stroke carries the code line that made it, which is how the window knows
@@ -428,6 +439,7 @@ src/
   mathlab/
     drawings.ts            the math lab's drawings: parameters -> strokes, each with its code line (pure)
     run.ts                 draws a drawing a batch of strokes a frame onto a kept canvas
+    surface.ts             3D GRAPHS: (u, v) -> point grids, shaded quads sorted back to front, axes
   core/
     input.ts               pointer + keyboard -> simulation coords
     rng.ts                 seeded PRNG (32-bit state)
@@ -495,7 +507,7 @@ tests/                     vitest: world rules, TNT debris, rendering, playgroun
 
 ### Testing
 
-329 tests. Beyond the material rules: two worlds fed the same inputs must
+334 tests. Beyond the material rules: two worlds fed the same inputs must
 match for 1200 frames; a world restored mid-game into a different seed must
 stay identical; host and two guests over a simulated network with random
 delays, reordering and a late joiner must agree at every frame; a corrupted

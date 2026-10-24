@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { defaults, DRAWINGS } from '../src/mathlab/drawings';
+import { SURFACES } from '../src/mathlab/surface';
 
 /** each drawing at its sliders' lowest, starting and highest values */
 function settings(d: (typeof DRAWINGS)[number]): Record<string, number>[] {
@@ -36,6 +37,28 @@ describe('MATH LAB drawings', () => {
         const moved = d.code({ ...p, [q.key]: p[q.key] === q.max ? q.min : q.max }).join('\n');
         expect(moved, `${d.id}.${q.key}`).not.toBe(text);
       }
+    }
+  });
+});
+
+describe('MATH LAB 3D graphs', () => {
+  const at = (s: (typeof SURFACES)[number], pick: (q: (typeof s.params)[number]) => number) => Object.fromEntries(s.params.map((q) => [q.key, pick(q)]));
+
+  it('every surface is a full grid of real points at any slider setting', () => {
+    for (const s of SURFACES)
+      for (const p of [at(s, (q) => q.min), defaults(s), at(s, (q) => q.max)]) {
+        const m = s.mesh(p);
+        expect(m.pts.length, s.id).toBe(m.nu * m.nv);
+        expect(m.pts.every((v) => v.every(Number.isFinite)), s.id).toBe(true);
+      }
+  });
+
+  it('the line lit while it builds is the one that makes the surface, and every slider shows in the code', () => {
+    for (const s of SURFACES) {
+      const p = defaults(s);
+      expect(s.code(p)[s.plotLine], s.id).toMatch(/surface\(/);
+      const text = s.code(p).join('\n');
+      for (const q of s.params) expect(s.code({ ...p, [q.key]: p[q.key] === q.max ? q.min : q.max }).join('\n'), `${s.id}.${q.key}`).not.toBe(text);
     }
   });
 });
