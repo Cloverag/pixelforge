@@ -38,8 +38,10 @@ uniform sampler2D uLight;
 // the world in cells, and how many screen pixels one cell spans
 uniform vec2 uSim;
 uniform float uCellPx;
-// what each material is (materialInfo): r = liquid
+// what each material is (materialInfo): r = liquid, g = light source, b = solid body
 uniform sampler2D uMatInfo;
+// edge light and shadow on every cell (off in GRID view and in the playground)
+uniform float uShade;
 uniform float uCrt;
 // what glows: each light source's colour, nothing else (EMIT pass)
 uniform sampler2D uEmit;
@@ -55,6 +57,30 @@ vec4 infoOf(int id) {
 }
 bool liquidAt(ivec2 p) {
   return infoOf(idAt(p)).r > 0.5;
+}
+// a body light cannot pass: powders, liquids, solids, living things (not gas, not air)
+bool bodyAt(ivec2 p) {
+  return infoOf(idAt(p)).b > 0.5;
+}
+
+// Pixel-art lighting inside one cell: a lit top edge where it faces open air,
+// a shaded underside, darker flanks, and a dark seam where two different
+// materials meet. One screen pixel wide, so it stays crisp at any scale.
+vec3 cellShade(vec3 c, ivec2 p, int id, vec2 f) {
+  float e = 1.0 / uCellPx;
+  if (f.y > 1.0 - e && !bodyAt(p + ivec2(0, 1))) return c + (1.0 - c) * 0.32;
+  if (f.y < e && !bodyAt(p - ivec2(0, 1))) return c * 0.66;
+  if (f.x < e && !bodyAt(p - ivec2(1, 0))) return c * 0.84;
+  if (f.x > 1.0 - e) {
+    if (!bodyAt(p + ivec2(1, 0))) return c * 0.78;
+    int r = idAt(p + ivec2(1, 0));
+    if (r != id) return c * 0.6;
+  }
+  if (f.y < e) {
+    int d = idAt(p - ivec2(0, 1));
+    if (d != id && d < 128) return c * 0.6;
+  }
+  return c;
 }
 
 vec3 waterFx(vec3 c, ivec2 p) {
@@ -93,7 +119,11 @@ void main() {
   // nearest, on purpose: at 2-3 screen pixels a cell, any edge blending is
   // half the picture and reads as blur; a cell one pixel wider is not visible
   vec3 c = px.rgb;
-  if (liquidAt(p)) c = waterFx(c, p);
+  int id = int(px.a * 255.0 + 0.5);
+  vec4 info = infoOf(id);
+  // light sources stay flat and bright; everything with a body gets shaped
+  if (uShade > 0.5 && uCellPx >= 2.0 && info.b > 0.5 && info.g < 0.5) c = cellShade(c, p, id, fract(cf));
+  if (info.r > 0.5) c = waterFx(c, p);
 
   if (uSoft > 0.5) {
     // eight taps on two rings of the emission map: only light sources bleed
@@ -167,7 +197,7 @@ void main() {
 /** Materials that give off light: their glow bleeds into the cells around them. */
 const LIGHTS = new Set<number>([Mat.FIRE, Mat.EMBER, Mat.LAVA, Mat.TORCH, Mat.NEON_GLOW, Mat.IODINE_GAS, ...FLAMES]);
 
-/** What the composite needs to know about each material, by id: r = liquid, g = light source. */
+/** What the composite needs to know about each material, by id: r = liquid, g = light source, b = solid body. */
 export function materialInfo(): Uint8Array {
   const lut = new Uint8Array(128 * 4);
   for (let m = 0; m < NMATS; m++) {
@@ -176,6 +206,7 @@ export function materialInfo(): Uint8Array {
     // lava is a light source, not a pool: it keeps its own look
     if (d.cat === Cat.LIQUID && m !== Mat.LAVA) lut[m * 4] = 255;
     if (LIGHTS.has(m)) lut[m * 4 + 1] = 255;
+    if (d.cat !== Cat.GAS && d.cat !== Cat.EMPTY) lut[m * 4 + 2] = 255;
   }
   return lut;
 }
@@ -435,6 +466,7 @@ export class GLRenderer implements SimRenderer {
     // the cinematic pipeline composites at cell resolution, then scales up itself
     this.composite
       .f('uCellPx', cine ? 1 : this.canvas.width / SIM_W)
+      .f('uShade', cine || this.block ? 0 : 1)
       .f('uCrt', document.body.classList.contains('crt-on') ? 1 : 0);
     const lift = bgLift();
     this.composite.v3('uBgLift', lift[0], lift[1], lift[2]);
