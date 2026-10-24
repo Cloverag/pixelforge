@@ -11,20 +11,15 @@ Live: https://cloverag.github.io/pixelforge/ (deployed from `main` by CI).
 | 2026-10-24 | Redesign R1-R3: arcade title screen, CC0 sound + adaptive music, pause menu |
 | 2026-10-24 | Arcade cabinet UI: marquee with modes, materials panel, control deck (VIEW, SKY, SOUND, WORLD) |
 | 2026-10-24 | Pixel and light engine: crisp cells, cell shading, sun and moon shadows, day/night cycle, clear water, path-traced light (RAY) |
+| 2026-10-24 | ASCII Garden: flowers, EYE OF WORDS, 3D LILY as coloured text; title-screen preview; ASCII lamp in every mode; README with new GIFs |
 
 ## Next
 
-1. **ASCII Garden** (in progress) - a fourth playground: vector flowers
-   (lilies, tulips, daisies, roses, sunflowers) drawn as coloured ASCII text,
-   like the "ASCII lily bouquet" demos. Plant flowers with a click, or make a
-   whole bouquet; flowers bloom and sway; ASCII on/off and glyph size on the
-   panel. Solo first.
-2. **Garden 2** - draw your own bouquet shape, a vase, falling petals, save and
+1. **Garden 2** - draw your own bouquet shape, a vase, falling petals, save and
    share a bouquet as a link, play together in a garden room.
-3. **Lighting tune-up** - from real-device FPS: quality levels for RAY
+2. **Lighting tune-up** - from real-device FPS: quality levels for RAY
    (rays per texel, resolution), light from the playground's particles,
    coloured shadows through glass.
-4. **README + docs** - describe the light engine and the garden.
 
 ## Later
 
