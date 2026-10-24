@@ -1007,8 +1007,8 @@ function startAttract(kind: 'pg' | 'chem' | 'garden'): void {
   if (kind === 'garden') {
     // its own canvas over the demo; a new scene each time round
     if (!gardenPreview.mounted()) gardenPreview.mount();
-    const scenes = ['flowers', 'lily3d', 'eye'] as const;
-    const i = attract?.kind === 'garden' ? (scenes.indexOf(gardenPreview.scene as (typeof scenes)[number]) + 1) % 3 : 0;
+    const scenes = ['flowers', 'lily3d', 'bloom', 'eye'] as const;
+    const i = attract?.kind === 'garden' ? (scenes.indexOf(gardenPreview.scene as (typeof scenes)[number]) + 1) % scenes.length : 0;
     gardenPreview.flowers = [];
     gardenPreview.setScene(scenes[i], (Math.random() * 1e6) | 0);
     attract = { kind, name: ['ASCII BOUQUET', '3D LILY', 'EYE OF WORDS'][i] };

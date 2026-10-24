@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { bouquet, decodeGarden, encodeGarden, FLOWER_KINDS, openness, plantAt } from '../src/garden/flowers';
 import { RAMP } from '../src/garden/ascii';
+import { bloomState } from '../src/garden/bloom';
 
 describe('the ASCII garden', () => {
   it('a bouquet is the same for the same seed, and different for another', () => {
@@ -102,5 +103,14 @@ describe('the eye of words and the 3D lilies', () => {
     b[1] = 0xf0;
     const bad = btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
     expect(decodeGarden(bad, 0)).toBeNull();
+  });
+
+  it("BLOOM's life goes sprout, bloom, wilt, and round again", () => {
+    expect(bloomState(0).stem).toBe(0);
+    const open = bloomState(10);
+    expect([open.stem, open.leaf, open.bloom, open.glow, open.wilt]).toEqual([1, 1, 1, 1, 0]);
+    expect(bloomState(15.6).wilt).toBe(1);
+    expect(bloomState(15.6).glow).toBe(0);
+    for (const t of [1, 6, 13, 17]) expect(bloomState(t + 18)).toEqual(bloomState(t));
   });
 });

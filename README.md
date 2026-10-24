@@ -54,7 +54,7 @@ get their own layout.
 | **PLAY TOGETHER (beta)** | A room for friends: open one, send the link, and everyone builds in the same world - the sandbox or the playground. See [Playing together](#playing-together). |
 | **PARTICLE PLAYGROUND** | Light shows instead of materials: emitters, forces, bumpers that play notes, portals - with a film-look renderer, a full 3D view and sound design. See [The playground](#the-playground). |
 | **ASCII GARDEN** | Flowers, an eye made of words and 3D lilies, drawn as coloured text. Solo only. See [The ASCII garden](#the-ascii-garden). |
-| **MATH LAB** | Watch maths draw itself: a parametric heart, a spiral rosette, a globe of ellipses, a recursive tree. The code sits beside the drawing and lights the line drawing now; sliders change its numbers. Solo only. See [The math lab](#the-math-lab). |
+| **MATH LAB** | Watch maths draw itself: a parametric heart, a neon butterfly, a spiral rosette, a globe of ellipses, a recursive tree. The code sits beside the drawing and lights the line drawing now; sliders change its numbers. Solo only. See [The math lab](#the-math-lab). |
 | **CHEM LAB** | Pick elements off a periodic table and drop them into water, acid, fire or each other: 30 elements, 70 reactions, 3 ready-made experiments. See [The chem lab](#the-chem-lab). |
 | **SURPRISE ME** | A brand-new generated playground scene every click (`R`). |
 | **CHALLENGES** | 7 goal-based puzzles with material budgets, time limits, win/lose checks and a 3-star rating. Levels unlock in order; stars persist in `localStorage`. |
@@ -223,15 +223,21 @@ one shader and a glyph atlas drawn once with the browser's monospace font.
 - **3D LILY** (`L`): five lilies built from parametric petals, lit two-sided
   with light through the petals, painter-sorted on a plain 2D canvas. It
   draws itself as a wireframe first, then the surfaces fade in.
+- **BLOOM** (`O`): one flower's life in dots, pointillist. It sprouts from
+  the soil, its stem curves up, leaves unfurl, three rings of petals open in
+  3D with a glow and a ring of sparks; then it wilts, bows, drops its petals,
+  and starts again (an 18-second cycle).
 - **ASCII** (`A`) switches the text off to show the drawings; GLYPH SIZE
   cycles 6 / 8 / 11 / 15 px characters.
 - **COPY LINK** puts the flower bed in a link (`#g=`, 12 bytes a flower):
   whoever opens it lands in the garden and watches the same flowers open.
 
-The eye and the 3D lily are our own takes on two Python sketches
+The eye, the 3D lily and the bloom are our own takes on Python sketches
 ([eye_python](https://github.com/mishratanya2311/eye_python),
-[lily-animation-python](https://github.com/mishratanya2311/lily-animation-python));
-no code was copied. On the title screen, resting the cursor on ASCII GARDEN
+[lily-animation-python](https://github.com/mishratanya2311/lily-animation-python),
+[Flowers](https://github.com/iremcnar/Flowers)), as is MATH LAB's butterfly
+([neonButterfly](https://github.com/iremcnar/neonButterfly)); no code was
+copied. On the title screen, resting the cursor on ASCII GARDEN
 plays the three scenes behind the list.
 
 The other modes have an **ASCII** lamp on the deck (`T`): the same filter over
@@ -247,6 +253,7 @@ code and starts the drawing again.
 
 | Drawing | The idea | Sliders |
 |---|---|---|
+| **BUTTERFLY** | Temple Fay's butterfly curve, `r = e^cos t - 2 cos 4t + sin⁵(t/12)`, in neon strokes drawn from the middle out | STROKES, TURNS, LENGTH |
 | **HEART** | A parametric curve: `x = 16 sin³t`, `y = 13 cos t - 5 cos 2t - 2 cos 3t - cos 4t`; thousands of short strokes pointing away from the centre | STROKES, SPREAD, LENGTH |
 | **ROSETTE** | Polar coordinates: `x = r cos a`, `y = r sin a`; each arm is a spiral of shrinking circles | ARMS, STEPS, TWIST |
 | **SPHERE** | A circle seen at an angle is an ellipse: rings turned around the axis, `width = R cos(turn)`, make a globe | RINGS, LATITUDES, TILT |
@@ -288,7 +295,7 @@ what to light. They are our own versions of classic Python-turtle sketches.
 | `R` | SURPRISE ME (menu and playground) |
 | `L` | Chem lab (menu); 3D LILY (garden) |
 | `G` | ASCII garden (menu) |
-| `F` / `E` / `A` / `X` | Bouquet / eye of words / text on-off / clear (garden) |
+| `F` / `E` / `O` / `A` / `X` | Bouquet / eye of words / bloom / text on-off / clear (garden) |
 | `A` | Math lab (menu) |
 | `R` / `F` | Draw again / finish (math lab) |
 | `E` | Periodic table (chem lab) |
@@ -415,6 +422,7 @@ src/
     draw.ts                vector flowers on a 2D canvas
     eye.ts                 EYE OF WORDS: the text mask and the eye's colours
     lily3d.ts              3D LILY: parametric petals, projection, painter's sort
+    bloom.ts               BLOOM: a flower's life cycle in dots (pointillism)
     ascii.ts               the WebGL text filter (also the ASCII lamp in other modes)
     view.ts                the garden's own canvas over the world's; the title preview
   mathlab/
@@ -487,7 +495,7 @@ tests/                     vitest: world rules, TNT debris, rendering, playgroun
 
 ### Testing
 
-328 tests. Beyond the material rules: two worlds fed the same inputs must
+329 tests. Beyond the material rules: two worlds fed the same inputs must
 match for 1200 frames; a world restored mid-game into a different seed must
 stay identical; host and two guests over a simulated network with random
 delays, reordering and a late joiner must agree at every frame; a corrupted

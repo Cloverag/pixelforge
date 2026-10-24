@@ -41,6 +41,7 @@ export class GardenMode implements ModeController {
     a: () => this.toggleAscii(),
     e: () => this.show('eye'),
     l: () => this.show('lily3d'),
+    o: () => this.show('bloom'),
   };
   private kind: FlowerKind = 'lily';
   private view = new GardenView('garden-on');
@@ -63,6 +64,7 @@ export class GardenMode implements ModeController {
           { label: 'BOUQUET', title: 'A whole new bouquet of flowers (F)', onClick: () => this.makeBouquet(), cls: 'surprise' },
           { label: 'EYE OF WORDS', title: 'A giant eye made of words: it blinks and follows the pointer (E)', onClick: () => this.show('eye') },
           { label: '3D LILY', title: 'A lily bouquet that builds itself in 3D (L)', onClick: () => this.show('lily3d') },
+          { label: 'BLOOM', title: "One flower's life in dots: it sprouts, blooms, wilts and starts again (O)", onClick: () => this.show('bloom') },
         ],
       },
       { label: 'PLANT', swatches },
@@ -136,11 +138,12 @@ export class GardenMode implements ModeController {
     this.ctx.hud.setParticles(bed ? this.view.flowers.length : 0);
   }
 
-  private show(s: 'flowers' | 'eye' | 'lily3d'): void {
+  private show(s: 'flowers' | 'eye' | 'lily3d' | 'bloom'): void {
     this.view.setScene(s, this.seed++ * 31337);
     this.ctx.sfx.ui();
     if (s === 'eye') this.ctx.toast('EYE OF WORDS - MOVE THE POINTER, IT FOLLOWS');
     if (s === 'lily3d') this.ctx.toast('3D LILY - WATCH IT BUILD');
+    if (s === 'bloom') this.ctx.toast('BLOOM - A FLOWER FROM SEED TO WILT, IN DOTS');
     this.count();
   }
 

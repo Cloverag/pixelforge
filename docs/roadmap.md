@@ -11,7 +11,7 @@ Live: https://cloverag.github.io/pixelforge/ (deployed from `main` by CI).
 | 2026-10-24 | Redesign R1-R3: arcade title screen, CC0 sound + adaptive music, pause menu |
 | 2026-10-24 | Arcade cabinet UI: marquee with modes, materials panel, control deck (VIEW, SKY, SOUND, WORLD) |
 | 2026-10-24 | Pixel and light engine: crisp cells, cell shading, sun and moon shadows, day/night cycle, clear water, path-traced light (RAY) |
-| 2026-10-24 | MATH LAB: heart, rosette, sphere, tree drawn stroke by stroke beside their code, with sliders |
+| 2026-10-24 | MATH LAB: heart, butterfly, rosette, sphere, tree drawn stroke by stroke beside their code, with sliders |
 | 2026-10-24 | ASCII Garden: flowers, EYE OF WORDS, 3D LILY as coloured text; title-screen preview; ASCII lamp in every mode; README with new GIFs |
 
 ## Next

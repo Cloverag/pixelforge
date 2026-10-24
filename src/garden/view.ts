@@ -1,11 +1,12 @@
 import { AsciiFilter } from './ascii';
+import { buildBloom, drawBloom, type BloomScene } from './bloom';
 import { drawGarden } from './draw';
 import { drawEye, EYE_PALETTES, eyeTextMask } from './eye';
 import { bouquet, type Flower } from './flowers';
 import { buildLilies, drawLilies, type LilyScene } from './lily3d';
 import type { MathRun } from '../mathlab/run';
 
-export type GardenScene = 'flowers' | 'eye' | 'lily3d' | 'math';
+export type GardenScene = 'flowers' | 'eye' | 'lily3d' | 'bloom' | 'math';
 
 /**
  * The garden's picture: its own canvas laid over the world's, sized to it,
@@ -35,6 +36,7 @@ export class GardenView {
   private sceneT0 = 0;
   private mask: HTMLCanvasElement | null = null;
   private lilies: LilyScene | null = null;
+  private bloom: BloomScene | null = null;
 
   constructor(private bodyClass: string) {}
 
@@ -56,6 +58,7 @@ export class GardenView {
     this.scene = s;
     this.sceneT0 = this.now();
     if (s === 'lily3d') this.lilies = buildLilies(seed);
+    if (s === 'bloom') this.bloom = buildBloom(seed);
     if (s === 'flowers' && this.flowers.length === 0) this.flowers = bouquet(seed, this.now());
   }
 
@@ -140,6 +143,8 @@ export class GardenView {
     } else if (this.scene === 'math' && this.math) {
       const line = this.math.draw(g, bw, bh, bw * this.mathWidth);
       if (line !== this.line) this.onLine?.((this.line = line));
+    } else if (this.scene === 'bloom' && this.bloom) {
+      drawBloom(g, this.bloom, bw, bh, now - this.sceneT0);
     } else if (this.scene === 'lily3d' && this.lilies) {
       drawLilies(g, this.lilies, bw, bh, now - this.sceneT0);
     } else {
