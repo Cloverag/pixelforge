@@ -38,6 +38,7 @@ import { SandMode } from './modes/sand';
 import { PlaygroundMode } from './modes/playground';
 import { ChemMode } from './modes/chem';
 import { GardenMode } from './modes/garden';
+import { GardenView } from './garden/view';
 
 const STEP_MS = 1000 / 60;
 
@@ -975,15 +976,31 @@ const ATTRACT_MS = 25000;
 const PREVIEW_DELAY_MS = 300;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 /** what the menu is showing behind itself; null = nothing (or reduced motion) */
-let attract: { kind: 'pg' | 'chem'; name: string } | null = null;
+let attract: { kind: 'pg' | 'chem' | 'garden'; name: string } | null = null;
+/** the ASCII garden, playing behind the title screen while its entry is hovered */
+const gardenPreview = new GardenView('garden-preview');
 let attractTimer = 0;
 let previewTimer = 0;
 /** particles (playground) or cells (chem lab) in the last frame, for dev checks */
 let lastLive = 0;
 
-function startAttract(kind: 'pg' | 'chem'): void {
+function startAttract(kind: 'pg' | 'chem' | 'garden'): void {
   window.clearTimeout(attractTimer);
   if (screen !== 'menu' || reducedMotion.matches) return;
+  if (kind === 'garden') {
+    // its own canvas over the demo; a new scene each time round
+    if (!gardenPreview.mounted()) gardenPreview.mount();
+    const scenes = ['flowers', 'lily3d', 'eye'] as const;
+    const i = attract?.kind === 'garden' ? (scenes.indexOf(gardenPreview.scene as (typeof scenes)[number]) + 1) % 3 : 0;
+    gardenPreview.flowers = [];
+    gardenPreview.setScene(scenes[i], (Math.random() * 1e6) | 0);
+    attract = { kind, name: ['ASCII BOUQUET', '3D LILY', 'EYE OF WORDS'][i] };
+    overlay.classList.add('attract');
+    setMenuLive(attract.name);
+    attractTimer = window.setTimeout(() => startAttract('garden'), ATTRACT_MS / 2);
+    return;
+  }
+  gardenPreview.unmount();
   const m = kind === 'pg' ? playground : chemLab;
   renderer.setCinematic?.(m.cinematic);
   renderer.reset();
@@ -1004,6 +1021,7 @@ function startAttract(kind: 'pg' | 'chem'): void {
 }
 
 function stopAttract(): void {
+  gardenPreview.unmount();
   window.clearTimeout(attractTimer);
   window.clearTimeout(previewTimer);
   attract = null;
@@ -1012,11 +1030,11 @@ function stopAttract(): void {
 }
 
 /** Hover or focus on a mode card: preview it, once the mouse settles. */
-function previewAttract(kind: 'pg' | 'chem'): void {
+function previewAttract(kind: 'pg' | 'chem' | 'garden'): void {
   window.clearTimeout(previewTimer);
   previewTimer = window.setTimeout(() => {
     // the chem lab's scene is fixed: no need to rebuild what is already on
-    if (screen === 'menu' && !(kind === 'chem' && attract?.kind === 'chem')) startAttract(kind);
+    if (screen === 'menu' && !((kind === 'chem' || kind === 'garden') && attract?.kind === kind)) startAttract(kind);
   }, PREVIEW_DELAY_MS);
 }
 
@@ -1078,6 +1096,7 @@ const MENU: MenuEntry[] = [
   },
   {
     name: 'ASCII GARDEN',
+    preview: 'garden',
     sub: 'plant lilies, tulips and roses - drawn in coloured text',
     hotkey: 'g',
     run: () => {

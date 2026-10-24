@@ -48,3 +48,31 @@ describe('the ASCII garden', () => {
     expect(new Set(RAMP).size).toBe(RAMP.length);
   });
 });
+
+describe('the eye of words and the 3D lilies', () => {
+  it('the eye blinks briefly about every 4.5 s: open most of the time, shut for a moment', async () => {
+    const { lidOpen } = await import('../src/garden/eye');
+    let open = 0;
+    let shut = 0;
+    for (let t = 0; t < 45; t += 0.01) {
+      const o = lidOpen(t);
+      expect(o).toBeGreaterThanOrEqual(0);
+      expect(o).toBeLessThanOrEqual(1);
+      if (o === 1) open++;
+      if (o < 0.1) shut++;
+    }
+    expect(open / (open + shut)).toBeGreaterThan(0.9);
+    expect(shut).toBeGreaterThan(0);
+  });
+
+  it('a lily bouquet is the same for a seed, and every lily is six tepals of 36 quads', async () => {
+    const { buildLilies, lilyBuildTime } = await import('../src/garden/lily3d');
+    const a = buildLilies(5);
+    expect(a).toEqual(buildLilies(5));
+    // 5 lilies x (6 tepals x 36 quads + a leaf of 12)
+    expect(a.quads.length).toBe(5 * (6 * 36 + 12));
+    for (const q of a.quads) for (const p of q.p) for (const c of p) expect(Number.isFinite(c)).toBe(true);
+    expect(lilyBuildTime(a)).toBeGreaterThan(3);
+    expect(lilyBuildTime(a)).toBeLessThan(8);
+  });
+});

@@ -14,7 +14,7 @@ export interface MenuEntry {
   /** the key as Input reports it ('p', 'l'); works on MAIN */
   hotkey?: string;
   /** moving the cursor here previews this on the background */
-  preview?: 'pg' | 'chem';
+  preview?: 'pg' | 'chem' | 'garden';
   /** opens a submenu instead of running */
   opens?: 'challenges' | 'options';
   run?(): void;
@@ -45,7 +45,7 @@ export interface MenuCallbacks extends CommonCallbacks {
   /** PRESS START was pressed: the user gesture that unlocks audio */
   onStart(): void;
   onChallenge(id: string): void;
-  onPreview(kind: 'pg' | 'chem'): void;
+  onPreview(kind: 'pg' | 'chem' | 'garden'): void;
 }
 
 /** The view toggles of the pause menu's VIEW screen: each acts, and `state` reads them back. */

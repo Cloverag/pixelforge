@@ -1616,8 +1616,8 @@ body.immersive.reveal-bottom #deck { transform: none; opacity: 1; pointer-events
   body.immersive #deck { transition: opacity 120ms linear; }
 }
 
-/* the ASCII garden draws on its own canvas over the world's (modes/garden.ts) */
-#garden { position: absolute; left: 0; top: 0; z-index: 3; touch-action: none; pointer-events: none; }
+/* the ASCII garden draws on its own canvas over the world's (garden/view.ts):
+   in the game (garden-on) and as the title screen's preview (garden-preview) */
+.garden-canvas { position: absolute; left: 0; top: 0; z-index: 3; touch-action: none; pointer-events: none; }
 /* hidden by opacity, not visibility: the world canvas still takes the clicks */
-body.garden-on #screen { opacity: 0; }
-body:not(.in-game) #garden { display: none; }
+body.garden-on #screen, body.garden-preview #screen { opacity: 0; }

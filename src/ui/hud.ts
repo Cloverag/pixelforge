@@ -544,6 +544,12 @@ export class Hud {
     window.dispatchEvent(new Event('resize'));
   }
 
+  /** Change what an empty world says (the garden's scenes say nothing). */
+  setHint(text: string): void {
+    this.hintText = text;
+    this.showEmpty(!!text);
+  }
+
   /** An empty world says what to do with it, until the first thing lands. */
   private showEmpty(empty: boolean): void {
     if (!this.emptyHint) return;
