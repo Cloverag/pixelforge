@@ -224,7 +224,7 @@ lava, plants, glass and wall.
 | `B` | Grid view: chunky blocks, cycles 4 / 8 / 16 px then off |
 | `S` / `C` | Soft glow / CRT filter |
 | `M` | Mute SFX |
-| `ESC` | Close the periodic table, leave immersive mode, then back to menu (asks first in a room) |
+| `ESC` | Close the periodic table, leave immersive mode, then the **pause menu** (alone it freezes the game; in a room it does not). QUIT TO TITLE asks first in a room |
 
 On a phone the top bar folds into one row with a **MORE** menu, the canvas
 goes full width and the materials become large buttons below it (beside it

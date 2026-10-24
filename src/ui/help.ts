@@ -84,7 +84,7 @@ function buildContent(box: HTMLElement): void {
     ['B', 'grid view - chunky blocks, cycles size'],
     ['3', 'toggle 3D voxel view'],
     ['I', 'immersive: fill the window; panels slide in at the edges'],
-    ['ESC', 'leave immersive, then back to menu'],
+    ['ESC', 'leave immersive, then the pause menu (resume, save, view, options, quit)'],
   ];
   for (const [k, d] of rows) {
     const line = h('div', 'pf-help-krow');

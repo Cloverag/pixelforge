@@ -31,7 +31,7 @@ const BTN_NOTES: Record<string, string> = {
   MUSIC: 'Mute / unmute the music.',
   CRT: 'Toggle the CRT scanline filter. (C)',
   BG: 'Backdrop: cycle the picture around the game screen (grid, neon, nebula, ember).',
-  MENU: 'Back to the main menu. (ESC)',
+  MENU: 'Open the pause menu. (ESC)',
   BUCKET: 'Flood-fill the connected area with the selected material. (F)',
   '?': 'Open the help overlay.',
   X: 'Close this panel.',

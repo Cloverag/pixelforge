@@ -631,8 +631,9 @@ input[type='range']::-moz-range-thumb {
   background: radial-gradient(ellipse at center, rgba(8, 6, 5, 0) 50%, rgba(8, 6, 5, 0.85) 100%);
   backdrop-filter: none;
 }
-/* reduced motion runs no demo: a plain dark backdrop instead of a frozen frame */
-#overlay:has(.title-screen):not(.attract) {
+/* reduced motion runs no demo: a plain dark backdrop instead of a frozen frame
+   (the pause menu keeps the vignette: the game under it is the point) */
+#overlay:has(.title-screen[data-kind='title']):not(.attract) {
   background: radial-gradient(ellipse at center, rgba(14, 11, 9, 0.8), rgba(6, 5, 4, 0.97));
 }
 .title-screen {

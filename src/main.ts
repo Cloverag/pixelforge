@@ -7,7 +7,9 @@ import type { PG3D } from './render/pg3d';
 import { Sfx } from './game/audio';
 import { Juice } from './game/juice';
 import { Hud } from './ui/hud';
-import { setMenuLive, showMenu, type MenuEntry } from './ui/menu';
+import { isPauseOpen, setMenuLive, showMenu, showPause, type MenuSound } from './ui/menu';
+import type { MenuEntry } from './ui/menu';
+import { pauseRule } from './game/pause';
 import { hideOverlay, showResult, toast } from './ui/widgets';
 import { Mat, MATS } from './sim/materials';
 import { MpSession, newRoomCode, roomFromUrl, roomUrl, type MpHooks } from './net/mp';
@@ -803,7 +805,14 @@ function startChallenge(id: string): void {
   startMode(new SandMode(modeCtx, def));
 }
 
-/** ESC / MENU: in a room, make sure first - leaving takes you out of it. */
+function menuSound(k: MenuSound): void {
+  if (k === 'move') sfx.uiMove();
+  else if (k === 'select') sfx.uiSelect();
+  else if (k === 'back') sfx.uiBack();
+  else sfx.uiDeny();
+}
+
+/** QUIT TO TITLE: in a room, make sure first - leaving takes you out of it. */
 async function requestMenu(): Promise<void> {
   if (mp) {
     const host = mp.role === 'host';
@@ -823,6 +832,7 @@ async function requestMenu(): Promise<void> {
 /** `firstVisit`: the first menu of a page load with nothing saved - PRESS START comes first. */
 function openMenu(firstVisit = false): void {
   setImmersive(false);
+  pauseRestore = null;
   leaveRoom('YOU LEFT THE ROOM');
   // the demo behind the menu replaces the world: save the sandbox first
   // (a no-op outside it), queued ahead of the demo's mode switch
@@ -841,12 +851,7 @@ function openMenu(firstVisit = false): void {
       sfx.ensure();
       startChallenge(id);
     },
-    sound: (k) => {
-      if (k === 'move') sfx.uiMove();
-      else if (k === 'select') sfx.uiSelect();
-      else if (k === 'back') sfx.uiBack();
-      else sfx.uiDeny();
-    },
+    sound: menuSound,
     onPreview: previewAttract,
     volume: (bus) => sfx.getVolumes()[bus],
     setVolume: (bus, v) => {
@@ -1056,13 +1061,92 @@ function maybeShowResult(result: import('./sim/protocol').ChallengeResult | null
 
 // ---- toggles ----
 
+function setPaused(p: boolean): void {
+  paused = p;
+  hud.setPaused(p);
+  // paused: no frames arrive, so fade the playground's voices explicitly
+  if (p) sfx.playground(null);
+}
+
 function togglePause(): void {
   if (screen !== 'game') return;
-  paused = !paused;
-  hud.setPaused(paused);
+  setPaused(!paused);
   sfx.ui();
-  // paused: no frames arrive, so fade the playground's voices explicitly
-  if (paused) sfx.playground(null);
+}
+
+// ---- the pause menu (ESC in game) ----
+
+/** The pause state to put back on RESUME; null while no pause menu is open. */
+let pauseRestore: boolean | null = null;
+
+/** Open the menu over the game: alone it freezes the sim, in a room it never does (game/pause.ts). */
+function openPause(): void {
+  if (screen !== 'game' || isPauseOpen()) return;
+  const rule = pauseRule(paused, !!mp);
+  pauseRestore = rule.pausedOnResume;
+  if (rule.freezeOnOpen) setPaused(true);
+  sfx.uiSelect();
+  showPause({
+    title: mp ? 'MENU' : 'PAUSED',
+    resume: closePause,
+    canSave: current.saveable,
+    save: () => requestSnapshot('store'),
+    load: loadSaved,
+    share: () => requestSnapshot('share'),
+    view: {
+      immerse: () => {
+        sfx.ui();
+        toggleImmersive();
+      },
+      soft: toggleSoft,
+      crt: toggleCrt,
+      grid: toggleGrid,
+      view3d: toggle3d,
+      backdrop: () => void cycleWallpaper(),
+      state: () => ({
+        immerse: isImmersive(),
+        soft: renderer.isSoft(),
+        crt: document.body.classList.contains('crt-on'),
+        grid: renderer.getBlockSize(),
+        view3d: view3dOn,
+        backdrop: WALLPAPER_NAMES[bgIndex],
+      }),
+    },
+    quit: () => void requestMenu(),
+    sound: menuSound,
+    volume: (bus) => sfx.getVolumes()[bus],
+    setVolume: (bus, v) => {
+      sfx.setVolume(bus, v);
+      syncAudioHud();
+    },
+    onToggleBg: () => void cycleWallpaper(),
+    backdrop: () => WALLPAPER_NAMES[bgIndex],
+    onToggleCrt: toggleCrt,
+    onHelp: () => toggleHelp(),
+  });
+}
+
+function closePause(): void {
+  if (!isPauseOpen()) return;
+  hideOverlay();
+  if (pauseRestore !== null) setPaused(pauseRestore);
+  pauseRestore = null;
+}
+
+/** LOAD: the saved world, into this sandbox. */
+function loadSaved(): void {
+  const blob = readSave();
+  if (!blob) {
+    toast('NO SAVE FOUND', true);
+    return;
+  }
+  const d = rleDecode(blob, SIM_W * SIM_H);
+  if (!d) {
+    toast('SAVE CORRUPTED', true);
+    return;
+  }
+  adoptWorld(d);
+  toast('GAME LOADED');
 }
 
 function stepOnce(): void {
@@ -1129,23 +1213,10 @@ function setBrush(n: number): void {
 hud.initTopbar({
   onPause: togglePause,
   onStep: stepOnce,
-  onMenu: () => void requestMenu(),
+  onMenu: openPause,
   onSave: () => requestSnapshot('store'),
   onShare: () => requestSnapshot('share'),
-  onLoad: () => {
-    const blob = readSave();
-    if (!blob) {
-      toast('NO SAVE FOUND', true);
-      return;
-    }
-    const d = rleDecode(blob, SIM_W * SIM_H);
-    if (!d) {
-      toast('SAVE CORRUPTED', true);
-      return;
-    }
-    adoptWorld(d);
-    toast('GAME LOADED');
-  },
+  onLoad: loadSaved,
   onToggleMute: toggleMute,
   onToggleCrt: toggleCrt,
   onToggleBg: cycleWallpaper,
@@ -1190,9 +1261,14 @@ new Input(
         setBrush(brush + 2);
         break;
       case 'escape':
-        // one step back at a time: out of immersive first, then the menu
+        // one step back at a time: out of immersive, then the mode's own panel
+        // (the periodic table), then the pause menu; a finished challenge's
+        // result screen has no pause to offer, so ESC goes on to the title
         if (isImmersive()) setImmersive(false);
-        else if (screen === 'game' && !current.onEscape?.()) void requestMenu();
+        else if (screen === 'game' && !current.onEscape?.()) {
+          if (resultOpen) void requestMenu();
+          else openPause();
+        }
         break;
       case 'i':
         if (screen === 'game') toggleImmersive();

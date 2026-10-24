@@ -225,7 +225,7 @@ export class Hud {
     this.muteBtn = this.mkBtn('SFX', cbs.onToggleMute, 'Mute the sound effects (M mutes everything)', true);
     this.musicBtn = this.mkBtn('MUSIC', cbs.onToggleMusic, 'Mute the music', true);
     const helpBtn = this.mkBtn('?', cbs.onHelp, 'How to play');
-    const menuBtn = this.mkBtn('MENU', cbs.onMenu, 'Back to the main menu (ESC)');
+    const menuBtn = this.mkBtn('MENU', cbs.onMenu, 'The pause menu (ESC)');
     menuBtn.classList.add('primary');
 
     // clusters by job, so fourteen controls read as five decisions
