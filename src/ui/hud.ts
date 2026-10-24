@@ -48,22 +48,10 @@ export type PgTool =
   | 'portal'
   | 'erase';
 
-interface TopbarCallbacks {
+/** The bottom bar's two buttons. */
+interface BarCallbacks {
   onPause(): void;
-  onStep(): void;
   onMenu(): void;
-  onSave(): void;
-  onLoad(): void;
-  onShare(): void;
-  onToggleMute(): void;
-  onToggleCrt(): void;
-  onToggleBg(): void;
-  onToggleMusic(): void;
-  onHelp(): void;
-  onToggle3d(): void;
-  onToggleGrid(): void;
-  onToggleSoft(): void;
-  onToggleImmersive(): void;
 }
 
 /** One pickable thing in the rail: a material, a tool, an element. */
@@ -151,20 +139,15 @@ export function materialSections(allowed: number[] | null): PaletteSection[] {
 
 export class Hud {
   private pauseBtn!: HTMLButtonElement;
-  private muteBtn!: HTMLButtonElement;
-  private saveBtn!: HTMLButtonElement;
-  private loadBtn!: HTMLButtonElement;
-  private modeEl!: HTMLElement;
-  private fpsEl!: HTMLElement;
+  private fpsEl: HTMLElement | null = null;
+  private pausedBadge: HTMLElement | null = null;
   private brushLabel!: HTMLElement;
   private brushDot!: HTMLElement;
   private swatchEls = new Map<string, HTMLElement>();
   private status!: {
-    run: HTMLElement;
     chip: HTMLElement;
     name: HTMLElement;
     note: HTMLElement;
-    tool: HTMLElement;
     cells: HTMLElement;
     cellsKey: HTMLElement;
     /** the CHEM LAB's live readout: rate and the busiest rule (hidden elsewhere) */
@@ -189,99 +172,24 @@ export class Hud {
     this.status.cells.textContent = n.toLocaleString('en-US');
   }
   private cursor = new BrushCursor();
-  private brushN = 6;
   private toolKind: PaintKind = 'brush';
   private budgetEls = new Map<number, HTMLElement>();
 
-  constructor(
-    private topbar: HTMLElement,
-    private toolbar: HTMLElement,
-  ) {}
+  constructor(private toolbar: HTMLElement) {}
 
-  initTopbar(cbs: TopbarCallbacks): void {
-    this.topbar.innerHTML = '';
-    const brand = h('div', 'brand');
-    const mark = h('span', 'brand-mark');
-    mark.setAttribute('aria-hidden', 'true');
-    brand.appendChild(mark);
-    brand.appendChild(h('span', 'title', 'PIXELFORGE'));
-    this.modeEl = h('span', 'mode-label', '');
-    brand.appendChild(this.modeEl);
-    this.topbar.appendChild(brand);
-    this.topbar.appendChild(h('span', 'spacer'));
-
-    this.pauseBtn = this.mkBtn('PAUSE', cbs.onPause, 'Pause / resume the simulation (SPACE)', true);
-    const stepBtn = this.mkBtn('STEP', cbs.onStep, 'Advance one tick while paused (N)');
-    this.saveBtn = this.mkBtn('SAVE', cbs.onSave, 'Save this world to browser storage');
-    this.loadBtn = this.mkBtn('LOAD', cbs.onLoad, 'Load the saved world');
-    this.shareBtn = this.mkBtn('SHARE', cbs.onShare, 'Copy a link that loads this world');
-    this.softBtn = this.mkBtn('SOFT', cbs.onToggleSoft, 'Smooth particles with trails and glow (S)', true);
-    const crtBtn = this.mkBtn('CRT', cbs.onToggleCrt, 'Toggle the CRT filter (C)', true);
-    this.crtBtn = crtBtn;
-    this.gridBtn = this.mkBtn('GRID', cbs.onToggleGrid, 'Chunky block view - cycles size (B)', true);
-    this.view3dBtn = this.mkBtn('3D', cbs.onToggle3d, 'Toggle 3D voxel view (3)', true);
-    this.immersiveBtn = this.mkBtn('IMMERSE', cbs.onToggleImmersive, 'Fill the window, hide the panels (I)', true);
-    const bgBtn = this.mkBtn('BG', cbs.onToggleBg, 'Backdrop: the picture around the game screen');
-    this.muteBtn = this.mkBtn('SFX', cbs.onToggleMute, 'Mute the sound effects (M mutes everything)', true);
-    this.musicBtn = this.mkBtn('MUSIC', cbs.onToggleMusic, 'Mute the music', true);
-    const helpBtn = this.mkBtn('?', cbs.onHelp, 'How to play');
-    const menuBtn = this.mkBtn('MENU', cbs.onMenu, 'The pause menu (ESC)');
-    menuBtn.classList.add('primary');
-
-    // clusters by job, so fourteen controls read as five decisions
-    const groups: [string, HTMLButtonElement[]][] = [
-      ['Run', [this.pauseBtn, stepBtn]],
-      ['File', [this.saveBtn, this.loadBtn, this.shareBtn]],
-      ['View', [this.immersiveBtn, this.softBtn, crtBtn, this.gridBtn, this.view3dBtn, bgBtn]],
-      ['Sound', [this.muteBtn, this.musicBtn]],
-    ];
-    // On a phone these fold into a drop-down behind the MORE button (CSS);
-    // on a desktop the wrapper is display: contents and changes nothing.
-    const fold = h('div', 'topbar-groups');
-    fold.id = 'topbar-groups';
-    for (const [name, btns] of groups) {
-      const g = h('div', 'btn-group');
-      g.setAttribute('role', 'group');
-      g.setAttribute('aria-label', name);
-      g.appendChild(h('span', 'grp-label', name));
-      const row = h('div', 'grp-row');
-      for (const b of btns) row.appendChild(b);
-      g.appendChild(row);
-      fold.appendChild(g);
-    }
-    this.topbar.appendChild(fold);
-    const end = h('div', 'btn-group end');
-    const more = this.mkBtn('MORE', () => {
-      const open = this.topbar.classList.toggle('more-open');
-      more.setAttribute('aria-expanded', String(open));
-    }, 'Pause, save, view and sound settings');
-    more.classList.add('more-btn');
-    more.setAttribute('aria-controls', 'topbar-groups');
-    more.setAttribute('aria-expanded', 'false');
-    // picking anything in the drop-down closes it
-    fold.addEventListener('click', (e) => {
-      if ((e.target as HTMLElement).closest('button')) {
-        this.topbar.classList.remove('more-open');
-        more.setAttribute('aria-expanded', 'false');
-      }
-    });
-    end.appendChild(more);
-    end.appendChild(helpBtn);
-    end.appendChild(menuBtn);
-    this.topbar.appendChild(end);
-
-    crtBtn.classList.add('toggled');
-    this.muteBtn.classList.add('toggled');
-    document.body.classList.add('crt-on');
-    this.buildStatusBar();
+  /** The bottom bar: what you hold, what is happening, PAUSE and MENU. */
+  initBar(cbs: BarCallbacks): void {
+    this.fpsEl = document.getElementById('fps');
+    this.pausedBadge = document.getElementById('paused-badge');
+    this.buildBar(cbs);
   }
 
   /**
-   * The strip under the canvas: what is running, what you are holding, how
-   * big the brush is, how much is in the world. Everything a player used to
-   * have to infer from which button happened to be lit.
+   * The one-line bar under everything: the picked material (chip, name, its
+   * note), then on the right the live count, the chem lab's readout, PAUSE and
+   * MENU. Words that only repeat the screen are not here; keys live in CONTROLS.
    */
-  private buildStatusBar(): void {
+  private buildBar(cbs: BarCallbacks): void {
     const bar = document.getElementById('statusbar');
     if (!bar) return;
     bar.innerHTML = '';
@@ -290,47 +198,44 @@ export class Hud {
       bar.appendChild(el);
       return el;
     };
-    const runSeg = seg('sb-run');
-    const run = h('span', 'sb-val', 'RUNNING');
-    runSeg.append(run);
-
     const matSeg = seg('sb-mat');
     const chip = h('span', 'sb-chip');
-    const name = h('span', 'sb-val', '');
+    const name = h('span', 'sb-name', '');
     const note = h('span', 'sb-note', '');
     matSeg.append(chip, name, note);
 
     // CHEM LAB only (setReadout): how much is reacting, and what mostly is
     const rxSeg = seg('sb-rx hidden');
     const rxVal = h('span', 'sb-val num', '0/s');
-    rxSeg.append(h('span', 'sb-key', 'Reactions'), rxVal);
+    rxSeg.append(h('span', 'sb-rxlbl', 'REACTIONS'), rxVal);
     const nowSeg = seg('sb-now hidden');
     const nowVal = h('span', 'sb-note', '');
-    nowSeg.append(h('span', 'sb-key', 'Now'), nowVal);
+    nowSeg.append(h('span', 'sb-rxlbl', 'NOW'), nowVal);
 
-    const tool = h('span', 'sb-val', '');
-    seg('sb-tool').append(h('span', 'sb-key', 'Tool'), tool);
     const cells = h('span', 'sb-val num', '0');
-    const cellsKey = h('span', 'sb-key', 'Cells');
-    seg('sb-cells').append(cellsKey, cells);
-    this.fpsEl = h('span', 'sb-val num', '');
-    this.fpsEl.id = 'fps';
-    seg('sb-fps').append(this.fpsEl);
-    this.status = { run, chip, name, note, tool, cells, cellsKey, rxSeg, rxVal, nowSeg, nowVal };
+    const cellsKey = h('span', 'sb-unit', 'cells');
+    seg('sb-cells').append(cells, cellsKey);
+
+    // PAUSE is a 44px square with a drawn glyph (no font has to carry it)
+    const btns = seg('sb-btns');
+    this.pauseBtn = this.mkBtn('', cbs.onPause, 'Pause (SPACE)', true);
+    this.pauseBtn.classList.add('sq');
+    const ico = h('span', 'ico');
+    ico.setAttribute('aria-hidden', 'true');
+    this.pauseBtn.appendChild(ico);
+    const menuBtn = this.mkBtn('MENU', cbs.onMenu, 'Pause menu (ESC)');
+    btns.append(this.pauseBtn, menuBtn);
+    this.status = { chip, name, note, cells, cellsKey, rxSeg, rxVal, nowSeg, nowVal };
   }
 
   private renderTool(): void {
-    if (!this.status) return;
-    const k = this.toolKind;
-    this.status.tool.textContent =
-      k === 'flood' ? 'BUCKET' : k === 'wind' ? `WIND ${this.brushN}` : `BRUSH ${this.brushN}`;
-    this.cursor.setMode(k);
+    this.cursor.setMode(this.toolKind);
   }
 
   private showSelection(name: string, cat: string, note: string, chipBg: string): void {
     if (!this.status) return;
     this.status.name.textContent = name;
-    this.status.note.textContent = [cat, note].filter(Boolean).join(' · ');
+    this.status.note.textContent = [cat, note].filter(Boolean).join(' - ');
     this.status.chip.style.background = chipBg;
   }
 
@@ -348,19 +253,9 @@ export class Hud {
     return b;
   }
 
-  /** Change a button's text without destroying its indicator lamp. */
-  private setLabel(b: HTMLButtonElement, text: string): void {
-    const l = b.querySelector('.lbl');
-    if (l) l.textContent = text;
-    else b.textContent = text;
-  }
-
-  setModeLabel(s: string): void {
-    this.modeEl.textContent = s;
-  }
-
+  /** The FPS readout in the canvas corner (shown by the D key). */
   setFps(f: number): void {
-    this.fpsEl.textContent = `${f} FPS`;
+    if (this.fpsEl) this.fpsEl.textContent = `${f} FPS`;
   }
 
   /**
@@ -380,35 +275,13 @@ export class Hud {
   setPaused(p: boolean): void {
     // a paused world fires nothing, and no frames arrive to say so
     if (p && this.status && !this.status.rxSeg.classList.contains('hidden')) this.setReadout(0, null);
-    this.setLabel(this.pauseBtn, p ? 'RESUME' : 'PAUSE');
     this.pauseBtn.classList.toggle('toggled', p);
-    if (this.status) this.status.run.textContent = p ? 'PAUSED' : 'RUNNING';
-  }
-
-  /**
-   * FILE stays on the bar in every mode, so the groups beside it sit at the
-   * same x everywhere; outside the sandbox its keys are just disabled.
-   * Sharing a challenge would hand someone a half-solved puzzle, so the link
-   * button lives and dies with save/load.
-   */
-  setSaveEnabled(v: boolean): void {
-    for (const b of [this.saveBtn, this.loadBtn, this.shareBtn]) {
-      // the enabled title is whatever mkBtn gave it: remember it, put it back
-      b.dataset.title ??= b.title;
-      const t = v ? b.dataset.title : 'Saving is for the sandbox';
-      b.disabled = !v;
-      b.title = t;
-      b.setAttribute('aria-label', t);
-    }
-  }
-
-  /** The SFX toggle is lit when sound is on. */
-  setMuted(m: boolean): void {
-    this.muteBtn.classList.toggle('toggled', !m);
+    this.pauseBtn.title = p ? 'Resume (SPACE)' : 'Pause (SPACE)';
+    this.pauseBtn.setAttribute('aria-label', this.pauseBtn.title);
+    this.pausedBadge?.classList.toggle('hidden', !p);
   }
 
   showBars(v: boolean): void {
-    this.topbar.classList.toggle('hidden', !v);
     this.toolbar.classList.toggle('hidden', !v);
     document.getElementById('statusbar')?.classList.toggle('hidden', !v);
     document.body.classList.toggle('in-game', v);
@@ -484,44 +357,11 @@ export class Hud {
     this.buildBrushCol(brush, spec.bucket);
     this.pick(spec.initial);
     this.particleMode = spec.counts === 'particles';
-    if (this.status) this.status.cellsKey.textContent = this.particleMode ? 'Particles' : 'Cells';
+    if (this.status) this.status.cellsKey.textContent = this.particleMode ? 'particles' : 'cells';
   }
 
   private bucketBtn: HTMLButtonElement | null = null;
   private windBtn: HTMLButtonElement | null = null;
-  private musicBtn!: HTMLButtonElement;
-  private view3dBtn!: HTMLButtonElement;
-  private immersiveBtn!: HTMLButtonElement;
-  private shareBtn!: HTMLButtonElement;
-  private softBtn!: HTMLButtonElement;
-  private crtBtn!: HTMLButtonElement;
-  private gridBtn!: HTMLButtonElement;
-
-  /** null = off; a number shows the active block edge, e.g. "GRID 8". */
-  setGridSize(n: number | null): void {
-    this.gridBtn.classList.toggle('toggled', n !== null);
-    this.setLabel(this.gridBtn, n === null ? 'GRID' : `GRID ${n}`);
-  }
-
-  setImmersiveToggled(v: boolean): void {
-    this.immersiveBtn.classList.toggle('toggled', v);
-  }
-
-  set3dToggled(v: boolean): void {
-    this.view3dBtn.classList.toggle('toggled', v);
-  }
-
-  setCrt(on: boolean): void {
-    this.crtBtn?.classList.toggle('toggled', on);
-  }
-
-  setSoftToggled(v: boolean): void {
-    this.softBtn.classList.toggle('toggled', v);
-  }
-
-  setMusicToggled(v: boolean): void {
-    this.musicBtn.classList.toggle('toggled', v);
-  }
 
   /** BUCKET and WIND are the same one-of-three choice, so they light as one. */
   setToolKind(kind: PaintKind): void {
@@ -623,7 +463,6 @@ export class Hud {
   }
 
   setBrushDisplay(n: number): void {
-    this.brushN = n;
     this.cursor.setSize(n);
     this.renderTool();
     if (this.brushLabel) this.brushLabel.textContent = String(n);

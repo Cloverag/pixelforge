@@ -31,7 +31,6 @@ const HELD_TOOLS = new Set<PgTool>(['fountain', 'sparkler', 'hose', 'fireflies']
 /** The particle playground: emitters, forces, portals, bumpers and scenes. */
 export class PlaygroundMode implements ModeController {
   readonly id = 'playground';
-  readonly label = 'PARTICLE PLAYGROUND';
   readonly roomName = 'PLAYGROUND';
   readonly cinematic = true;
   // deliberately throwaway: no save, no autosave

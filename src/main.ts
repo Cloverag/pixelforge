@@ -39,7 +39,6 @@ import { ChemMode } from './modes/chem';
 const STEP_MS = 1000 / 60;
 
 let canvas = document.getElementById('screen') as HTMLCanvasElement;
-const topbar = document.getElementById('topbar')!;
 const toolbar = document.getElementById('toolbar')!;
 const overlay = document.getElementById('overlay')!;
 
@@ -79,7 +78,7 @@ const flashEl = document.createElement('div');
 flashEl.id = 'blast-flash';
 document.getElementById('screen-wrap')!.appendChild(flashEl);
 const juice = new Juice(document.getElementById('viewport') ?? canvas, flashEl);
-const hud = new Hud(topbar, toolbar);
+const hud = new Hud(toolbar);
 
 const worker = new Worker(new URL('./sim/worker.ts', import.meta.url), {
   type: 'module',
@@ -144,7 +143,6 @@ async function togglePg3d(): Promise<void> {
     view3dOn = false;
     pgView?.hide();
     document.getElementById('screen')!.style.visibility = 'visible';
-    hud.set3dToggled(false);
     post({ t: 'watch3d', on: false });
     return;
   }
@@ -167,7 +165,6 @@ async function togglePg3d(): Promise<void> {
   view3dOn = true;
   pgView.show();
   document.getElementById('screen')!.style.visibility = 'hidden';
-  hud.set3dToggled(true);
   post({ t: 'watch3d', on: true });
 }
 
@@ -178,7 +175,6 @@ function close3d(): void {
   view3d?.hide();
   pgView?.hide();
   document.getElementById('screen')!.style.visibility = 'visible';
-  hud.set3dToggled(false);
   post({ t: 'watch3d', on: false });
 }
 
@@ -189,7 +185,6 @@ async function toggle3d(): Promise<void> {
     view3dOn = false;
     view3d?.hide();
     document.getElementById('screen')!.style.visibility = 'visible';
-    hud.set3dToggled(false);
     post({ t: 'watch3d', on: false });
     return;
   }
@@ -209,7 +204,6 @@ async function toggle3d(): Promise<void> {
   view3dOn = true;
   view3d.show();
   document.getElementById('screen')!.style.visibility = 'hidden';
-  hud.set3dToggled(true);
   post({ t: 'watch3d', on: true });
 }
 
@@ -233,7 +227,6 @@ function toggleSoft(): void {
 
 function applySoft(on: boolean): void {
   renderer.setSoft(on);
-  hud.setSoftToggled(on);
   // the material map is only worth streaming when something consumes it
   if (hasFluid) post({ t: 'watchFluid', on });
 }
@@ -268,7 +261,6 @@ function toggleGrid(): void {
 
 function applyGrid(n: number | null): void {
   renderer.setBlockSize(n);
-  hud.setGridSize(n);
 }
 
 /** Restores the saved block size once the HUD buttons exist. */
@@ -759,8 +751,6 @@ function enterGame(): void {
   resultOpen = false;
   hud.setPaused(false);
   hud.showBars(true);
-  hud.setModeLabel(current.label);
-  hud.setSaveEnabled(current.saveable);
   hideOverlay();
   renderer.resize();
   acc = 0;
@@ -856,7 +846,6 @@ function openMenu(firstVisit = false): void {
     volume: (bus) => sfx.getVolumes()[bus],
     setVolume: (bus, v) => {
       sfx.setVolume(bus, v);
-      syncAudioHud();
     },
     onToggleBg: () => void cycleWallpaper(),
     backdrop: () => WALLPAPER_NAMES[bgIndex],
@@ -1101,6 +1090,7 @@ function openPause(): void {
       soft: toggleSoft,
       crt: toggleCrt,
       grid: toggleGrid,
+      fps: toggleFps,
       view3d: toggle3d,
       backdrop: () => void cycleWallpaper(),
       state: () => ({
@@ -1108,6 +1098,7 @@ function openPause(): void {
         soft: renderer.isSoft(),
         crt: document.body.classList.contains('crt-on'),
         grid: renderer.getBlockSize(),
+        fps: document.body.classList.contains('show-fps'),
         view3d: view3dOn,
         backdrop: WALLPAPER_NAMES[bgIndex],
       }),
@@ -1117,7 +1108,6 @@ function openPause(): void {
     volume: (bus) => sfx.getVolumes()[bus],
     setVolume: (bus, v) => {
       sfx.setVolume(bus, v);
-      syncAudioHud();
     },
     onToggleBg: () => void cycleWallpaper(),
     backdrop: () => WALLPAPER_NAMES[bgIndex],
@@ -1153,27 +1143,22 @@ function stepOnce(): void {
   if (screen === 'game' && paused) sendStep();
 }
 
-/** The SFX and MUSIC lamps say whether that bus can be heard: its own mute or master's. */
-function syncAudioHud(): void {
-  const m = sfx.getVolumes().mute;
-  hud.setMuted(m.master || m.sfx);
-  hud.setMusicToggled(!(m.master || m.music));
-}
-
-/** The SFX button: mute or unmute the effects (their level is kept). */
-function toggleMute(): void {
-  sfx.toggleMute('sfx');
-  syncAudioHud();
-}
-
 /** The M key: mute or unmute everything, as a game's mute key does. */
 function toggleMaster(): void {
   sfx.toggleMute('master');
-  syncAudioHud();
+  toast(sfx.getVolumes().mute.master ? 'SOUND OFF' : 'SOUND ON');
 }
 
+// the CRT filter is on until the player turns it off
+document.body.classList.add('crt-on');
+
 function toggleCrt(): void {
-  hud.setCrt(document.body.classList.toggle('crt-on'));
+  document.body.classList.toggle('crt-on');
+}
+
+/** The D key and VIEW's FPS: a small frames-per-second readout in the canvas corner, off by default. */
+function toggleFps(): void {
+  document.body.classList.toggle('show-fps');
 }
 
 const music = initMusic(sfx);
@@ -1181,12 +1166,6 @@ const music = initMusic(sfx);
 sfx.onReady = () => music.start();
 // ...and a restored game has no PRESS START, so any first click or key is the gesture
 for (const ev of ['pointerdown', 'keydown'] as const) addEventListener(ev, () => sfx.ensure(), { once: true, capture: true });
-
-/** The MUSIC button: mute or unmute the music (its level is kept). */
-function toggleMusic(): void {
-  sfx.toggleMute('music');
-  syncAudioHud();
-}
 
 let bgIndex = loadBgIndex();
 
@@ -1210,31 +1189,11 @@ function setBrush(n: number): void {
 
 // ---- input wiring ----
 
-hud.initTopbar({
-  onPause: togglePause,
-  onStep: stepOnce,
-  onMenu: openPause,
-  onSave: () => requestSnapshot('store'),
-  onShare: () => requestSnapshot('share'),
-  onLoad: loadSaved,
-  onToggleMute: toggleMute,
-  onToggleCrt: toggleCrt,
-  onToggleBg: cycleWallpaper,
-  onToggleMusic: toggleMusic,
-  onHelp: () => toggleHelp(),
-  onToggle3d: () => void toggle3d(),
-  onToggleGrid: toggleGrid,
-  onToggleSoft: toggleSoft,
-  onToggleImmersive: () => {
-    sfx.ui();
-    toggleImmersive();
-  },
-});
+hud.initBar({ onPause: togglePause, onMenu: openPause });
 
-// the GRID and SOFT buttons exist only after initTopbar, so restore here
+// the saved block size and soft setting, now that the HUD exists
 restoreGrid();
 restoreSoft();
-syncAudioHud();
 
 new Input(
   canvas,
@@ -1250,6 +1209,9 @@ new Input(
         break;
       case 'm':
         toggleMaster();
+        break;
+      case 'd':
+        if (screen === 'game') toggleFps();
         break;
       case 'c':
         toggleCrt();
@@ -1308,7 +1270,6 @@ window.addEventListener('pf-star', (e) => {
 overlay.classList.add('hidden');
 initHelp();
 initImmersive((on) => {
-  hud.setImmersiveToggled(on);
   if (on) toast('IMMERSIVE - EDGES FOR CONTROLS - I OR ESC TO LEAVE');
 });
 applyWallpaper(bgIndex);

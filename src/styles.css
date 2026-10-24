@@ -43,8 +43,7 @@
   color-scheme: dark;
 
   --rail-w: 236px;
-  --topbar-h: 56px;
-  --status-h: 30px;
+  --bar-h: 48px;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -110,73 +109,6 @@ body.has-wallpaper #app { position: relative; z-index: 1; }
 }
 
 .hidden { display: none !important; }
-
-/* ---------------------------------------------------------------- top bar */
-/* (R3 deletes the top bar: its job moves to the bottom bar and the pause menu) */
-
-#topbar {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: flex-end;
-  flex-wrap: wrap;
-  gap: 6px 18px;
-  min-height: var(--topbar-h);
-  padding: 7px 14px 9px;
-  background: var(--panel);
-  border-bottom: var(--frame-line);
-  z-index: 20;
-}
-
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  align-self: center;
-}
-.brand-mark {
-  flex: 0 0 auto;
-  width: 4px;
-  height: 4px;
-  margin: 0 10px 8px 2px;
-  background: var(--accent);
-  box-shadow:
-    5px 5px 0 0 var(--accent-2),
-    10px 10px 0 0 var(--danger);
-}
-#topbar .title {
-  font-family: var(--font-display);
-  color: var(--accent);
-  font-size: 14px;
-}
-#topbar .mode-label {
-  color: var(--ink-dim);
-  font-size: 14px;
-  padding: 3px 7px;
-  border: var(--frame-line);
-  background: var(--panel-deep);
-}
-#topbar .mode-label:empty { display: none; }
-#topbar .spacer { flex: 1; }
-
-/* a cluster: a label over a row of keys */
-.btn-group {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-/* a cluster whose keys are all hidden goes too */
-.btn-group:not(:has(button.px:not(.hidden))) { display: none; }
-.btn-group.end {
-  flex-direction: row;
-  align-items: flex-end;
-  gap: 8px;
-}
-.grp-label {
-  font-size: 14px;
-  color: var(--ink-faint);
-  padding-left: 2px;
-}
-.grp-row { display: flex; gap: 6px; }
 
 /* -------------------------------------------------------------- buttons */
 /* One button: the pixel frame, display type. A toggle (.tog) shows its state
@@ -342,61 +274,121 @@ body.crt-on #crt {
   rotate: 45deg;
 }
 
-/* ------------------------------------------------------ status bar */
+/* ------------------------------------------------------ bottom bar */
+/* One line, 48px, under the rail and the canvas: the picked material on the
+   left; the count, the chem lab's readout, PAUSE and MENU on the right. */
 
 #statusbar {
-  flex: 0 0 var(--status-h);
+  flex: 0 0 var(--bar-h);
+  height: var(--bar-h);
   display: flex;
   align-items: stretch;
   min-width: 0;
   background: var(--panel);
   border-top: var(--frame-line);
-  font-size: 14px;
   color: var(--ink-dim);
   z-index: 20;
 }
 .sb-seg {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   padding: 0 14px;
-  border-right: 2px solid var(--line-soft);
   white-space: nowrap;
 }
-.sb-seg:last-child { border-right: 0; }
-.sb-mat { flex: 1 1 auto; min-width: 0; }
-.sb-key { color: var(--ink-faint); text-transform: uppercase; }
-/* the CHEM LAB readout: the rate keeps its width so the bar does not twitch,
-   and NOW gives way (with an ellipsis) before the FPS segment does */
-.sb-rx .sb-val { min-width: 8ch; }
-.sb-now { flex: 0 1 auto; min-width: 0; max-width: 46ch; }
-/* while NOW shows, the selected material's description is what gives way:
-   it takes what is left rather than sharing the squeeze (:has keeps every
-   other mode's bar as it was) */
-@media (min-width: 1181px) {
-  #statusbar:has(.sb-now:not(.hidden)) .sb-mat { flex: 1 1 0; min-width: 150px; overflow: hidden; }
+.sb-mat { flex: 1 1 0; min-width: 0; overflow: hidden; }
+.sb-name {
+  flex: 0 0 auto;
+  font-family: var(--font-display);
+  font-size: 16px;
+  color: var(--ink);
 }
-/* Narrower bars give up the readout in steps, so the FPS segment never leaves
-   the bar: below 1180px NOW would be a sliver, so the rate stays and the line
-   goes; below 1000px the lab's cell count goes too; on a phone, the rate. */
-@media (max-width: 1180px) { .sb-now { display: none; } }
-@media (max-width: 1000px) { #statusbar:has(.sb-rx:not(.hidden)) .sb-cells { display: none; } }
-@media (max-width: 720px) { .sb-rx { display: none; } }
-.sb-val { color: var(--ink); }
-.sb-val.num { font-variant-numeric: tabular-nums; font-family: var(--font-read); font-size: 14px; }
+/* the note wraps to a second line before it ever clips; segments give way whole */
 .sb-note {
+  min-width: 0;
   font-family: var(--font-read);
-  font-size: 14px;
-  color: var(--ink-faint);
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-size: 15px;
+  line-height: 1.15;
+  color: var(--ink-dim);
+  white-space: normal;
 }
 .sb-chip {
   flex: 0 0 auto;
-  width: 14px;
-  height: 14px;
+  width: 20px;
+  height: 20px;
   border: 2px solid var(--frame);
 }
+.sb-val { color: var(--ink); }
+.sb-val.num {
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-read);
+  font-size: 15px;
+}
+.sb-unit, .sb-rxlbl { font-family: var(--font-read); font-size: 14px; color: var(--ink-dim); }
+.sb-rxlbl { font-family: var(--font-display); }
+/* the CHEM LAB readout: the rate keeps its width so the bar does not twitch */
+.sb-rx .sb-val { min-width: 6ch; }
+.sb-now { flex: 0 1 auto; min-width: 0; max-width: 40ch; }
+.sb-btns { gap: 10px; padding-right: 10px; }
+.sb-cells { min-width: 11ch; }
+/* a small bar gives up its readout in steps, whole segments at a time: NOW
+   first, then the chem lab's rate, then the material's note */
+@media (max-width: 1500px) { .sb-now { display: none; } }
+@media (max-width: 1100px) { .sb-rx { display: none; } }
+@media (max-width: 900px) { .sb-note { display: none; } }
+
+button.px.sq {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  box-shadow: none;
+}
+/* the pause glyph, drawn: two bars; resumed-from-paused shows a play triangle */
+button.px.sq .ico {
+  width: 16px;
+  height: 18px;
+  background: currentColor;
+  clip-path: polygon(0 0, 35% 0, 35% 100%, 0 100%, 0 0, 65% 0, 100% 0, 100% 100%, 65% 100%, 65% 0);
+}
+button.px.sq.toggled .ico { clip-path: polygon(0 0, 100% 50%, 0 100%); }
+
+/* the PAUSED badge on the canvas: blinks in hard steps, and keeps blinking
+   under reduced motion (it is information, not decoration) */
+#paused-badge {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  translate: -50% 0;
+  z-index: 6;
+  padding: 8px 14px;
+  font-family: var(--font-display);
+  font-size: 16px;
+  line-height: 1;
+  color: var(--accent-hi);
+  background: rgba(8, 6, 5, 0.86);
+  border: var(--frame-line);
+  box-shadow: var(--frame-shadow);
+  animation: ts-blink 1s steps(1) infinite;
+  pointer-events: none;
+}
+/* the FPS readout (D): a small corner box, off until asked for */
+#fps {
+  display: none;
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  z-index: 6;
+  padding: 2px 6px;
+  font-family: var(--font-read);
+  font-size: 14px;
+  line-height: 1.3;
+  color: var(--ink);
+  background: rgba(8, 6, 5, 0.8);
+  pointer-events: none;
+}
+body.show-fps.in-game #fps { display: block; }
+body:not(.in-game) #paused-badge { display: none; }
+
 /* ---------------------------------------------------------- material rail */
 
 #toolbar {
@@ -807,7 +799,7 @@ body.crt-on .title-screen::after {
 
 #toast-wrap {
   position: fixed;
-  top: calc(var(--topbar-h) + 14px);
+  top: 14px;
   left: 50%;
   translate: -50% 0;
   z-index: 80;
@@ -921,53 +913,18 @@ body.crt-on .title-screen::after {
   .gswatches.tiles { grid-template-columns: none; grid-template-rows: repeat(2, 44px); grid-auto-columns: 44px; grid-auto-flow: column; }
   .swatch.tile { width: auto; }
   .toolcol { margin-top: 0; min-width: 190px; }
-  .sb-note, .sb-cells, .sb-now { display: none; }
 }
 @media (max-width: 720px) {
-  #topbar { padding: 6px 10px; gap: 6px 10px; }
-  .grp-label { display: none; }
   button.px { padding: 8px 8px; }
   .screen { padding: 22px 18px; }
 }
 
 /* ==== PHONES ====
-   The top bar folds to one row (brand, MORE, ?, MENU) with everything else
-   in a drop-down; portrait puts the canvas full-width under it and gives
-   the rest of the screen to big, thumb-sized material buttons; landscape
-   puts a narrow material column beside the canvas. Desktop: the fold
-   wrapper is display: contents and MORE is hidden, so nothing changes. */
-.topbar-groups { display: contents; }
-.more-btn { display: none !important; }
+   Portrait puts the canvas full-width on top and gives the rest of the
+   screen to big, thumb-sized material buttons; landscape puts a narrow
+   material column beside the canvas. */
 
 @media (max-width: 720px), (max-height: 520px) and (orientation: landscape) {
-  :root { --topbar-h: 44px; }
-  #topbar {
-    position: relative;
-    flex-wrap: nowrap;
-    align-items: center;
-    min-height: 44px;
-    padding: 5px 10px;
-    gap: 8px;
-  }
-  #topbar .mode-label { display: none; }
-  .more-btn { display: inline-flex !important; }
-  .topbar-groups {
-    display: none;
-    position: absolute;
-    top: 100%;
-    left: 0;
-    right: 0;
-    z-index: 30;
-    flex-wrap: wrap;
-    gap: 12px 16px;
-    padding: 12px;
-    background: var(--panel);
-    border-bottom: var(--frame-line);
-  }
-  #topbar.more-open .topbar-groups { display: flex; }
-  #topbar.more-open .more-btn { border-color: var(--accent); color: var(--accent); }
-  .topbar-groups .grp-label { display: block; }
-  .topbar-groups button.px { min-height: 40px; }
   /* the room badge: just the essentials */
   .room-pill { top: 6px; gap: 6px; padding: 4px 6px 4px 8px; }
   .room-pill .room-role,
@@ -1048,6 +1005,10 @@ body.crt-on .title-screen::after {
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
   }
+}
+/* ...except the PAUSED badge's blink: it says the game is stopped */
+@media (prefers-reduced-motion: reduce) {
+  #paused-badge { animation: ts-blink 1s steps(1) infinite !important; }
 }
 
 /* --- 3D voxel view: in-view camera / render controls --- */
@@ -1635,7 +1596,6 @@ body.crt-on .title-screen::after {
    (body.reveal-*). */
 body.immersive #stage { padding: 0; background: #000; }
 body.immersive #viewport { border: 0; box-shadow: none; background: none; }
-body.immersive #topbar,
 body.immersive #toolbar,
 body.immersive #statusbar {
   position: fixed;
@@ -1645,14 +1605,11 @@ body.immersive #statusbar {
   background: rgba(17, 14, 12, 0.92);
   transition: transform 220ms steps(5), opacity 160ms steps(3);
 }
-body.immersive #topbar { top: 0; left: 0; right: 0; transform: translateY(-100%); }
 body.immersive #toolbar { top: 0; bottom: 0; left: 0; transform: translateX(-100%); }
-body.immersive #statusbar { left: 0; right: 0; bottom: 0; height: var(--status-h); transform: translateY(100%); }
-body.immersive.reveal-top #topbar,
+body.immersive #statusbar { left: 0; right: 0; bottom: 0; height: var(--bar-h); transform: translateY(100%); }
 body.immersive.reveal-left #toolbar,
 body.immersive.reveal-bottom #statusbar { transform: none; opacity: 1; pointer-events: auto; }
 @media (prefers-reduced-motion: reduce) {
-  body.immersive #topbar,
   body.immersive #toolbar,
   body.immersive #statusbar { transition: opacity 120ms linear; }
 }

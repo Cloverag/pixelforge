@@ -51,10 +51,11 @@ export interface ViewOps {
   soft(): void;
   crt(): void;
   grid(): void;
+  fps(): void;
   /** loads the 3D view the first time, so it resolves later */
   view3d(): Promise<void>;
   backdrop(): void;
-  state(): { immerse: boolean; soft: boolean; crt: boolean; grid: number | null; view3d: boolean; backdrop: string };
+  state(): { immerse: boolean; soft: boolean; crt: boolean; grid: number | null; fps: boolean; view3d: boolean; backdrop: string };
 }
 
 export interface PauseOps extends CommonCallbacks {
@@ -245,6 +246,7 @@ function viewRows(p: PauseOps): Row[] {
     row('SOFT', onOff(st.soft), 'Smooth particles with trails and glow.', v.soft),
     row('CRT', onOff(st.crt), 'Scanlines and a soft vignette over the game.', v.crt),
     row('GRID', st.grid === null ? 'OFF' : `${st.grid}PX`, 'Chunky blocks: cycles the size.', v.grid),
+    row('FPS', onOff(st.fps), 'A frames-per-second readout in the corner of the screen.', v.fps),
     row('3D', onOff(st.view3d), 'Look at the world as a 3D diorama.', v.view3d),
     row('BACKDROP', st.backdrop, 'The picture around the game screen.', v.backdrop),
     { label: 'BACK', desc: 'Back to the pause menu.', go: () => goBack(p) },

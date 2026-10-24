@@ -27,7 +27,6 @@
 </head>
 <body>
   <div id="app">
-    <header id="topbar" class="hidden"></header>
     <div id="workspace">
       <aside id="toolbar" class="hidden" aria-label="Materials and tools"></aside>
       <div id="stagecol">
@@ -38,12 +37,14 @@
               <div id="view3d" class="hidden"></div>
               <div id="pg3d" class="hidden"></div>
               <div id="crt"></div>
+              <div id="paused-badge" class="hidden" aria-live="polite">PAUSED</div>
+              <div id="fps" aria-hidden="true"></div>
             </div>
           </div>
         </main>
-        <footer id="statusbar" class="hidden"></footer>
       </div>
     </div>
+    <footer id="statusbar" class="hidden"></footer>
     <div id="overlay"></div>
   </div>
   <script>

@@ -54,7 +54,6 @@ export function reactionLines(m: number): string[] {
  */
 export class ChemMode implements ModeController {
   readonly id = 'chem';
-  readonly label = 'CHEM LAB';
   readonly roomName = 'CHEM LAB';
   readonly cinematic = false;
   // a bench is for experiments: no save, like the playground

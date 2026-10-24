@@ -223,7 +223,8 @@ lava, plants, glass and wall.
 | `I` | Immersive: the canvas fills the window; push the pointer to an edge for the panels |
 | `B` | Grid view: chunky blocks, cycles 4 / 8 / 16 px then off |
 | `S` / `C` | Soft glow / CRT filter |
-| `M` | Mute SFX |
+| `M` | Mute everything (a toast says SOUND ON / OFF) |
+| `D` | FPS readout in the canvas corner (off by default) |
 | `ESC` | Close the periodic table, leave immersive mode, then the **pause menu** (alone it freezes the game; in a room it does not). QUIT TO TITLE asks first in a room |
 
 On a phone the top bar folds into one row with a **MORE** menu, the canvas

@@ -14,7 +14,6 @@ export class SandMode implements ModeController {
   readonly roomName = 'SANDBOX';
   readonly cinematic = false;
   readonly view3d = 'voxel';
-  readonly label: string;
   readonly saveable: boolean;
   readonly challengeId: string | null;
   readonly keys: Record<string, () => void>;
@@ -26,7 +25,6 @@ export class SandMode implements ModeController {
     private ctx: ModeCtx,
     private challenge: ChallengeDef | null = null,
   ) {
-    this.label = challenge ? `CHALLENGE: ${challenge.name}` : 'SANDBOX';
     // a challenge has its own start state; saving or sharing one would hand
     // someone a half-solved puzzle
     this.saveable = !challenge;
