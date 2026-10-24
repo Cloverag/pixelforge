@@ -70,6 +70,8 @@ export class PlaygroundMode implements ModeController {
         chip,
         title,
         info: [id.toUpperCase(), '', title, chip],
+        // ERASE is the most-used tool: pinned under the rail, never behind a scroll
+        pin: id === 'erase',
       }));
     const sections: PaletteSection[] = ['EMITTERS', 'FORCES', 'TOOLS'].map((g) => ({ label: g, swatches: swatches(g) }));
     // demo scenes, one click each

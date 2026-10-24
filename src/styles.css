@@ -579,16 +579,19 @@ body:not(.in-game) #paused-badge { display: none; }
 .scenebtns, .toolbtns { display: grid; gap: 10px; padding-right: 4px; }
 #toolbar button.px { width: 100%; white-space: normal; text-align: center; }
 
-/* -------------------------------------------------- brush */
+/* -------------------------------------------------- pinned tools and brush */
+/* ERASE, BUCKET and WIND sit on one row above the brush dots, under the
+   scrolling materials: the most-used tools never need a scroll */
 
 .toolcol {
   margin-top: auto;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding-top: 8px;
+  padding: 8px 0 0 5px;
   border-top: var(--frame-line);
 }
+.pinrow { margin-bottom: 4px; padding-right: 8px; }
 /* five dots of growing size; the lit one has the accent outline */
 .brushdots { display: flex; justify-content: space-between; }
 .bdot {
@@ -942,7 +945,7 @@ body.crt-on .title-screen::after {
   .gswatches { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: auto; justify-content: start; gap: 0 10px; }
   .scenebtns, .toolbtns { grid-auto-flow: column; grid-auto-columns: max-content; padding-bottom: 6px; }
   #toolbar button.px { width: auto; min-height: 44px; white-space: nowrap; }
-  .toolcol { margin-top: 0; flex-direction: row; align-items: center; gap: 10px; border-top: 0; padding-top: 0; }
+  .toolcol { margin-top: 0; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px 10px; border-top: 0; padding-top: 0; }
   .bdot { width: 44px; }
   .sb-seg { padding: 0 8px; }
   /* the pause button opens the pause menu here, so MENU would only repeat it */
@@ -951,12 +954,10 @@ body.crt-on .title-screen::after {
 @media (max-width: 560px) { .sb-cells { display: none; } }
 
 @media (max-height: 520px) and (orientation: landscape) {
-  :root { --rail-w: 176px; }
+  :root { --rail-w: 212px; }
   #toolbar { padding: 6px 8px 8px; }
-  .gswatches { grid-template-columns: repeat(2, auto); }
   .toolcol .glabel { display: none; }
-  .brushdots { flex-wrap: wrap; justify-content: flex-start; }
-  .bdot { width: 44px; }
+  .bdot { width: 38px; }
   #statusbar .sb-btns button.px:not(.sq) { display: none; }
   #workspace .react-btn { width: 44px; height: 44px; font-size: 20px; }
   #stage { padding: 4px 8px 8px 4px; }

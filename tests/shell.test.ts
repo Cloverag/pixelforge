@@ -77,10 +77,29 @@ describe('phones', () => {
     const from = css.indexOf('@media (max-width: 900px) and (orientation: portrait)');
     const portrait = css.slice(from, css.indexOf('@media (max-width: 560px)', from));
     const landscape = css.slice(css.indexOf('@media (max-height: 520px) and (orientation: landscape)'));
-    expect(landscape).toMatch(/\.bdot \{ width: 44px; \}/);
+    // one row of five dots fits the 212px landscape rail only at 38px wide (every dot is 44px tall)
+    expect(landscape).toMatch(/\.bdot \{ width: 38px; \}/);
+    expect(css).toMatch(/\.bdot \{[^}]*height: 44px;/);
     expect(portrait).toMatch(/\.bdot \{ width: 44px; \}/);
     expect(css).toMatch(/#statusbar button\.px \{ min-height: 44px; \}/);
     expect(css).toMatch(/\.ts-item \{ min-height: 44px;/);
     expect(css + hud + main).not.toMatch(/\bMORE\b/);
+  });
+});
+
+describe('tools are always reachable', () => {
+  const chem = readFileSync(join(root, 'src', 'modes', 'chem.ts'), 'utf8');
+  const playground = readFileSync(join(root, 'src', 'modes', 'playground.ts'), 'utf8');
+
+  it('ERASE is pinned under the scrolling rail in every mode; the playground pins only ERASE', () => {
+    expect(hud).toMatch(/label: 'ERASE',[^}]*pin: true/);
+    expect(chem).toMatch(/label: 'ERASE'[^}]*pin: true/);
+    expect(playground).toMatch(/pin: id === 'erase',\n/);
+  });
+
+  it('BUCKET and WIND join ERASE on the pinned row, not in the scrolling list', () => {
+    expect(hud).toMatch(/addToolTiles\(pinned\)/);
+    expect(hud).toMatch(/gswatches pinrow/);
+    expect(hud).toMatch(/col\.appendChild\(pinned\)/);
   });
 });

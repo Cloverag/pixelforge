@@ -83,6 +83,8 @@ export interface Swatch {
   /** symbol and atomic number: shown on a periodic-table tile (see `tiles`) */
   sym?: string;
   z?: number;
+  /** pinned under the scrolling rail with the brush, so it never needs a scroll (ERASE) */
+  pin?: boolean;
 }
 
 /** A button in the rail that acts at once rather than being held. */
@@ -144,6 +146,7 @@ export function materialSections(allowed: number[] | null): PaletteSection[] {
         label: 'ERASE',
         chip: 'var(--world-bg)',
         dashed: true,
+        pin: true,
         title: 'Eraser (or hold right mouse button)',
         info: ['ERASE', '', 'Clears whatever the brush covers. Right-drag erases too.', 'transparent'],
       },
@@ -319,39 +322,24 @@ export class Hud {
 
     const pal = h('div');
     pal.id = 'palette';
-    const grids = new Map<string, HTMLElement>();
+    /** tools that must always be reachable: ERASE, then BUCKET and WIND */
+    const pinned = h('div', 'gswatches pinrow');
     for (const sec of spec.sections) {
-      const group = h('div', 'matgroup');
-      group.appendChild(h('span', 'glabel', sec.label));
       if ('swatches' in sec) {
+        const pins = sec.swatches.filter((sw) => sw.pin);
+        for (const sw of pins) pinned.appendChild(this.makeSwatch(sw, false));
+        const rest = sec.swatches.filter((sw) => !sw.pin);
+        // a group left with nothing (the sandbox's TOOLS was only ERASE) goes with it
+        if (rest.length === 0) continue;
+        const group = h('div', 'matgroup');
+        group.appendChild(h('span', 'glabel', sec.label));
         const grid = h('div', sec.tiles ? 'gswatches tiles' : 'gswatches');
-        for (const sw of sec.swatches) {
-          const tile = sec.tiles && sw.sym !== undefined;
-          const el = h('div', tile ? 'swatch tile' : 'swatch');
-          if (tile) {
-            el.appendChild(h('span', 'tz', String(sw.z ?? '')));
-            el.appendChild(h('span', 'tsym', sw.sym));
-            const stripe = h('div', 'tstripe');
-            stripe.style.backgroundImage = sw.chip;
-            el.appendChild(stripe);
-            // the name stays in the DOM, unseen: the tooltips look the material up by it
-            el.appendChild(h('span', 'nm', sw.label));
-          } else {
-            const chip = h('div', 'chip');
-            if (sw.dashed) chip.classList.add('dashed');
-            else chip.style.backgroundImage = sw.chip;
-            el.appendChild(chip);
-            el.appendChild(h('span', 'nm', titleCase(sw.label)));
-          }
-          el.title = sw.title;
-          el.onclick = () => this.pick(sw.id);
-          grid.appendChild(el);
-          this.swatchEls.set(sw.id, el);
-          this.swatchInfo.set(sw.id, sw.info);
-        }
+        for (const sw of rest) grid.appendChild(this.makeSwatch(sw, !!sec.tiles && sw.sym !== undefined));
         group.appendChild(grid);
-        grids.set(sec.label, grid);
+        pal.appendChild(group);
       } else {
+        const group = h('div', 'matgroup');
+        group.appendChild(h('span', 'glabel', sec.label));
         const row = h('div', sec.cls);
         for (const b of sec.buttons) {
           const btn = this.mkBtn(b.label, b.onClick, b.title, b.lamp !== undefined);
@@ -361,17 +349,16 @@ export class Hud {
           row.appendChild(btn);
         }
         group.appendChild(row);
+        pal.appendChild(group);
       }
-      pal.appendChild(group);
     }
 
     this.toolbar.appendChild(pal);
     this.bucketBtn = null;
     this.windBtn = null;
     // BUCKET and WIND are tools, not brush options: two tiles beside ERASE
-    const tools = grids.get('TOOLS');
-    if (spec.bucket && tools) this.addToolTiles(tools);
-    this.buildBrush(brush);
+    if (spec.bucket) this.addToolTiles(pinned);
+    this.buildBrush(brush, pinned);
     this.pick(spec.initial);
     this.particleMode = spec.counts === 'particles';
     if (this.status) this.status.cellsKey.textContent = this.particleMode ? 'particles' : 'cells';
@@ -386,6 +373,31 @@ export class Hud {
     this.bucketBtn?.classList.toggle('toggled', kind === 'flood');
     this.windBtn?.classList.toggle('toggled', kind === 'wind');
     this.renderTool();
+  }
+
+  /** One tile of the rail: a material's ramp, or an element's periodic-table design. */
+  private makeSwatch(sw: Swatch, tile: boolean): HTMLElement {
+    const el = h('div', tile ? 'swatch tile' : 'swatch');
+    if (tile) {
+      el.appendChild(h('span', 'tz', String(sw.z ?? '')));
+      el.appendChild(h('span', 'tsym', sw.sym));
+      const stripe = h('div', 'tstripe');
+      stripe.style.backgroundImage = sw.chip;
+      el.appendChild(stripe);
+      // the name stays in the DOM, unseen: the tooltips look the material up by it
+      el.appendChild(h('span', 'nm', sw.label));
+    } else {
+      const chip = h('div', 'chip');
+      if (sw.dashed) chip.classList.add('dashed');
+      else chip.style.backgroundImage = sw.chip;
+      el.appendChild(chip);
+      el.appendChild(h('span', 'nm', titleCase(sw.label)));
+    }
+    el.title = sw.title;
+    el.onclick = () => this.pick(sw.id);
+    this.swatchEls.set(sw.id, el);
+    this.swatchInfo.set(sw.id, sw.info);
+    return el;
   }
 
   /** BUCKET and WIND as tiles in the TOOLS group: held like a tool, lit while on. */
@@ -410,8 +422,9 @@ export class Hud {
   }
 
   /** Five brush sizes as five dots of growing size; the wheel and [ ] move the lit one. */
-  private buildBrush(brush: number): void {
+  private buildBrush(brush: number, pinned: HTMLElement): void {
     const col = h('div', 'toolcol');
+    col.appendChild(pinned);
     col.appendChild(h('span', 'glabel', 'BRUSH'));
     const row = h('div', 'brushdots');
     row.setAttribute('role', 'group');
