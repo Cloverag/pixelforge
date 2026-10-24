@@ -1490,6 +1490,12 @@ function applyAscii(on: boolean): void {
   drawAscii();
 }
 
+/** 3 and the deck's 3D: the solo modes draw on their own canvas - MATH LAB has its own 3D, the garden none - not the world's voxels. */
+function key3d(): void {
+  if (SOLO.includes(current.id)) current.keys['3']?.();
+  else void toggle3d();
+}
+
 /** T and the deck's ASCII: the solo modes have their own text filter (their A key), the rest share the world's. */
 function asciiKey(): void {
   if (SOLO.includes(current.id)) current.keys.a?.();
@@ -1557,7 +1563,7 @@ hud.initDeck({
       toggleCrt();
     } },
     { id: 'grid', label: 'GRID', title: 'Chunky block view, cycles size (B)', color: '#ffd23f', toggle: toggleGrid },
-    { id: '3d', label: '3D', title: 'A 3D model of the world (3)', color: '#6ef07a', toggle: () => void toggle3d() },
+    { id: '3d', label: '3D', title: 'A 3D model of the world (3)', color: '#6ef07a', toggle: () => key3d() },
     { id: 'ascii', label: 'ASCII', title: 'The world drawn as coloured text (T)', color: '#ff9f43', toggle: () => asciiKey() },
     { id: 'ray', label: 'RAY', title: 'Path-traced light: bounces, coloured light, shadows from fire (lit skies only)', color: '#b48cff', toggle: toggleRay },
   ],
@@ -1639,7 +1645,7 @@ new Input(
         if (mp && screen === 'game') react(PING);
         break;
       case '3':
-        if (screen === 'game') void toggle3d();
+        if (screen === 'game') key3d();
         break;
       case 'b':
         if (screen === 'game') toggleGrid();

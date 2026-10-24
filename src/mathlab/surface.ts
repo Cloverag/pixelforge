@@ -205,8 +205,9 @@ export class SurfaceRun {
   }
 
   turn(dyaw: number, dpitch: number): void {
+    // all the way round, both ways: over the top and from underneath
     this.yaw += dyaw;
-    this.pitch = Math.max(-0.2, Math.min(1.4, this.pitch + dpitch));
+    this.pitch += dpitch;
   }
 
   draw(g: CanvasRenderingContext2D, w: number, h: number, aw: number): number {

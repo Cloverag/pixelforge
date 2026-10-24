@@ -51,7 +51,10 @@ export class MathMode implements ModeController {
     r: () => this.redraw(),
     a: () => this.toggleAscii(),
     f: () => this.view.math?.finish(),
+    '3': () => this.toggle3d(),
   };
+  /** drawings lifted into 3D (the 3D graphs always are) */
+  private lift3d = false;
   private view = new GardenView('math-on');
   private drawing: Item = DRAWINGS[0];
   /** a drag on a 3D graph turns it */
@@ -83,6 +86,7 @@ export class MathMode implements ModeController {
           { label: 'AGAIN', title: 'Draw it again from the start (R)', onClick: () => this.redraw() },
           { label: 'FINISH', title: 'Skip to the finished drawing (F)', onClick: () => this.view.math?.finish() },
           { label: 'ASCII', title: 'As coloured text (A)', onClick: () => this.toggleAscii(), lamp: 'ascii', on: false },
+          { label: '3D', title: 'Lift the drawing into 3D, each stroke as high as it is late - drag to turn it (3)', onClick: () => this.toggle3d(), lamp: 'm3d', on: this.lift3d },
           { label: 'RESET', title: "Put this drawing's numbers back", onClick: () => this.pick(this.drawing, true) },
           { label: 'COPY LINK', title: 'A link that opens this design: the drawing, its numbers and your formula', onClick: () => void this.share() },
         ],
@@ -239,6 +243,7 @@ export class MathMode implements ModeController {
       if (this.formulaError) this.formulaError.textContent = '';
       // your own curve redraws as you type: quick, so you can try things
       const run = new MathRun(strokes, d === YOURS ? 2.5 : 8);
+      run.view3d = this.lift3d;
       this.view.math = run;
       this.ctx.hud.setParticles(run.strokes.length);
     } else {
@@ -263,10 +268,18 @@ export class MathMode implements ModeController {
     this.ctx.sfx.ui();
   }
 
-  /** Drag a 3D graph to turn it round and tip it. */
+  private toggle3d(): void {
+    this.lift3d = !this.lift3d;
+    if (this.view.math instanceof MathRun) this.view.math.view3d = this.lift3d;
+    this.ctx.hud.setLamp('m3d', this.lift3d);
+    this.ctx.sfx.ui();
+    if (this.lift3d && !(this.view.math instanceof MathRun)) this.ctx.toast('3D GRAPHS ARE ALWAYS 3D - DRAG TO TURN THEM');
+  }
+
+  /** Drag a 3D graph, or a drawing in 3D, to turn it round and over. */
   onPointer(e: PointerEvt): void {
     const run = this.view.math;
-    if (!(run instanceof SurfaceRun)) return;
+    if (!(run instanceof SurfaceRun || (run instanceof MathRun && run.view3d))) return;
     if (e.phase === 'down') this.drag = { x: e.x, y: e.y };
     else if (e.phase === 'up') this.drag = null;
     else if (this.drag) {

@@ -103,8 +103,12 @@ describe('the control deck: what you change while playing is on screen', () => {
   });
 
   it('lights SOFT, CRT, GRID, 3D and RAY from the same toggles the keys and the pause menu use', () => {
-    for (const [id, fn] of [['soft', 'toggleSoft'], ['crt', 'toggleCrt'], ['grid', 'toggleGrid'], ['3d', 'toggle3d'], ['ray', 'toggleRay']])
+    for (const [id, fn] of [['soft', 'toggleSoft'], ['crt', 'toggleCrt'], ['grid', 'toggleGrid'], ['3d', 'key3d'], ['ray', 'toggleRay']])
       expect(main).toMatch(new RegExp(`id: '${id}'[^\\n]*\\n?[^}]*${fn}`));
+    // the 3 key goes through the same key3d, which is the world's toggle3d outside the solo modes
+    expect(main).toMatch(/case '3':\s*if \(screen === 'game'\) key3d\(\);/);
+    const k3 = main.slice(main.indexOf('function key3d('), main.indexOf('\n}\n', main.indexOf('function key3d(')));
+    expect(k3).toMatch(/toggle3d\(\)/);
     // and every one of those toggles tells the deck
     for (const fn of ['toggleSoft', 'toggleGrid', 'toggleCrt', 'toggle3d', 'applyBackground', 'toggleMaster']) {
       const i = main.indexOf(`function ${fn}(`);
