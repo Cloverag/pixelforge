@@ -102,8 +102,8 @@ describe('the control deck: what you change while playing is on screen', () => {
     expect(html).toMatch(/<section id="deck"/);
   });
 
-  it('lights SOFT, CRT, GRID and 3D from the same toggles the keys and the pause menu use', () => {
-    for (const [id, fn] of [['soft', 'toggleSoft'], ['crt', 'toggleCrt'], ['grid', 'toggleGrid'], ['3d', 'toggle3d']])
+  it('lights SOFT, CRT, GRID, 3D and RAY from the same toggles the keys and the pause menu use', () => {
+    for (const [id, fn] of [['soft', 'toggleSoft'], ['crt', 'toggleCrt'], ['grid', 'toggleGrid'], ['3d', 'toggle3d'], ['ray', 'toggleRay']])
       expect(main).toMatch(new RegExp(`id: '${id}'[^\\n]*\\n?[^}]*${fn}`));
     // and every one of those toggles tells the deck
     for (const fn of ['toggleSoft', 'toggleGrid', 'toggleCrt', 'toggle3d', 'applyBackground', 'toggleMaster']) {

@@ -1,11 +1,11 @@
 import { BG, bgLift } from '../sim/background';
-import { daylightAt, timeOfDay, type SkyMode } from './daylight';
+import { daylightAt, timeOfDay, type Daylight, type SkyMode } from './daylight';
 import { FLAMES, MATS, Mat, NMATS, Cat } from '../sim/materials';
 import { CHUNKS_X, CHUNKS_Y, SIM_H, SIM_W } from '../sim/protocol';
 import { Blockifier, fitSize } from './blocks';
 import { EMIT_LUT, Fluid } from './fluid';
 import { Cinematic } from './cinematic';
-import { bindDummyVao, blit, makeTarget, Program, type Target } from './glutil';
+import { bindDummyVao, blit, makeTarget, PingPong, pingPong, Program, type Target } from './glutil';
 import type { SimRenderer } from './renderer';
 
 /**
@@ -55,6 +55,11 @@ uniform vec2 uSunPos;
 uniform vec2 uMoonPos;
 uniform float uNight;
 uniform vec3 uBgCol;
+// path-traced light (GI pass) instead of the simple light: on/off, its result, the direct sun
+uniform float uRay;
+uniform sampler2D uGI;
+uniform vec3 uSunCol;
+uniform vec3 uAmbCol;
 
 float hash(vec2 p) {
   return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
@@ -193,10 +198,25 @@ void main() {
     } else if (info.g < 0.5) {
       // everything else is lit: sun or moon (with shadows), the sky's own
       // light, and the glow of fire, lava and torches - strongest at night
-      vec3 L = texture(uLit, vUv).rgb;
-      // three widths of the same glow: close, near and far (a torch lights the wood under it)
-      vec3 fire = textureLod(uEmit, vUv, 3.0).rgb * 1.5 + textureLod(uEmit, vUv, 4.5).rgb * 3.5 + textureLod(uEmit, vUv, 6.0).rgb * 5.0;
-      c *= L + fire * (0.3 + uNight);
+      if (uRay > 0.5) {
+        // path traced: light through the plane (sky, firelight with real
+        // shadows, a bounce a frame); the sky on the face we look at, which no
+        // ray in the plane can see; and the sun's (or moon's) direct light
+        // where its shadow ray got through
+        // A body's own texel is inside it, where the plane's rays are dark;
+        // its visible face takes the brightest light just around it.
+        vec4 lit = texture(uLit, vUv);
+        vec3 gi = texture(uGI, vUv).rgb;
+        vec2 o = 2.0 * uTexel;
+        gi = max(gi, max(max(texture(uGI, vUv + vec2(0.0, o.y)).rgb, texture(uGI, vUv - vec2(0.0, o.y)).rgb),
+                         max(texture(uGI, vUv + vec2(o.x, 0.0)).rgb, texture(uGI, vUv - vec2(o.x, 0.0)).rgb)) * 0.85);
+        c *= gi + uAmbCol * 0.55 + uSunCol * (0.08 + 0.45 * lit.a);
+      } else {
+        vec3 L = texture(uLit, vUv).rgb;
+        // three widths of the same glow: close, near and far (a torch lights the wood under it)
+        vec3 fire = textureLod(uEmit, vUv, 3.0).rgb * 1.5 + textureLod(uEmit, vUv, 4.5).rgb * 3.5 + textureLod(uEmit, vUv, 6.0).rgb * 5.0;
+        c *= L + fire * (0.3 + uNight);
+      }
     }
     if (info.a > 0.5) c = clearWater(c, p, cf);
   }
@@ -314,7 +334,125 @@ void main() {
   // closed-in spots get a little less. Direct sun or moon adds on top where
   // nothing blocks it, and a shadowed spot keeps a little of it (bounce).
   // Day: ~1.1 in the sun, ~0.6 in shadow, ~0.5 deep in a pile.
-  frag = vec4(uAmb * (0.9 - 0.4 * occ) + uSun * (0.15 + 0.45 * vis), 1.0);
+  // alpha: whether the sun (or moon) reaches this spot, for the path-traced mode
+  frag = vec4(uAmb * (0.9 - 0.4 * occ) + uSun * (0.15 + 0.45 * vis), vis);
+}`;
+
+/**
+ * Path-traced light, three passes at half the world's resolution:
+ *
+ * SEED + FLOOD build a distance field by jump flooding: every texel learns
+ * where the nearest "occluder" is (a body, or a light source - rays must be
+ * able to hit fire to bring its light back). Rays then leap through empty
+ * space by that distance instead of crawling cell by cell.
+ *
+ * GI casts rays from every texel in all directions (a new random rotation
+ * each frame). A ray that hits a light source brings back its light; one
+ * that hits a surface brings back the surface's colour times the light
+ * already there (last frame's result: one more bounce every frame, so light
+ * bounces and colours bleed); one that escapes upward brings back the sky.
+ * Frames blend over time, so the noise settles into smooth light.
+ */
+const SEED = `#version 300 es
+precision highp float;
+precision highp sampler2D;
+in vec2 vUv;
+out vec4 frag;
+uniform sampler2D uFrame;
+uniform sampler2D uMatInfo;
+uniform vec2 uSim;
+void main() {
+  int id = int(texelFetch(uFrame, ivec2(floor(vUv * uSim)), 0).a * 255.0 + 0.5);
+  vec4 info = id < 128 ? texelFetch(uMatInfo, ivec2(id, 0), 0) : vec4(0.0);
+  frag = (info.b > 0.5 || info.g > 0.5) ? vec4(vUv, 0.0, 1.0) : vec4(-1.0, -1.0, 0.0, 1.0);
+}`;
+
+const FLOOD = `#version 300 es
+precision highp float;
+precision highp sampler2D;
+in vec2 vUv;
+out vec4 frag;
+uniform sampler2D uSeed;
+uniform vec2 uRes;
+uniform float uStep;
+void main() {
+  vec2 best = vec2(-1.0);
+  float bd = 1e9;
+  for (int y = -1; y <= 1; y++)
+    for (int x = -1; x <= 1; x++) {
+      vec2 s = texture(uSeed, vUv + vec2(x, y) * uStep / uRes).xy;
+      if (s.x < 0.0) continue;
+      float d = distance(vUv * uRes, s * uRes);
+      if (d < bd) { bd = d; best = s; }
+    }
+  frag = vec4(best, 0.0, 1.0);
+}`;
+
+const GI = `#version 300 es
+precision highp float;
+precision highp sampler2D;
+in vec2 vUv;
+out vec4 frag;
+uniform sampler2D uSeed;
+uniform sampler2D uFrame;
+uniform sampler2D uEmit;
+uniform sampler2D uPrev;
+uniform vec2 uRes;
+uniform float uSeedFrame;
+uniform vec3 uAmb;
+uniform float uEmitGain;
+
+float distAt(vec2 q) {
+  vec2 s = texture(uSeed, q / uRes).xy;
+  return s.x < 0.0 ? 1e4 : distance(q, s * uRes);
+}
+float hash(vec2 p) {
+  return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+}
+void main() {
+  vec2 p = vUv * uRes;
+  float a0 = hash(p + uSeedFrame * 1.618) * 6.2831853;
+  vec3 acc = vec3(0.0);
+  const int N = 12;
+  for (int i = 0; i < N; i++) {
+    float a = a0 + 6.2831853 * float(i) / float(N);
+    vec2 dir = vec2(cos(a), sin(a));
+    vec2 q = p;
+    // a ray from inside a body first finds its way out; the deeper it
+    // started, the less light it carries back (the inside of a pile is dark)
+    float inside = 0.0;
+    // (clear by more than the hit distance below, or the ray hits the body it just left)
+    for (int k = 0; k < 10; k++) {
+      if (distAt(q) > 1.0) break;
+      q += dir;
+      inside += 1.0;
+    }
+    vec3 rad = vec3(0.0);
+    bool hit = false;
+    for (int s = 0; s < 32; s++) {
+      if (q.x < 0.0 || q.y < 0.0 || q.x >= uRes.x || q.y >= uRes.y) break;
+      float d = distAt(q);
+      if (d < 0.75) { hit = true; break; }
+      q += dir * max(d - 0.5, 1.0);
+    }
+    if (hit) {
+      // read the thing that was hit at its own texel (the flood stored where
+      // it is), not at the empty spot the ray stopped beside
+      vec2 h = texture(uSeed, q / uRes).xy;
+      // light sources shine; anything else returns its colour times the light
+      // on its face - read just in front of it, since inside a body is dark
+      vec2 face = (q - dir * 1.5) / uRes;
+      // textureLod: hit points jump about, and texture() would pick a blurred
+      // mip from that and average the fire away
+      rad = textureLod(uEmit, h, 0.0).rgb * uEmitGain + texture(uFrame, h).rgb * texture(uPrev, face).rgb * 0.6;
+    } else if (dir.y > -0.15) {
+      // out to the open sky: the sky's light, strongest from overhead
+      rad = uAmb * 2.2 * mix(0.6, 1.0, max(dir.y, 0.0));
+    }
+    acc += rad * exp(-inside * 0.35);
+  }
+  acc /= float(N);
+  frag = vec4(mix(texture(uPrev, vUv).rgb, acc, 0.2), 1.0);
 }`;
 
 /** Materials that give off light: their glow bleeds into the cells around them. */
@@ -403,7 +541,7 @@ function emissionTable(): Uint8Array {
 }
 
 /** The shader sources, for the defined-before-use check in tests/framefmt.test.ts. */
-export const SHADERS = { COMPOSITE, EMIT, LIGHT };
+export const SHADERS = { COMPOSITE, EMIT, LIGHT, SEED, FLOOD, GI };
 
 export class GLRenderer implements SimRenderer {
   private gl: WebGL2RenderingContext;
@@ -417,6 +555,13 @@ export class GLRenderer implements SimRenderer {
   private emit: Target;
   private lightP: Program;
   private lit: Target;
+  private seedP: Program;
+  private floodP: Program;
+  private giP: Program;
+  private jfa: PingPong;
+  private gi: PingPong;
+  private ray = true;
+  private giFrame = 0;
   private sky: SkyMode = 'flat';
   private fluid: Fluid;
   private blocks = new Blockifier();
@@ -490,11 +635,61 @@ export class GLRenderer implements SimRenderer {
     gl.generateMipmap(gl.TEXTURE_2D);
     this.lightP = new Program(gl, LIGHT);
     this.lit = makeTarget(gl, SIM_W >> 1, SIM_H >> 1, gl.RGBA16F, gl.RGBA, gl.HALF_FLOAT);
+    this.seedP = new Program(gl, SEED);
+    this.floodP = new Program(gl, FLOOD);
+    this.giP = new Program(gl, GI);
+    const hw = SIM_W >> 1;
+    const hh = SIM_H >> 1;
+    // the flood carries positions: nearest, never blended
+    this.jfa = new PingPong(
+      gl,
+      makeTarget(gl, hw, hh, gl.RGBA16F, gl.RGBA, gl.HALF_FLOAT, gl.NEAREST),
+      makeTarget(gl, hw, hh, gl.RGBA16F, gl.RGBA, gl.HALF_FLOAT, gl.NEAREST),
+    );
+    this.gi = pingPong(gl, hw, hh, gl.RGBA16F, gl.RGBA, gl.HALF_FLOAT);
     this.fluid = new Fluid(gl, SIM_W, SIM_H);
     this.fluid.setEmissionTable(emissionTable());
 
     window.addEventListener('resize', () => this.resize());
     this.resize();
+  }
+
+  /** The path-traced light (seed, jump flood, GI); see the GI shader. */
+  private traceLight(day: Daylight): void {
+    const gl = this.gl;
+    const hw = SIM_W >> 1;
+    const hh = SIM_H >> 1;
+    this.seedP.use();
+    this.seedP.tex('uFrame', this.frameTex, 0).tex('uMatInfo', this.matInfo, 1).v2('uSim', SIM_W, SIM_H);
+    blit(gl, this.jfa.write);
+    this.jfa.swap();
+    for (let step = 256; step >= 1; step >>= 1) {
+      this.floodP.use();
+      this.floodP.tex('uSeed', this.jfa.read.tex, 0).v2('uRes', hw, hh).f('uStep', step);
+      blit(gl, this.jfa.write);
+      this.jfa.swap();
+    }
+    this.giP.use();
+    this.giP
+      .tex('uSeed', this.jfa.read.tex, 0)
+      .tex('uFrame', this.frameTex, 1)
+      .tex('uEmit', this.emit.tex, 2)
+      .tex('uPrev', this.gi.read.tex, 3)
+      .v2('uRes', hw, hh)
+      .f('uSeedFrame', this.giFrame++ % 997)
+      .v3('uAmb', ...day.ambient)
+      .f('uEmitGain', 7.0 + 11.0 * day.night);
+    blit(gl, this.gi.write);
+    this.gi.swap();
+  }
+
+  /** Path-traced light on or off (the simple light pass otherwise). */
+  setRayTraced(on: boolean): void {
+    this.ray = on;
+  }
+
+  isRayTraced(): boolean {
+    return this.ray;
   }
 
   /** Day, night, the cycle, or 'flat' for the classic look. */
@@ -605,6 +800,7 @@ export class GLRenderer implements SimRenderer {
         .v3('uSun', ...day.sun)
         .v3('uAmb', ...day.ambient);
       blit(gl, this.lit);
+      if (this.ray) this.traceLight(day);
     }
 
     this.composite.use();
@@ -625,6 +821,8 @@ export class GLRenderer implements SimRenderer {
       .f('uCellPx', cine ? 1 : this.canvas.width / SIM_W)
       .f('uShade', cine || this.block ? 0 : 1)
       .f('uSky', day ? 1 : 0)
+      .f('uRay', day && this.ray ? 1 : 0)
+      .tex('uGI', this.gi.read.tex, 6)
       .tex('uLit', this.lit.tex, 5)
       .v3('uBgCol', BG.r / 255, BG.g / 255, BG.b / 255)
       .f('uCrt', document.body.classList.contains('crt-on') ? 1 : 0);
@@ -634,7 +832,9 @@ export class GLRenderer implements SimRenderer {
         .v3('uSkyHor', ...day.skyHorizon)
         .v2('uSunPos', day.sunPos[0], day.sunPos[1])
         .v2('uMoonPos', day.moonPos[0], day.moonPos[1])
-        .f('uNight', day.night);
+        .f('uNight', day.night)
+        .v3('uSunCol', ...day.sun)
+        .v3('uAmbCol', ...day.ambient);
     }
     const lift = bgLift();
     this.composite.v3('uBgLift', lift[0], lift[1], lift[2]);
@@ -651,6 +851,11 @@ export class GLRenderer implements SimRenderer {
     this.composite.dispose();
     this.emitP.dispose();
     this.lightP.dispose();
+    this.seedP.dispose();
+    this.floodP.dispose();
+    this.giP.dispose();
+    this.jfa.dispose();
+    this.gi.dispose();
     this.gl.deleteFramebuffer(this.lit.fbo);
     this.gl.deleteTexture(this.lit.tex);
     this.gl.deleteFramebuffer(this.emit.fbo);

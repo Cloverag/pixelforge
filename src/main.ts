@@ -459,6 +459,14 @@ function sendRedraw(): void {
 /** The sky: the day cycle, day, night, or 'flat' (the SKY colours, no lighting). Drawing only, per player. */
 let skyMode: SkyMode = loadSkyMode();
 renderer.setSky?.(skyMode);
+// path traced unless the player (or a slow device) said otherwise
+renderer.setRayTraced?.(((): boolean => {
+  try {
+    return localStorage.getItem('pf.ray') !== '0';
+  } catch {
+    return true;
+  }
+})());
 
 function applySky(m: SkyMode): void {
   skyMode = m;
@@ -766,7 +774,9 @@ function loop(now: number): void {
 
   fpsClock += dt;
   if (fpsClock >= 500) {
-    hud.setFps(Math.round((fpsFrames * 1000) / fpsClock));
+    const fps = Math.round((fpsFrames * 1000) / fpsClock);
+    hud.setFps(fps);
+    watchRayCost(fps);
     fpsFrames = 0;
     fpsClock = 0;
   }
@@ -1243,6 +1253,48 @@ function toggleMaster(): void {
   syncDeck();
 }
 
+// ---- path-traced light (the RAY lamp) ----
+
+const RAY_KEY = 'pf.ray';
+/** half-second readings in a row below the bar; a single hitch never counts */
+let slowReadings = 0;
+let rayAutoOff = false;
+
+function applyRay(on: boolean): void {
+  renderer.setRayTraced?.(on);
+  try {
+    localStorage.setItem(RAY_KEY, on ? '1' : '0');
+  } catch {
+    /* private mode: it just will not persist */
+  }
+  syncDeck();
+}
+
+function toggleRay(): void {
+  sfx.ui();
+  slowReadings = 0;
+  applyRay(!renderer.isRayTraced?.());
+  toast(renderer.isRayTraced?.() ? 'RAY-TRACED LIGHT ON' : 'RAY-TRACED LIGHT OFF');
+}
+
+/**
+ * Path tracing is the heaviest thing on screen. If the game stays under 40
+ * FPS for 3 s with it on (and a lit sky showing it), switch it off once and
+ * say so; the player can turn it back on from VIEW.
+ */
+function watchRayCost(fps: number): void {
+  if (rayAutoOff || screen !== 'game' || paused || skyMode === 'flat' || !renderer.isRayTraced?.()) {
+    slowReadings = 0;
+    return;
+  }
+  slowReadings = fps < 40 ? slowReadings + 1 : 0;
+  if (slowReadings >= 6) {
+    rayAutoOff = true;
+    applyRay(false);
+    toast('RAY-TRACED LIGHT OFF - TOO SLOW ON THIS DEVICE (VIEW > RAY TO TRY AGAIN)');
+  }
+}
+
 /** Bring the deck's lamps, sky, volumes and SAVE buttons in line with the game (cheap; called after any change). */
 function syncDeck(): void {
   const v = sfx.getVolumes();
@@ -1252,6 +1304,7 @@ function syncDeck(): void {
       crt: document.body.classList.contains('crt-on'),
       grid: renderer.getBlockSize() !== null,
       '3d': view3dOn,
+      ray: !!renderer.isRayTraced?.(),
     },
     sky: skyMode === 'flat' ? BG.id : `sky-${skyMode}`,
     music: v.mute.master || v.mute.music ? 0 : v.music,
@@ -1318,6 +1371,7 @@ hud.initDeck({
     } },
     { id: 'grid', label: 'GRID', title: 'Chunky block view, cycles size (B)', color: '#ffd23f', toggle: toggleGrid },
     { id: '3d', label: '3D', title: 'A 3D model of the world (3)', color: '#6ef07a', toggle: () => void toggle3d() },
+    { id: 'ray', label: 'RAY', title: 'Path-traced light: bounces, coloured light, shadows from fire (lit skies only)', color: '#b48cff', toggle: toggleRay },
   ],
   skies: [
     { id: 'sky-cycle', name: 'CYCLE', css: 'linear-gradient(135deg, #3d7fd6 0 50%, #10142e 50% 100%)', title: 'Day and night: the sun, the moon and shadows, turning' },

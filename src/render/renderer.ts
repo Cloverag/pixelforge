@@ -32,6 +32,9 @@ export interface SimRenderer {
   setCinematic?(on: boolean): void;
   /** The sky and its light (day, night, the cycle); the 2D fallback keeps the flat background. */
   setSky?(mode: import('./daylight').SkyMode): void;
+  /** Path-traced light in the lit skies (WebGL only). */
+  setRayTraced?(on: boolean): void;
+  isRayTraced?(): boolean;
 }
 
 /**
