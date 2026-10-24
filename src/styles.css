@@ -919,9 +919,12 @@ body.crt-on .title-screen::after {
 }
 
 /* ==== PHONES ====
-   Portrait: the canvas on top, the rail a one-row strip of 56px tiles under it
-   (it scrolls sideways), the bar below. Landscape: the desktop layout with a
-   narrower rail, two tiles to a row. Every tap target is 44px or more. */
+   Portrait: the canvas on top, the bar at the bottom, and the rail fills
+   everything between as a vertical tile grid - as many 56px columns as fit,
+   scrolling inside its own box with ERASE, BUCKET, WIND and the brush pinned
+   at its bottom. Landscape: the desktop layout with a narrower rail. Every
+   tap target is 44px or more (the landscape brush dots are 38px wide only so
+   five fit one row). */
 
 @media (max-width: 900px) and (orientation: portrait) {
   /* the rail comes first in the DOM: reversed, the canvas sits on top */
@@ -933,19 +936,20 @@ body.crt-on .title-screen::after {
   body.in-game #stage { flex: 0 0 auto; height: calc((100vw - 20px) * 0.5625 + 20px); }
   #toolbar {
     order: 1;
-    flex: 0 0 auto;
+    flex: 1 1 0;
     width: auto;
-    gap: 6px;
+    min-height: 0;
     padding: 8px 10px 6px;
     border-right: 0;
     border-top: var(--frame-line);
   }
-  #palette { flex-direction: row; flex: 0 0 auto; gap: 18px; overflow-x: auto; overflow-y: hidden; padding: 0 0 8px; }
-  .matgroup { flex: 0 0 auto; }
-  .gswatches { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: auto; justify-content: start; gap: 0 10px; }
-  .scenebtns, .toolbtns { grid-auto-flow: column; grid-auto-columns: max-content; padding-bottom: 6px; }
-  #toolbar button.px { width: auto; min-height: 44px; white-space: nowrap; }
-  .toolcol { margin-top: 0; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px 10px; border-top: 0; padding-top: 0; }
+  /* as many 56px tiles as fit a row: 5 at 390 (tracking tightened so Fireflies still fits) */
+  .gswatches { grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); justify-content: stretch; gap: 8px 2px; }
+  .swatch .nm { letter-spacing: -0.07em; }
+  .gswatches .swatch { justify-self: center; }
+  .scenebtns, .toolbtns { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  #toolbar button.px { min-height: 44px; }
+  .pinrow { grid-template-columns: repeat(3, minmax(64px, 1fr)); }
   .bdot { width: 44px; }
   .sb-seg { padding: 0 8px; }
   /* the pause button opens the pause menu here, so MENU would only repeat it */
