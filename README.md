@@ -372,7 +372,7 @@ solids stay put.
 
 ```
 index.html                 app shell, link-preview tags
-public/og.jpg              link-preview card
+public/og.jpg              link-preview card (flower ponds + the title menu)
 scripts/fetch-elements.mjs regenerates src/data/elements.json from PubChem (by hand)
 src/
   main.ts                  fixed-step loop, worker + room wiring, menu; asks the current mode
