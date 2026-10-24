@@ -237,9 +237,10 @@ export function starsFor(def: ChallengeDef, w: World, frame: number, used: Int32
     case 'gardener':
       return frame < 4800 ? 3 : frame < 6200 ? 2 : 1;
     case 'demolition': {
-      const spare = used[Mat.GUNPOWDER];
-      if (spare >= 380) return 3;
-      if (spare >= 150) return 2;
+      // TNT left over (it used to count what was used, so more TNT meant more stars)
+      const spare = (def.budget?.[Mat.TNT] ?? 0) - used[Mat.TNT];
+      if (spare >= 600) return 3;
+      if (spare >= 250) return 2;
       return 1;
     }
     default:
@@ -314,10 +315,10 @@ CHALLENGES.push(
   {
     id: 'demolition',
     name: 'DEMOLITION',
-    desc: 'Breach the tower. Fuse and powder are limited - make every blast count.',
-    hint: 'Fuse burns slowly along its length. Rig charges low, watch them climb.',
-    allowed: [Mat.GUNPOWDER, Mat.FUSE],
-    budget: { [Mat.GUNPOWDER]: 750, [Mat.FUSE]: 190 },
+    desc: 'Bring the tower down. TNT and fuse are limited - make every blast count.',
+    hint: 'The torch lights a fuse that touches it. TNT sets off TNT: stack it up the pillars.',
+    allowed: [Mat.TNT, Mat.FUSE],
+    budget: { [Mat.TNT]: 3000, [Mat.FUSE]: 500 },
     timeLimit: 4200,
     loseReason: 'Out of time - the tower still stands',
     setup(w) {
@@ -332,10 +333,15 @@ CHALLENGES.push(
       // glass keystone (blast-proof crown)
       fillRect(w, 296, 81, 344, 111, Mat.GLASS);
       fillRect(w, 306, 64, 333, 80, Mat.GLASS);
+      // a doorway in the left pillar's foot, and a torch on the ground to light from
+      fillRect(w, 253, 330, 269, 351, Mat.EMPTY);
+      w.grid.setXY(215, 351, Mat.TORCH);
     },
     check(w, _frame) {
+      // 5712 stone at the start; TNT up both pillars brings it under 4600
+      // (measured: 4442), one pillar alone does not (4856)
       const standing = countIn(w, 246, 112, 393, 279, Mat.STONE);
-      if (standing < 1460) return 'win';
+      if (standing < 4600) return 'win';
       return 'running';
     },
   },

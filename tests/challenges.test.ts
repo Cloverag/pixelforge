@@ -143,3 +143,28 @@ describe('CONTAINMENT', { timeout: 300_000 }, () => {
   });
 });
 
+describe('DEMOLITION', { timeout: 300_000 }, () => {
+  const line = (x0: number, y0: number, x1: number, y1: number) => {
+    const p: number[] = [];
+    const n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0));
+    for (let k = 0; k <= n; k++) p.push(Math.round(x0 + ((x1 - x0) * k) / n), Math.round(y0 + ((y1 - y0) * k) / n));
+    return p;
+  };
+  const rig = (both: boolean) => (w: World, f: number) => {
+    if (f !== 0) return;
+    // a fuse from the torch along the floor, in through the doorway; TNT up the pillars' inner faces
+    w.paint(line(216, 350, 360, 350), Mat.FUSE, 2);
+    w.paint(line(271, 160, 271, 345), Mat.TNT, 6);
+    if (both) w.paint(line(366, 160, 366, 345), Mat.TNT, 6);
+  };
+
+  it('can be won: the torch lights the fuse and TNT up both pillars brings the tower down (issue #4)', () => {
+    expect(play('demolition', rig(true))?.status).toBe('win');
+  });
+
+  it('is not won by one pillar, or by doing nothing', () => {
+    expect(play('demolition', rig(false))?.status).toBe('lose');
+    expect(play('demolition', idle)?.status).toBe('lose');
+  });
+});
+

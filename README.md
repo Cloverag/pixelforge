@@ -68,7 +68,7 @@ get their own layout.
 | 3 | ICE BREAKER | Melt the glacier wall with a limited lava ration. |
 | 4 | CONTAINMENT | Patch the reservoir crack before lava reaches the reactor. |
 | 5 | GARDENER | Sow seeds and water them into a living meadow. |
-| 6 | DEMOLITION | Breach the tower with limited gunpowder and fuse. |
+| 6 | DEMOLITION | Bring the tower down: a torch, a limited fuse and TNT - stack it up the pillars. |
 | 7 | SPARK THE BEACON | Bridge the broken wire so sparks reach the beacon tower. |
 
 Each challenge shows only its allowed materials; budgeted swatches show a
