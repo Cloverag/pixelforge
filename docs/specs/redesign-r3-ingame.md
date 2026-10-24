@@ -69,8 +69,10 @@ Screenshots: sandbox, playground, chem lab - all three share one shell.
   the right the count (`12,408 cells` / `particles`, chem lab's
   `REACTIONS 14/s` + `NOW` note keep their place here), then the
   PAUSE button (`❚❚` / `▶`, 44px square) and MENU. Drop `RUNNING`, `TOOL
-  BRUSH 6` and `FPS` (FPS moves to a CONTROLS-documented `F` key that
-  toggles a small corner readout, off by default).
+  BRUSH 6` and `FPS` (FPS moves to a CONTROLS-documented `D` key - `F` is the
+  bucket - and a VIEW item `FPS: OFF`; a small corner readout, off by
+  default). The topbar's SFX / MUSIC toggles go: OPTIONS volumes and `M`
+  (which now toasts SOUND ON / OFF) cover them.
 - **PAUSED** shows as a badge on the canvas (top-centre, display font,
   blinking at 1 Hz in hard steps like R1's PRESS START; still under reduced
   motion).
