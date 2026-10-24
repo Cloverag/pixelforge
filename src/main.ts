@@ -1688,6 +1688,7 @@ post({ t: 'init', w: SIM_W, h: SIM_H, buf: masterBuf }, [masterBuf]);
  */
 const urlCode = takeUrlCode();
 const gardenCode = takeUrlCode('g');
+const mathCode = takeUrlCode('m');
 const urlRoom = roomFromUrl();
 if (urlRoom && hostingCode() === urlRoom) {
   // the host reloaded: same room, from the autosaved world
@@ -1698,6 +1699,13 @@ if (urlRoom && hostingCode() === urlRoom) {
   void hostRoom(urlRoom);
 } else if (urlRoom) {
   void joinRoom(urlRoom);
+} else if (mathCode) {
+  // a shared MATH LAB design: straight into it
+  if (mathLab.adopt(mathCode)) startMode(mathLab);
+  else {
+    openMenu(true);
+    toast('SHARED DESIGN LINK IS CORRUPTED', true);
+  }
 } else if (gardenCode) {
   // a shared garden: straight into it, the flowers opening one by one
   if (garden.adopt(gardenCode)) startMode(garden);

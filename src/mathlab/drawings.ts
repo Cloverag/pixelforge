@@ -1,4 +1,5 @@
 import { rng } from '../garden/flowers';
+import { compile } from './expr';
 
 /**
  * MATH LAB's drawings: classic turtle-graphics maths - a parametric heart,
@@ -37,9 +38,12 @@ export interface Drawing {
   /** what it teaches, one line */
   idea: string;
   params: Param[];
-  /** the program, Python-turtle style, with the current values written in */
-  code(p: Record<string, number>): string[];
-  strokes(p: Record<string, number>): Stroke[];
+  /** a formula the player types (YOUR CURVE): its label, starting text and ideas to try */
+  formula?: { label: string; value: string; examples: string[] };
+  /** the program, Python-turtle style, with the current values (and formula) written in */
+  code(p: Record<string, number>, formula?: string): string[];
+  /** throws, with a message for the player, if the formula cannot be read */
+  strokes(p: Record<string, number>, formula?: string): Stroke[];
 }
 
 const TAU = Math.PI * 2;
@@ -293,7 +297,155 @@ const tree: Drawing = {
   },
 };
 
+/** Phyllotaxis: how a sunflower packs its seeds. Each one turns the golden angle further. */
+const sunflower: Drawing = {
+  id: 'sunflower',
+  name: 'SUNFLOWER',
+  idea: 'Each seed turns 137.5 degrees (the golden angle) past the last and sits at r = c * sqrt(n). Nudge the angle to 137 or 140 and the seeds fall into spokes with gaps.',
+  params: [
+    { key: 'n', label: 'SEEDS', min: 50, max: 2000, step: 50, value: 900 },
+    { key: 'angle', label: 'ANGLE', min: 130, max: 145, step: 0.1, value: 137.5 },
+    { key: 'size', label: 'SEED SIZE', min: 1, max: 6, step: 0.5, value: 2.5 },
+  ],
+  code: (p) => [
+    `golden = ${p.angle}          # degrees; 137.5 is the golden angle`,
+    `for n in range(${p.n}):`,
+    '    angle = radians(n * golden)',
+    '    r = 6 * sqrt(n)             # equal area for every seed',
+    '    x, y = r*cos(angle), r*sin(angle)',
+    `    circle(x, y, ${p.size})        # petals round the edge`,
+  ],
+  strokes(p) {
+    const out: Stroke[] = [];
+    for (let n = 0; n < p.n; n++) {
+      const a = (n * p.angle * Math.PI) / 180;
+      const r = 6 * Math.sqrt(n);
+      const k = n / p.n;
+      // dark seeds in the middle, orange, then a rim of golden petals
+      const col = k > 0.86 ? hsl(46, 95, 58) : k > 0.6 ? hsl(28, 80, 40 + 10 * k) : hsl(25, 55, 18 + 18 * k);
+      circle(out, r * Math.cos(a), r * Math.sin(a), k > 0.86 ? p.size * 1.6 : p.size, col, 1.2, 5);
+    }
+    return out;
+  },
+};
+
+/** The Maurer rose: the rose curve r = sin(n theta), walked in jumps of d degrees. */
+const maurer: Drawing = {
+  id: 'maurer',
+  name: 'MAURER ROSE',
+  idea: 'Walk round the rose curve r = sin(n theta) in jumps of d degrees and join the dots with straight lines. Two whole numbers, hundreds of flowers: try n 6, d 71.',
+  params: [
+    { key: 'n', label: 'PETALS N', min: 1, max: 12, step: 1, value: 6 },
+    { key: 'd', label: 'JUMP D', min: 1, max: 179, step: 1, value: 71 },
+  ],
+  code: (p) => [
+    'for k in range(361):',
+    `    theta = radians(k * ${p.d})       # jump d degrees`,
+    `    r = sin(${p.n} * theta)`,
+    '    line_to(r*cos(theta), r*sin(theta))',
+    '',
+    'for k in range(361):              # the rose itself, on top',
+    `    theta = radians(k); r = sin(${p.n} * theta)`,
+    '    line_to(r*cos(theta), r*sin(theta))',
+  ],
+  strokes(p) {
+    const out: Stroke[] = [];
+    const walk = (step: number, col: (k: number) => string, w: number, line: number) => {
+      let px = 0, py = 0;
+      for (let k = 0; k <= 360; k++) {
+        const th = (k * step * Math.PI) / 180;
+        const r = 250 * Math.sin(p.n * th);
+        const x = r * Math.cos(th), y = r * Math.sin(th);
+        if (k > 0) out.push({ x1: px, y1: py, x2: x, y2: y, col: col(k), w, line });
+        px = x;
+        py = y;
+      }
+    };
+    walk(p.d, (k) => hsl(190 + (k / 360) * 80, 80, 62), 0.7, 3);
+    walk(1, () => '#ff4a6a', 1.6, 7);
+    return out;
+  },
+};
+
+/** The toy: a pen in a wheel rolling inside a ring (a hypotrochoid). */
+const spiro: Drawing = {
+  id: 'spiro',
+  name: 'SPIROGRAPH',
+  idea: 'A wheel of radius r rolls inside a ring of radius R; a pen d from its centre draws. The pattern closes after r / gcd(R, r) turns round the ring.',
+  params: [
+    { key: 'R', label: 'RING R', min: 40, max: 120, step: 1, value: 105 },
+    { key: 'r', label: 'WHEEL R', min: 5, max: 100, step: 1, value: 33 },
+    { key: 'd', label: 'PEN D', min: 5, max: 120, step: 1, value: 60 },
+  ],
+  code: (p) => [
+    `R, r, d = ${p.R}, ${p.r}, ${p.d}     # ring, wheel, pen`,
+    'turns = r / gcd(R, r)            # when it closes',
+    'for i in range(turns * 360):',
+    '    t = radians(i)',
+    '    x = (R - r)*cos(t) + d*cos((R - r)/r * t)',
+    '    y = (R - r)*sin(t) - d*sin((R - r)/r * t)',
+    '    line_to(x, y)',
+  ],
+  strokes(p) {
+    const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : a);
+    const turns = Math.min(40, p.r / gcd(Math.round(p.R), Math.round(p.r)));
+    const n = Math.round(turns * 360);
+    const out: Stroke[] = [];
+    let px = 0, py = 0;
+    for (let i = 0; i <= n; i++) {
+      const t = (i * Math.PI) / 180;
+      const k = (p.R - p.r) / p.r;
+      const x = (p.R - p.r) * Math.cos(t) + p.d * Math.cos(k * t);
+      const y = (p.R - p.r) * Math.sin(t) - p.d * Math.sin(k * t);
+      if (i > 0) out.push({ x1: px, y1: py, x2: x, y2: y, col: hsl((i / n) * 300 + 180, 85, 65), w: 1, line: 6 });
+      px = x;
+      py = y;
+    }
+    return out;
+  },
+};
+
+/** The player's own polar curve, r = f(t). */
+const yours: Drawing = {
+  id: 'yours',
+  name: 'YOUR CURVE',
+  idea: 'Type r as a formula of t and it is drawn: r(t) is how far from the middle at angle t. Try the ideas below, then change a number and see what it does.',
+  params: [{ key: 'turns', label: 'TURNS', min: 1, max: 24, step: 1, value: 2 }],
+  formula: {
+    label: 'r(t) =',
+    value: '1 + 2cos(5t)',
+    examples: ['cos(4t)', '1 + 2cos(5t)', 'sin(t)^2 + 0.6sin(9t)', 'exp(sin t) - 2cos(4t)', 't / 6', '1 - sin(t)', 'cos(7t / 4)'],
+  },
+  code: (p, f = '') => [
+    'def r(t):',
+    `    return ${f}`,
+    '',
+    `for i in range(${p.turns} * 720):`,
+    '    t = radians(i / 2)',
+    '    x, y = r(t)*cos(t), r(t)*sin(t)',
+    '    line_to(x, y)',
+  ],
+  strokes(p, f = '') {
+    const r = compile(f, ['t']);
+    const n = p.turns * 720;
+    const out: Stroke[] = [];
+    let prev: [number, number] | null = null;
+    for (let i = 0; i <= n; i++) {
+      const t = (i / 2) * (Math.PI / 180);
+      const rt = r({ t });
+      const pt: [number, number] | null = Number.isFinite(rt) && Math.abs(rt) < 1e6 ? [rt * Math.cos(t), rt * Math.sin(t)] : null;
+      if (prev && pt) out.push({ x1: prev[0], y1: prev[1], x2: pt[0], y2: pt[1], col: hsl(330 + (i / n) * 200, 85, 64), w: 1.2, line: 6 });
+      prev = pt;
+    }
+    return out;
+  },
+};
+
 export const DRAWINGS: Drawing[] = [heart, butterfly, rosette, sphere, tree];
+/** maths that makes flowers */
+export const MATH_FLOWERS: Drawing[] = [sunflower, maurer, spiro];
+/** the player's own */
+export const YOURS: Drawing = yours;
 
 /** A drawing's (or a 3D graph's) parameters at their starting values. */
 export function defaults(d: { params: Param[] }): Record<string, number> {

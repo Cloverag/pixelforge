@@ -1658,3 +1658,28 @@ body.math-on #screen { opacity: 0; }
 .math-key { font-size: 0.95em; letter-spacing: 0.06em; color: #b9b0de; }
 .math-slider input { accent-color: var(--gold); width: 100%; min-height: 28px; }
 .math-val { text-align: right; color: var(--gold); font-variant-numeric: tabular-nums; }
+.math-formula { margin: 0 0 10px; }
+.math-formula-row { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 8px; }
+.math-formula-row input {
+  font: inherit;
+  font-size: 1.15em;
+  color: #fff;
+  background: #07060f;
+  border: 2px solid var(--gold);
+  border-radius: 6px;
+  padding: 6px 10px;
+  min-height: 36px;
+}
+.math-error { min-height: 1.4em; margin-top: 4px; color: #ff8a80; font-family: var(--font-read); }
+.math-ideas { display: flex; flex-wrap: wrap; gap: 6px; }
+.math-idea-btn {
+  font: inherit;
+  font-size: 0.95em;
+  color: #e8e2ff;
+  background: #1b1433;
+  border: 1px solid #4a3d7a;
+  border-radius: 4px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+.math-idea-btn:hover, .math-idea-btn:focus-visible { border-color: var(--gold); color: #fff; }

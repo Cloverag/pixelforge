@@ -263,6 +263,16 @@ code and starts the drawing again.
 | **SPHERE** | A circle seen at an angle is an ellipse: rings turned around the axis, `width = R cos(turn)`, make a globe | RINGS, LATITUDES, TILT |
 | **TREE** | Recursion: a branch is a line with two smaller branches on its end, until they are tiny | TRUNK, ANGLE, RATIO, SMALLEST |
 
+**YOUR CURVE** is a formula box: type `r(t) =` anything - `1 + 2cos(5t)`,
+`exp(sin t) - 2cos(4t)` - and it is drawn as you type. The formula reader
+(`src/mathlab/expr.ts`) parses it into plain operations, never `eval`, and
+says what is wrong ("missing ')'", "unknown name 'x'") while keeping the last
+good drawing. **MATH FLOWERS** are maths that makes flowers: SUNFLOWER (seeds
+at the golden angle, 137.5 degrees - nudge it and the spiral breaks into
+spokes), MAURER ROSE (the rose curve walked in jumps of d degrees) and
+SPIROGRAPH (a wheel in a ring). COPY LINK puts any design - drawing, numbers,
+formula - in a `#m=` link.
+
 **3D GRAPHS** sit under the drawings: surfaces sampled on a grid and drawn as
 shaded quads back to front, with x/y/z axes and the mesh lines, building row
 by row while they turn; drag to turn them by hand.
@@ -516,7 +526,7 @@ tests/                     vitest: world rules, TNT debris, rendering, playgroun
 
 ### Testing
 
-336 tests. Beyond the material rules: two worlds fed the same inputs must
+342 tests. Beyond the material rules: two worlds fed the same inputs must
 match for 1200 frames; a world restored mid-game into a different seed must
 stay identical; host and two guests over a simulated network with random
 delays, reordering and a late joiner must agree at every frame; a corrupted

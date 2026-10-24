@@ -70,7 +70,8 @@ export class MathRun {
     for (let i = from; i < to; i++) {
       const s = this.strokes[i];
       g.strokeStyle = s.col;
-      g.lineWidth = Math.max(0.75, s.w * k);
+      // scaled with the drawing, but a curve drawn at r ~ 1 must not get 100-pixel lines
+      g.lineWidth = Math.max(0.75, Math.min(s.w * k, s.w * 3));
       g.beginPath();
       g.moveTo(ox + s.x1 * k, oy - s.y1 * k);
       g.lineTo(ox + s.x2 * k, oy - s.y2 * k);

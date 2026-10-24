@@ -1,6 +1,8 @@
 import { GardenView } from '../garden/view';
-import { defaults, DRAWINGS, type Drawing } from '../mathlab/drawings';
+import { defaults, DRAWINGS, MATH_FLOWERS, YOURS, type Drawing } from '../mathlab/drawings';
 import { MathRun } from '../mathlab/run';
+import { decodeDesign, encodeDesign } from '../mathlab/link';
+import { copyText, shareUrl } from '../game/share';
 import { SURFACES, SurfaceRun, type Surface } from '../mathlab/surface';
 import type { PointerEvt } from '../core/input';
 import type { PaletteSection, Swatch } from '../ui/hud';
@@ -18,11 +20,15 @@ const CHIPS: Record<string, string> = {
   ripple: 'linear-gradient(135deg,#fde725 0 50%,#3b528b 50% 100%)',
   saddle: 'linear-gradient(135deg,#5ec962 0 50%,#440154 50% 100%)',
   waves: 'linear-gradient(135deg,#21918c 0 50%,#fde725 50% 100%)',
+  sunflower: 'linear-gradient(135deg,#f2b81c 0 50%,#5a3416 50% 100%)',
+  maurer: 'linear-gradient(135deg,#ff4a6a 0 50%,#52c8ff 50% 100%)',
+  spiro: 'linear-gradient(135deg,#7ad8ff 0 50%,#ff7ad8 50% 100%)',
+  yours: 'linear-gradient(135deg,#ffd23f 0 50%,#ff4fa3 50% 100%)',
 };
 
 /** Everything on the rail: drawings drawn stroke by stroke, and 3D graphs. */
 type Item = Drawing | Surface;
-const ITEMS: Item[] = [...DRAWINGS, ...SURFACES];
+const ITEMS: Item[] = [...DRAWINGS, ...MATH_FLOWERS, YOURS, ...SURFACES];
 
 /**
  * MATH LAB: maths you can watch. Pick a drawing - a parametric heart, a
@@ -52,6 +58,9 @@ export class MathMode implements ModeController {
   private drag: { x: number; y: number } | null = null;
   private params: Record<string, number> = defaults(DRAWINGS[0]);
   private panel: HTMLElement | null = null;
+  /** what the player has typed for YOUR CURVE (kept while they look at other drawings) */
+  private formula = YOURS.formula!.value;
+  private formulaError: HTMLElement | null = null;
   private lines: HTMLElement[] = [];
 
   constructor(private ctx: ModeCtx) {}
@@ -63,6 +72,8 @@ export class MathMode implements ModeController {
   buildUI(): void {
     const swatch = (d: Item): Swatch => ({ id: d.id, label: d.name, chip: CHIPS[d.id], title: d.idea, info: [d.name, '', d.idea, CHIPS[d.id]] });
     const sections: PaletteSection[] = [
+      { label: 'YOUR OWN', swatches: [swatch(YOURS)] },
+      { label: 'MATH FLOWERS', swatches: MATH_FLOWERS.map(swatch) },
       { label: 'DRAWINGS', swatches: DRAWINGS.map(swatch) },
       { label: '3D GRAPHS', swatches: SURFACES.map(swatch) },
       {
@@ -73,6 +84,7 @@ export class MathMode implements ModeController {
           { label: 'FINISH', title: 'Skip to the finished drawing (F)', onClick: () => this.view.math?.finish() },
           { label: 'ASCII', title: 'As coloured text (A)', onClick: () => this.toggleAscii(), lamp: 'ascii', on: false },
           { label: 'RESET', title: "Put this drawing's numbers back", onClick: () => this.pick(this.drawing, true) },
+          { label: 'COPY LINK', title: 'A link that opens this design: the drawing, its numbers and your formula', onClick: () => void this.share() },
         ],
       },
     ];
@@ -115,8 +127,10 @@ export class MathMode implements ModeController {
     if (!p) return;
     const d = this.drawing;
     p.replaceChildren(h('div', 'math-title', d.name), h('p', 'math-idea', d.idea));
+    this.formulaError = null;
+    if ('formula' in d && d.formula) p.append(this.formulaBox(d.formula));
     const code = h('ol', 'math-lines');
-    this.lines = d.code(this.params).map((t) => {
+    this.lines = this.codeText().map((t) => {
       const li = h('li');
       li.append(h('code', '', t));
       code.append(li);
@@ -137,7 +151,7 @@ export class MathMode implements ModeController {
         this.params[q.key] = Number(input.value);
         val.textContent = input.value;
         // the code shows the new number at once; the drawing starts again
-        d.code(this.params).forEach((t, i) => (this.lines[i].firstChild!.textContent = t));
+        this.showCode();
         this.redraw();
       });
       row.append(h('span', 'math-key', q.label), input, val);
@@ -146,10 +160,85 @@ export class MathMode implements ModeController {
     p.append(sliders);
   }
 
+  /** The formula box: what the player types, what is wrong with it, ideas to try. */
+  private formulaBox(f: NonNullable<Drawing['formula']>): HTMLElement {
+    const box = h('div', 'math-formula');
+    const row = h('label', 'math-formula-row');
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = this.formula;
+    input.spellcheck = false;
+    input.autocomplete = 'off';
+    input.setAttribute('aria-label', `Your formula, ${f.label}`);
+    // typing here must not reach the game's keys (A, R, F, SPACE...); ESC still leaves the box
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') input.blur();
+      else e.stopPropagation();
+    });
+    input.addEventListener('input', () => {
+      this.formula = input.value;
+      this.showCode();
+      this.redraw();
+    });
+    row.append(h('span', 'math-key', f.label), input);
+    const err = h('div', 'math-error');
+    this.formulaError = err;
+    const ideas = h('div', 'math-ideas');
+    for (const ex of f.examples) {
+      const b = h('button', 'math-idea-btn', ex) as HTMLButtonElement;
+      b.type = 'button';
+      b.addEventListener('click', () => {
+        input.value = this.formula = ex;
+        this.showCode();
+        this.redraw();
+      });
+      ideas.append(b);
+    }
+    box.append(row, err, ideas);
+    return box;
+  }
+
+  /** A design from a link: shown when the mode starts. False if the code is not one. */
+  adopt(code: string): boolean {
+    const got = decodeDesign(code, ITEMS);
+    if (!got) return false;
+    this.drawing = got.item;
+    this.params = got.params;
+    if (got.formula !== undefined) this.formula = got.formula;
+    return true;
+  }
+
+  private async share(): Promise<void> {
+    const d = this.drawing;
+    const code = encodeDesign(d.id, this.params, d === YOURS ? this.formula : undefined);
+    const ok = await copyText(shareUrl(code, 'm'));
+    this.ctx.sfx.ui();
+    this.ctx.toast(ok ? 'DESIGN LINK COPIED' : 'COPY FAILED - THE BROWSER BLOCKED THE CLIPBOARD', !ok);
+  }
+
+  private codeText(): string[] {
+    const d = this.drawing;
+    return 'strokes' in d ? d.code(this.params, this.formula) : d.code(this.params);
+  }
+
+  private showCode(): void {
+    this.codeText().forEach((t, i) => (this.lines[i].firstChild!.textContent = t));
+  }
+
   private redraw(): void {
     const d = this.drawing;
     if ('strokes' in d) {
-      const run = new MathRun(d.strokes(this.params));
+      let strokes;
+      try {
+        strokes = d.strokes(this.params, this.formula);
+      } catch (e) {
+        // a formula it cannot read: say why, and keep the last drawing
+        if (this.formulaError) this.formulaError.textContent = (e as Error).message;
+        return;
+      }
+      if (this.formulaError) this.formulaError.textContent = '';
+      // your own curve redraws as you type: quick, so you can try things
+      const run = new MathRun(strokes, d === YOURS ? 2.5 : 8);
       this.view.math = run;
       this.ctx.hud.setParticles(run.strokes.length);
     } else {
