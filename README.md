@@ -238,7 +238,7 @@ The eye, the 3D lily and the bloom are our own takes on Python sketches
 [Flowers](https://github.com/iremcnar/Flowers)), as is MATH LAB's butterfly
 ([neonButterfly](https://github.com/iremcnar/neonButterfly)); no code was
 copied. On the title screen, resting the cursor on ASCII GARDEN
-plays the three scenes behind the list.
+plays its four scenes behind the list.
 
 The other modes have an **ASCII** lamp on the deck (`T`): the same filter over
 the world, masked by the frame's material ids, so only what is there turns to
@@ -250,6 +250,10 @@ A place to see what code and maths do. Pick a drawing and it is drawn stroke
 by stroke while its program, in a code window beside it, lights the line that
 is drawing. Every number you can change is a slider; moving one rewrites the
 code and starts the drawing again.
+
+| Drawn beside its code | A 3D graph, turning |
+|:---:|:---:|
+| ![The butterfly curve drawn stroke by stroke in neon colours, its Python-style code beside it with the drawing line lit](docs/math-butterfly.gif) | ![The mathematical rose surface, pink with mesh lines and x/y/z axes, turning, its formula code beside it](docs/math-rose.gif) |
 
 | Drawing | The idea | Sliders |
 |---|---|---|
@@ -350,6 +354,11 @@ no icon set, no images.
 - The **title screen** is a cursor list over a live demo: PRESS START (first
   visit only, which also unlocks audio), then the main list with CHALLENGES
   and OPTIONS submenus. Arrow keys / Enter / ESC drive it, or the mouse.
+  Resting the cursor on a mode plays that mode behind the list: SANDBOX
+  cycles four worlds built from ordinary brush strokes (flower ponds, a
+  volcano, TNT demolition, a waterfall), PLAYGROUND generated light shows,
+  CHEM LAB its three experiments, ASCII GARDEN its four scenes, MATH LAB its
+  drawings and 3D graphs.
 - Explosions shake the canvas, flash and boom.
 - **SKY** (the deck, VIEW in the pause menu, OPTIONS on the title screen): the
   lit skies (see [Light and sky](#light-and-sky)) or the flat colour of the
@@ -507,7 +516,7 @@ tests/                     vitest: world rules, TNT debris, rendering, playgroun
 
 ### Testing
 
-334 tests. Beyond the material rules: two worlds fed the same inputs must
+336 tests. Beyond the material rules: two worlds fed the same inputs must
 match for 1200 frames; a world restored mid-game into a different seed must
 stay identical; host and two guests over a simulated network with random
 delays, reordering and a late joiner must agree at every frame; a corrupted
