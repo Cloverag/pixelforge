@@ -7,7 +7,7 @@ import { back, initialNav, move, moveTo, open, start, type MenuHome, type Nav } 
 import { h } from './widgets';
 
 /** what an entry plays behind the title screen while the cursor rests on it */
-export type PreviewKind = 'pg' | 'chem' | 'garden' | 'sand' | 'math';
+export type PreviewKind = 'pg' | 'chem' | 'garden' | 'sand' | 'math' | 'elements';
 
 /** An item of the title screen's MAIN list; main.ts owns the list and its hotkeys. */
 export interface MenuEntry {

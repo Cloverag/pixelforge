@@ -65,6 +65,7 @@ const ORBITAL_FRAG = /* glsl */ `
   uniform vec3 uPos;
   uniform vec3 uNeg;
   uniform float uFade;
+  uniform float uGain;
   varying float vSign;
   varying vec3 vN;
   varying vec3 vView;
@@ -72,7 +73,7 @@ const ORBITAL_FRAG = /* glsl */ `
     // glass: faint face-on, bright at the silhouette
     float rim = pow(1.0 - abs(dot(normalize(vN), normalize(vView))), 2.2);
     vec3 col = vSign > 0.0 ? uPos : uNeg;
-    gl_FragColor = vec4(col * (0.12 + 1.1 * rim), (0.05 + 0.4 * rim) * uFade);
+    gl_FragColor = vec4(col * (0.12 + 1.1 * rim) * uGain, (0.05 + 0.4 * rim) * uFade);
   }
 `;
 
@@ -149,7 +150,15 @@ export class Atom3D {
   private electronGeo = new THREE.SphereGeometry(0.11, 12, 8);
   private reduced = matchMedia('(prefers-reduced-motion: reduce)');
 
-  constructor(private container: HTMLElement) {
+  /**
+   * `shiftX`: move the atom off centre by this share of the width (the title
+   * screen's preview keeps it clear of the menu). `interactive: false`: no
+   * drag to turn, it only spins.
+   */
+  constructor(
+    private container: HTMLElement,
+    private opts: { shiftX?: number; interactive?: boolean } = {},
+  ) {
     const r = new THREE.WebGLRenderer({ antialias: true });
     r.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     r.toneMapping = THREE.ACESFilmicToneMapping;
@@ -169,6 +178,7 @@ export class Atom3D {
     this.controls.maxDistance = 60;
     this.controls.autoRotate = !this.reduced.matches;
     this.controls.autoRotateSpeed = 0.8;
+    this.controls.enabled = opts.interactive !== false;
 
     this.scene.add(new THREE.HemisphereLight(0xbfd4ff, 0x20141a, 1.1));
     const key = new THREE.DirectionalLight(0xffffff, 2.2);
@@ -177,7 +187,7 @@ export class Atom3D {
 
     this.composer = new EffectComposer(r);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.6, 0.45, 0.4);
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.5, 0.4, 0.55);
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
 
@@ -252,7 +262,9 @@ export class Atom3D {
     this.camera.aspect = w / h;
     // a narrow view backs off so the outer shell still fits across it
     this.camera.position.setLength(w / h < 1 ? 26 / Math.max(0.55, w / h) : 26);
-    this.camera.updateProjectionMatrix();
+    // a view offset slides the picture sideways without turning the camera
+    if (this.opts.shiftX) this.camera.setViewOffset(w, h, -w * this.opts.shiftX, 0, w, h);
+    else this.camera.updateProjectionMatrix();
   }
 
   private build(spec: AtomSpec): Built {
@@ -304,12 +316,15 @@ export class Atom3D {
     const orbitals = new THREE.Group();
     const size = (SHELL_R0 + (spec.shells.length - 1) * SHELL_DR) * 1.02;
     const orbitalMats: THREE.ShaderMaterial[] = [];
+    // the lobes add up where they overlap: seven f orbitals (fourteen lobes) at
+    // the brightness of three p ones would burn the middle out to white
+    const gain = Math.min(1, 3 / Math.max(1, spec.orbitals.length)) ** 0.8;
     const neg = new THREE.Color().setHSL((tint.getHSL({ h: 0, s: 0, l: 0 }).h + 0.5) % 1, 0.75, 0.6);
     for (const o of spec.orbitals) {
       const om = new THREE.ShaderMaterial({
         vertexShader: ORBITAL_VERT,
         fragmentShader: ORBITAL_FRAG,
-        uniforms: { uPos: { value: tint.clone() }, uNeg: { value: neg }, uFade: { value: 0 } },
+        uniforms: { uPos: { value: tint.clone() }, uNeg: { value: neg }, uFade: { value: 0 }, uGain: { value: gain } },
         transparent: true,
         depthWrite: false,
         side: THREE.DoubleSide,

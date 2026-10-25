@@ -1817,3 +1817,20 @@ body.elements-on #screen { opacity: 0; }
 @media (prefers-reduced-motion: reduce) {
   .el-cell { transition: none; }
 }
+/* ELEMENTS behind the title screen (elements/preview.ts): the atom to the right of the menu */
+body.elements-preview #screen { opacity: 0; }
+.el-preview { position: absolute; inset: 0; z-index: 3; pointer-events: none; line-height: 1; }
+.el-preview canvas { position: absolute; inset: 0; }
+.el-preview-label {
+  --el-tint: #5ad8ff;
+  position: absolute;
+  right: 6%;
+  bottom: 9%;
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  color: var(--el-tint);
+}
+.el-preview-sym { font-size: clamp(40px, 7vw, 120px); font-weight: 700; text-shadow: 0 0 24px color-mix(in srgb, var(--el-tint) 55%, transparent); }
+.el-preview-name { font-size: clamp(14px, 1.4vw, 22px); letter-spacing: 0.4em; color: #e6e8ff; }

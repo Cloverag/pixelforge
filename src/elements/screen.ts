@@ -14,7 +14,7 @@ import {
   subshells,
   wavelengthRGB,
 } from './atom';
-import { Atom3D, type Layers } from './atom3d';
+import { Atom3D, type AtomSpec, type Layers } from './atom3d';
 import { FACTS } from './facts';
 
 /**
@@ -58,6 +58,18 @@ export const tintOf = (e: Element): string => TINT.get(e.block) ?? '#cfc8ef';
 function subsOf(e: ElementData) {
   return subshells(e.config ?? '', (sym) => BY_SYM.get(sym)?.config ?? null);
 }
+
+/** What the 3D atom draws for an element, and what its caption needs. */
+export function atomOf(e: ElementData) {
+  const subs = subsOf(e);
+  const shells = shellCounts(subs);
+  const last = lastSubshell(subs);
+  const orbitals = occupiedOrbitals(last);
+  const spec: AtomSpec = { z: e.z, nucleons: Math.round(e.mass ?? e.z * 2.5), shells, orbitals, tint: tintOf(e) };
+  return { spec, subs, shells, last, orbitals };
+}
+
+export const elementByZ = (z: number): ElementData => ALL[z - 1];
 
 /** Where to go from element z with the arrow keys: along the row, or up and down the column. */
 const GRID = new Map(ALL.map((e) => [placeOf(e.z).join(','), e.z]));
@@ -142,18 +154,9 @@ export class ElementsScreen {
       cell.classList.toggle('sel', k === z);
       cell.setAttribute('aria-pressed', String(k === z));
     }
-    const subs = subsOf(e);
-    const shells = shellCounts(subs);
-    const last = lastSubshell(subs);
-    const orbitals = occupiedOrbitals(last);
+    const { spec, shells, last, orbitals } = atomOf(e);
     this.root.style.setProperty('--el-tint', tintOf(e));
-    this.atom.show({
-      z: e.z,
-      nucleons: Math.round(e.mass ?? e.z * 2.5),
-      shells,
-      orbitals,
-      tint: tintOf(e),
-    });
+    this.atom.show(spec);
     this.showHead(e);
     const sub = `${last.n}${L_LETTER[last.l]}`;
     // what the picture is, and what it is not: rings count electrons, they are not paths

@@ -1020,6 +1020,8 @@ let attract: { kind: PreviewKind; name: string } | null = null;
 /** the ASCII garden, playing behind the title screen while its entry is hovered */
 const gardenPreview = new GardenView('garden-preview');
 let attractTimer = 0;
+/** ELEMENTS behind the title screen: three.js and the element data load on the first hover */
+let elPreview: import('./elements/preview').ElementsPreview | null = null;
 let previewTimer = 0;
 /** particles (playground) or cells (chem lab) in the last frame, for dev checks */
 let lastLive = 0;
@@ -1035,6 +1037,26 @@ function nextScene(kind: PreviewKind, count: number): number {
 function startAttract(kind: PreviewKind): void {
   window.clearTimeout(attractTimer);
   if (screen !== 'menu' || reducedMotion.matches) return;
+  if (kind !== 'elements') elPreview?.stop();
+  if (kind === 'elements') {
+    // an atom turning to the right of the menu, a new element every few seconds
+    gardenPreview.unmount();
+    const shown = { kind, name: 'ELEMENTS' };
+    attract = shown;
+    overlay.classList.add('attract');
+    import('./elements/preview')
+      .then(({ ElementsPreview, TOUR }) => {
+        // the cursor moved on, or the game started, while it loaded
+        if (screen !== 'menu' || attract !== shown) return;
+        elPreview ??= new ElementsPreview();
+        elPreview.play(nextScene('elements', TOUR.length), (name) => {
+          shown.name = name;
+          setMenuLive(name);
+        });
+      })
+      .catch((err) => console.error(err));
+    return;
+  }
   if (kind === 'math') {
     // the drawings drawing themselves, full width, one after another
     if (!gardenPreview.mounted()) gardenPreview.mount();
@@ -1097,6 +1119,7 @@ function startAttract(kind: PreviewKind): void {
 
 function stopAttract(): void {
   gardenPreview.unmount();
+  elPreview?.stop();
   window.clearTimeout(attractTimer);
   window.clearTimeout(previewTimer);
   attract = null;
@@ -1204,6 +1227,7 @@ const MENU: MenuEntry[] = [
   },
   {
     name: 'ELEMENTS',
+    preview: 'elements',
     sub: 'the periodic table in 3D: every atom, its orbitals and the light it gives off',
     hotkey: 'e',
     run: () => {
