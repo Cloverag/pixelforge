@@ -302,9 +302,14 @@ function savedGrid(): number | null | undefined {
   return BLOCK_SIZES.includes(n as (typeof BLOCK_SIZES)[number]) ? n : null;
 }
 
-/** Restores the saved block size (none for a new player) once the HUD buttons exist. */
+/**
+ * Each mode's block size on the way in: the playground (SURPRISE ME is a
+ * playground scene) in 4px blocks, every other mode without. GRID still
+ * changes it while playing; the title screen keeps the saved one.
+ */
+const MODE_GRID: Partial<Record<Mode, number>> = { playground: 4 };
 function restoreGrid(): void {
-  applyGrid(savedGrid() ?? null);
+  applyGrid(MODE_GRID[current.id] ?? null);
 }
 /** steps sent, for tools that emit on a slower beat than every step */
 let frameNo = 0;
@@ -1660,7 +1665,7 @@ hud.initDeck({
   },
 });
 
-// the saved block size and soft setting, now that the HUD exists
+// the block size and soft setting, now that the HUD exists
 restoreGrid();
 restoreSoft();
 try {

@@ -403,8 +403,10 @@ entry bundle.
   texel cast 12 rays a frame, blended over time, so coloured light bounces off
   walls and fire throws soft shadows. If the frame rate stays under 40 FPS for
   3 seconds it switches itself off.
-- A new player's **title screen** is drawn in 4px blocks; once you pick a
-  GRID size in game (or none), the title screen uses it too.
+- **GRID** per mode: the playground and SURPRISE ME start in 4px blocks,
+  every other mode without; the GRID lamp (`B`) still changes it while you
+  play. A new player's **title screen** is drawn in 4px blocks; once you pick
+  a GRID size in game (or none), the title screen uses it too.
 
 ## Controls
 
