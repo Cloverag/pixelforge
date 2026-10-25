@@ -125,6 +125,7 @@ const MODE_TABS: [Mode, string][] = [
   ['chem', 'CHEM LAB'],
   ['garden', 'GARDEN'],
   ['math', 'MATH'],
+  ['elements', 'ELEMENTS'],
 ];
 
 /** One VIEW lamp on the deck: what it is, and what pressing it does. */
@@ -205,7 +206,7 @@ export interface PaletteSpec {
   /** BUCKET and WIND under the brush */
   bucket: boolean;
   /** what the bar counts */
-  counts: 'cells' | 'particles' | 'strokes';
+  counts: 'cells' | 'particles' | 'strokes' | 'electrons';
   /** said on the canvas while the world is empty */
   hint?: string;
 }

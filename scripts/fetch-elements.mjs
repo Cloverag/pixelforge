@@ -4,8 +4,8 @@
 //
 // Run by hand when the data should be refreshed, never at build or run time:
 // the game is a static site, so the element table ships with it and no
-// player's browser ever calls PubChem. Only the fields the CHEM LAB shows are
-// kept. Source: https://pubchem.ncbi.nlm.nih.gov/periodic-table/ (NCBI).
+// player's browser ever calls PubChem. Only the fields the CHEM LAB and the
+// ELEMENTS mode show are kept. Source: https://pubchem.ncbi.nlm.nih.gov/periodic-table/ (NCBI).
 import { writeFileSync } from 'node:fs';
 
 const SOURCE = 'https://pubchem.ncbi.nlm.nih.gov/rest/pug/periodictable/JSON';
@@ -26,6 +26,8 @@ const elements = Table.Row.map(({ Cell: c }) => ({
   melt: num(c[col.MeltingPoint]),
   boil: num(c[col.BoilingPoint]),
   block: c[col.GroupBlock],
+  config: c[col.ElectronConfiguration] || null,
+  year: c[col.YearDiscovered] || null,
 }));
 if (elements.length !== 118) throw new Error(`expected 118 elements, got ${elements.length}`);
 

@@ -39,6 +39,7 @@ import { PlaygroundMode } from './modes/playground';
 import { ChemMode } from './modes/chem';
 import { GardenMode } from './modes/garden';
 import { MathMode } from './modes/math';
+import { ElementsMode } from './modes/elements';
 import { defaults, DRAWINGS } from './mathlab/drawings';
 import { MathRun } from './mathlab/run';
 import { SURFACES, SurfaceRun } from './mathlab/surface';
@@ -136,10 +137,11 @@ const playground = new PlaygroundMode(modeCtx);
 const chemLab = new ChemMode(modeCtx);
 const garden = new GardenMode(modeCtx);
 const mathLab = new MathMode(modeCtx);
+const elements = new ElementsMode(modeCtx);
 /** each world's free-play screen; a challenge is a SandMode of its own */
-const MODE_CTRL: Record<Mode, ModeController> = { sand: sandbox, playground, chem: chemLab, garden, math: mathLab };
+const MODE_CTRL: Record<Mode, ModeController> = { sand: sandbox, playground, chem: chemLab, garden, math: mathLab, elements };
 /** modes drawn on their own canvas, not the world's: no rooms, no RAY, no ASCII lamp of the world's */
-const SOLO: readonly Mode[] = ['garden', 'math'];
+const SOLO: readonly Mode[] = ['garden', 'math', 'elements'];
 /** the screen being played (the menu keeps the last one) */
 let current: ModeController = sandbox;
 
@@ -1198,6 +1200,16 @@ const MENU: MenuEntry[] = [
       sfx.ensure();
       leaveRoom('YOU LEFT THE ROOM');
       startMode(mathLab);
+    },
+  },
+  {
+    name: 'ELEMENTS',
+    sub: 'the periodic table in 3D: every atom, its orbitals and the light it gives off',
+    hotkey: 'e',
+    run: () => {
+      sfx.ensure();
+      leaveRoom('YOU LEFT THE ROOM');
+      startMode(elements);
     },
   },
   {

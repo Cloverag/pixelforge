@@ -3,7 +3,8 @@
 A pixel-art falling-sand forge for the browser. Paint 29 materials that burn,
 flow, grow and explode; build with friends in the same world over a link; make
 light shows with fireworks, portals, black holes and musical bumpers; pick
-elements off a periodic table and watch them react in the chem lab; grow a
+elements off a periodic table and watch them react in the chem lab; turn any
+atom in 3D, with its orbitals and the light it gives off; grow a
 bouquet of flowers drawn in coloured text in the ASCII garden; or solve 7
 goal-based challenges. A sun and a moon cross the sky and cast shadows, and an
 optional path tracer bounces firelight around the world. Everything is
@@ -55,6 +56,7 @@ get their own layout.
 | **PARTICLE PLAYGROUND** | Light shows instead of materials: emitters, forces, bumpers that play notes, portals - with a film-look renderer, a full 3D view and sound design. See [The playground](#the-playground). |
 | **ASCII GARDEN** | Flowers, an eye made of words and 3D lilies, drawn as coloured text. Solo only. See [The ASCII garden](#the-ascii-garden). |
 | **MATH LAB** | Watch maths draw itself: a parametric heart, a neon butterfly, a spiral rosette, a globe of ellipses, a recursive tree - and 3D graphs (a rose surface, ripple, saddle, waves) you can turn. The code sits beside the drawing and lights the line drawing now; sliders change its numbers. Solo only. See [The math lab](#the-math-lab). |
+| **ELEMENTS** | The periodic table in 3D: pick any of the 118 and its atom turns in front of you - nucleus, electron shells and the shapes of its outer orbitals - beside its numbers, its visible spectrum and what it is used for. Solo only. See [The elements](#the-elements). |
 | **CHEM LAB** | Pick elements off a periodic table and drop them into water, acid, fire or each other: 32 elements (uranium and plutonium among them: fission and critical mass), 70 reactions, 5 ready-made experiments. See [The chem lab](#the-chem-lab). |
 | **SURPRISE ME** | A brand-new generated playground scene every click (`R`). |
 | **CHALLENGES** | 7 goal-based puzzles with material budgets, time limits, win/lose checks and a 3-star rating. Levels unlock in order; stars persist in `localStorage`. |
@@ -323,6 +325,47 @@ coloured text. The drawings are pure functions (`src/mathlab/drawings.ts`):
 each stroke carries the code line that made it, which is how the window knows
 what to light. They are our own versions of classic Python-turtle sketches.
 
+## The elements
+
+The periodic table as something to look into. The table sits under the atom;
+click an element (or walk the table with the arrow keys) and its atom grows in:
+
+- **The nucleus**: protons (red) and neutrons (grey-blue), as many as the
+  standard atomic weight rounded. Enormously magnified: at true scale it would
+  be invisible.
+- **The shells**, K outwards: a ring each, with that shell's electrons moving
+  round it. They show how many electrons each shell holds, not paths.
+- **The orbitals** of the subshell the element filled last (Madelung order,
+  so copper's `[Ar]4s1 3d10` draws 3d), as the polar plot of |Y|²: the real
+  spherical harmonics up to f, the wavefunction's two signs in two colours.
+  By Hund's rule a subshell fills each orbital singly first, so carbon's 2p²
+  draws two p dumbbells and argon's 3p⁶ three. Tests check each harmonic
+  integrates to 1 and the orbitals of a subshell are orthogonal.
+
+Beside it: protons and electrons, the outer shell, the shells' counts, the
+electron configuration, atomic weight, period and group, melting and boiling
+points and the year of discovery; the **spectral fingerprint**; a few everyday
+uses and one fact. `O`, `K` and `R` turn the orbitals, the shells and the
+slow spin on and off; the rail's colours light up one category of the table.
+
+- **Configurations, weights and the rest** are PubChem's (the same
+  `src/data/elements.json` as the chem lab); every element's configuration,
+  core written out, adds up to its atomic number (tested). PubChem marks the
+  superheavy ones "(predicted)" and the panel says so.
+- **Spectra** are the NIST Atomic Spectra Database's: each element's neutral
+  atom, lines observed between 380 and 750 nm (in air) with a relative
+  intensity, the strongest 24 kept. `scripts/fetch-spectra.mjs` fetches them
+  once into `src/data/spectra.json`; no player's browser calls NIST. 97 of
+  the 118 have lines; for the rest (astatine, francium and every element past
+  einsteinium) NIST has none, and the panel says that rather than drawing
+  any. Intensities come from many sources and only compare within one
+  element, which is all the strip does with them.
+- **The facts and uses** are written by hand (`src/elements/facts.ts`), not
+  fetched: kept to well-established facts, with no precise figures.
+
+The screen, three.js and the data load on the way in, so none of it is in the
+entry bundle.
+
 ## Light and sky
 
 - **SKY** on the deck: CYCLE (day and night turning, a full day every six
@@ -357,7 +400,8 @@ what to light. They are our own versions of classic Python-turtle sketches.
 | `F` / `E` / `O` / `A` / `X` | Bouquet / eye of words / bloom / text on-off / clear (garden) |
 | `A` | Math lab (menu) |
 | `R` / `F` | Draw again / finish (math lab) |
-| `E` | Periodic table (chem lab) |
+| `E` | Periodic table (chem lab); elements (menu) |
+| Arrows / `O` / `K` / `R` | Move round the table / orbitals / shells / spin (elements) |
 | `O` | Open a room (menu) |
 | `Z` | Ping where your cursor is (in a room) |
 | `3` | 3D view |
@@ -370,7 +414,7 @@ what to light. They are our own versions of classic Python-turtle sketches.
 | `D` | FPS readout in the canvas corner (off by default) |
 | `ESC` | Close the periodic table, leave immersive mode, then the **pause menu** (alone it freezes the game; in a room it does not). QUIT TO TITLE asks first in a room |
 
-The SANDBOX / PLAYGROUND / CHEM LAB / GARDEN / MATH buttons on the marquee switch mode in one
+The SANDBOX / PLAYGROUND / CHEM LAB / GARDEN / MATH / ELEMENTS buttons on the marquee switch mode in one
 press; the sandbox comes back from its autosave. In a room only the host can
 switch, after a confirm, and everyone goes along.
 
@@ -470,10 +514,12 @@ solids stay put.
 index.html                 app shell, link-preview tags
 public/og.jpg              link-preview card (flower ponds + the title menu)
 scripts/fetch-elements.mjs regenerates src/data/elements.json from PubChem (by hand)
+scripts/fetch-spectra.mjs  regenerates src/data/spectra.json from the NIST ASD (by hand)
 src/
   main.ts                  fixed-step loop, worker + room wiring, menu; asks the current mode
   styles.css               all styling (the one dark palette, the pixel frame, CRT, phone layout, dialogs)
   data/elements.json       the periodic table: 118 elements, trimmed PubChem data
+  data/spectra.json        each element's visible lines, from the NIST Atomic Spectra Database
   modes/
     types.ts               ModeController: what a game screen provides to main.ts
     sand.ts                the sandbox, and each challenge
@@ -481,6 +527,7 @@ src/
     chem.ts                the chem lab
     garden.ts              the ASCII garden: scenes, planting, the panel
     math.ts                the math lab: the drawing, its code window and sliders
+    elements.ts            the elements: the rail, keys and lamps; loads elements/screen.ts
     stroke.ts              brush strokes, shared by every mode
   garden/
     flowers.ts             flower kinds, planting, the bouquet generator (seeded)
@@ -490,6 +537,11 @@ src/
     bloom.ts               BLOOM: a flower's life cycle in dots (pointillism)
     ascii.ts               the WebGL text filter (also the ASCII lamp in other modes)
     view.ts                the garden's own canvas over the world's; the title preview
+  elements/
+    atom.ts                configurations -> shells, last subshell, orbitals (real harmonics), wavelength colour (pure)
+    atom3d.ts              the atom in three.js: nucleus, shells, orbital lobes, bloom
+    screen.ts              the screen: header, panel, spectrum strip, clickable table
+    facts.ts               a fact and a few uses per element (written, not fetched)
   mathlab/
     drawings.ts            the math lab's drawings: parameters -> strokes, each with its code line (pure)
     run.ts                 draws a drawing a batch of strokes a frame onto a kept canvas

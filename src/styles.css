@@ -1708,3 +1708,112 @@ body.math-on #screen { opacity: 0; }
 .math-py-out.bad { color: #ff8a80; }
 /* a challenge's clock: its last ten seconds in red */
 .sb-time.urgent .sb-val { color: #ff6a6a; }
+
+/* ELEMENTS: the atom in 3D over a clickable periodic table, the element's
+   numbers, spectrum and uses on the right (elements/screen.ts). The type
+   floor holds here too: nothing under 14px, hierarchy by colour and spacing */
+body.elements-on #screen { opacity: 0; }
+.el-root {
+  --el-tint: #5ad8ff;
+  --el-ink: #e6e8ff;
+  --el-dim: #8d93c9;
+  --el-faint: #5d6294;
+  --el-line: #23284f;
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: grid;
+  grid-template-columns: 58% 42%;
+  line-height: 1.35;
+  background: #070816;
+  color: var(--el-ink);
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 14px;
+}
+.el-left { display: grid; grid-template-rows: minmax(0, 1fr) auto; min-height: 0; }
+.el-atom { position: relative; min-height: 0; }
+.el-atom canvas { position: absolute; inset: 0; }
+.el-head { position: absolute; top: 12px; left: 16px; pointer-events: none; }
+.el-z { color: var(--el-tint); letter-spacing: 0.1em; }
+.el-sym {
+  font: 700 clamp(30px, 4.2vw, 64px) / 1.05 'IBM Plex Mono', monospace;
+  color: var(--el-tint);
+  text-shadow: 0 0 18px color-mix(in srgb, var(--el-tint) 60%, transparent);
+}
+.el-name { font-weight: 500; letter-spacing: 0.32em; font-size: 1.15em; }
+.el-kind { margin-top: 2px; color: var(--el-dim); letter-spacing: 0.12em; }
+.el-caption {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 6px;
+  color: var(--el-faint);
+  pointer-events: none;
+}
+.el-table { padding: 6px 12px 10px; border-top: 1px solid var(--el-line); }
+.el-grid {
+  display: grid;
+  grid-template-columns: repeat(18, minmax(0, 1fr));
+  /* row 8 is the gap above the f-block */
+  grid-template-rows: repeat(7, auto) 5px repeat(2, auto);
+  gap: 2px;
+}
+.el-cell {
+  min-width: 0;
+  padding: 0;
+  height: 22px;
+  font: 500 14px / 1 'IBM Plex Mono', monospace;
+  letter-spacing: -0.04em;
+  color: color-mix(in srgb, var(--tint) 75%, white);
+  background: color-mix(in srgb, var(--tint) 14%, #0c0e22);
+  border: 1px solid color-mix(in srgb, var(--tint) 30%, transparent);
+  border-radius: 2px;
+  cursor: pointer;
+  transition: opacity 0.2s, background-color 0.15s;
+}
+.el-cell:hover, .el-cell:focus-visible { background: color-mix(in srgb, var(--tint) 38%, #0c0e22); outline: none; }
+.el-cell:focus-visible { box-shadow: 0 0 0 2px #fff; }
+.el-cell.sel { background: var(--tint); color: #070816; font-weight: 700; box-shadow: 0 0 10px var(--tint); }
+.el-cell.dim { opacity: 0.16; }
+.el-fgap { display: flex; align-items: center; justify-content: center; color: var(--el-faint); }
+.el-panel {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 10px 16px 12px;
+  border-left: 1px solid var(--el-line);
+  background: #0a0b1d;
+}
+.el-section {
+  display: flex;
+  justify-content: space-between;
+  margin: 10px 0 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--el-line);
+  color: var(--el-dim);
+  letter-spacing: 0.12em;
+}
+.el-section:first-child { margin-top: 0; }
+.el-rows { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 0; }
+.el-rows dt { color: var(--el-dim); letter-spacing: 0.05em; }
+.el-rows dd { margin: 0; text-align: right; font-weight: 500; }
+.el-spectrum canvas { display: block; width: 100%; height: 36px; border: 1px solid var(--el-line); border-radius: 3px; }
+.el-axis { position: relative; height: 1.5em; color: var(--el-faint); }
+.el-axis span { position: absolute; top: 1px; transform: translateX(-50%); }
+.el-lines { color: var(--el-tint); }
+.el-uses { margin: 0; padding-left: 2.4em; }
+.el-uses li { margin: 2px 0; }
+.el-uses li::marker { content: counter(list-item, decimal-leading-zero) '  '; color: var(--el-faint); }
+.el-fact { margin: 10px 0 6px; color: #cdd1ff; line-height: 1.5; }
+.el-source { margin: 0; color: var(--el-faint); }
+@media (max-width: 900px) and (orientation: portrait) {
+  /* the screen is small here: the atom fills it, the table and the panel scroll under it */
+  .el-root { display: block; overflow-y: auto; }
+  .el-left { display: block; }
+  /* the screen is 16:9, so the atom takes exactly its first screenful */
+  .el-atom { width: 100%; aspect-ratio: 16 / 9; }
+  .el-caption { display: none; }
+  .el-panel { border-left: 0; border-top: 1px solid var(--el-line); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .el-cell { transition: none; }
+}
