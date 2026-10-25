@@ -1,8 +1,20 @@
 import type { PointerEvt } from '../core/input';
+import { copyText, shareUrl } from '../game/share';
 import type { PaletteSection, Swatch } from '../ui/hud';
 import type { CursorLook, ModeController, ModeCtx } from './types';
 
 type Screen = typeof import('../elements/screen');
+
+/** the element last looked at, so a reload comes back to it */
+const LAST_KEY = 'pf.element';
+function lastElement(): number {
+  try {
+    const z = Number(localStorage.getItem(LAST_KEY));
+    return Number.isInteger(z) && z >= 1 && z <= 118 ? z : 18;
+  } catch {
+    return 18; // private mode: argon, as a first visit
+  }
+}
 
 /**
  * ELEMENTS: the periodic table in 3D. Pick an element off the table and its
@@ -19,6 +31,8 @@ export class ElementsMode implements ModeController {
   readonly saveable = false;
   readonly view3d = 'voxel';
   readonly challengeId = null;
+  /** the world's canvas is hidden here: its view lamps and skies would change nothing you can see (CRT still does) */
+  readonly deckOff = ['soft', 'grid', '3d', 'ascii', 'ray', 'sky'];
   readonly keys: Record<string, () => void> = {
     arrowleft: () => this.screen?.move('left'),
     arrowright: () => this.screen?.move('right'),
@@ -30,12 +44,21 @@ export class ElementsMode implements ModeController {
   };
   private mod: Screen | null = null;
   private screen: InstanceType<Screen['ElementsScreen']> | null = null;
-  private z = 18;
+  private z = lastElement();
+  /** an element from a #e= link, looked up once the data has loaded */
+  private linked: string | null = null;
   private loading = false;
   /** left the mode while the screen was still loading: do not mount it */
   private left = false;
 
   constructor(private ctx: ModeCtx) {}
+
+  /** A shared #e= link: a symbol or an atomic number, checked when the screen loads. */
+  adopt(code: string): boolean {
+    if (!/^([A-Za-z]{1,3}|\d{1,3})$/.test(code)) return false;
+    this.linked = code;
+    return true;
+  }
 
   start(): void {
     this.ctx.post({ t: 'input', inp: { k: 'mode', m: 'elements' } });
@@ -89,6 +112,7 @@ export class ElementsMode implements ModeController {
           { label: 'SPIN', title: 'Turn the atom slowly; drag to turn it yourself (R)', onClick: () => this.toggleSpin(), lamp: 'spin', on: true },
           { label: '◀ PREV', title: 'The element before (←)', onClick: () => this.screen?.move('left') },
           { label: 'NEXT ▶', title: 'The element after (→)', onClick: () => this.screen?.move('right') },
+          { label: 'COPY LINK', title: 'A link that opens this element', onClick: () => void this.share() },
         ],
       },
     ];
@@ -105,15 +129,34 @@ export class ElementsMode implements ModeController {
     );
     this.screen = new mod.ElementsScreen((e) => {
       this.z = e.z;
+      try {
+        localStorage.setItem(LAST_KEY, String(e.z));
+      } catch {
+        /* private mode: it just will not be remembered */
+      }
       this.ctx.hud.setParticles(e.z);
       this.ctx.sfx.ui();
     });
+    if (this.linked) {
+      const e = mod.findElement(this.linked);
+      if (e) this.z = e.z;
+      else this.ctx.toast('NO SUCH ELEMENT IN THAT LINK', true);
+      this.linked = null;
+    }
     document.getElementById('screen-wrap')?.appendChild(this.screen.root);
     document.body.classList.add('elements-on');
     this.screen.select(this.z);
     this.ctx.hud.setLamp('orbitals', this.screen.layers.orbitals);
     this.ctx.hud.setLamp('shells', this.screen.layers.shells);
     this.ctx.hud.setLamp('spin', this.screen.spinning);
+  }
+
+  private async share(): Promise<void> {
+    const sym = this.screen?.current.sym;
+    if (!sym) return;
+    const ok = await copyText(shareUrl(sym, 'e'));
+    this.ctx.sfx.ui();
+    this.ctx.toast(ok ? `LINK TO ${sym.toUpperCase()} COPIED` : 'COPY FAILED - THE BROWSER BLOCKED THE CLIPBOARD', !ok);
   }
 
   private toggleLayer(k: 'orbitals' | 'shells'): void {

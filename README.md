@@ -343,10 +343,32 @@ click an element (or walk the table with the arrow keys) and its atom grows in:
   integrates to 1 and the orbitals of a subshell are orthogonal.
 
 Beside it: protons and electrons, the outer shell, the shells' counts, the
-electron configuration, atomic weight, period and group, melting and boiling
-points and the year of discovery; the **spectral fingerprint**; a few everyday
-uses and one fact. `O`, `K` and `R` turn the orbitals, the shells and the
-slow spin on and off; the rail's colours light up one category of the table.
+electron configuration, atomic weight, period and group and the year of
+discovery; the **outer orbitals as boxes of arrows** (one per box before any
+pairs, Hund's rule); **properties** (melting and boiling points in K and °C,
+density, electronegativity, ionization energy, electron affinity, van der
+Waals radius, oxidation states); the **spectral fingerprint**; a few everyday
+uses; and **facts**: one written fact, where the name comes from, and any
+**records** it holds, worked out from the data ("the highest ionization
+energy of any element", "the densest in group 8"). `O`, `K` and `R` turn the
+orbitals, the shells and the slow spin on and off; the rail's colours light
+up one category of the table; COPY LINK copies a `#e=Au` link that opens
+straight to that element, and a reload comes back to the last one.
+
+The table's empty top middle holds its controls:
+
+- **COLOUR BY**: category, block (s p d f), any of the seven properties on a
+  dark-to-light ramp (density on a log scale; hatched where there is no
+  data), **state at a temperature** (a slider from 10 K to 6000 K: at room
+  temperature 2 liquids and 11 gases, tested), or **known by a year** (a
+  slider from 1650 to 2010; it starts on 1869, the year of Mendeleev's table).
+- **FIND**: a symbol, a number or the start of a name ("gold", "Au", "79").
+- A readout of the element under the pointer and its value in that view.
+
+Some of PubChem's numbers are not what their label says at normal pressure:
+helium's melting point is under pressure (it never freezes at 1 atm), and
+carbon and arsenic sublime. The panel says so beside the value, and no
+record is claimed from those (`CAVEATS` in `src/elements/trends.ts`).
 
 - **Configurations, weights and the rest** are PubChem's (the same
   `src/data/elements.json` as the chem lab); every element's configuration,
@@ -360,8 +382,10 @@ slow spin on and off; the rail's colours light up one category of the table.
   einsteinium) NIST has none, and the panel says that rather than drawing
   any. Intensities come from many sources and only compare within one
   element, which is all the strip does with them.
-- **The facts and uses** are written by hand (`src/elements/facts.ts`), not
-  fetched: kept to well-established facts, with no precise figures.
+- **The facts, uses and name origins** are written by hand
+  (`src/elements/facts.ts`, `src/elements/names.ts`), not fetched: kept to
+  well-established facts, with no precise figures. The records are not
+  written: they are computed from PubChem's numbers.
 
 The screen, three.js and the data load on the way in, so none of it is in the
 entry bundle.
@@ -541,7 +565,10 @@ src/
     atom.ts                configurations -> shells, last subshell, orbitals (real harmonics), wavelength colour (pure)
     atom3d.ts              the atom in three.js: nucleus, shells, orbital lobes, bloom
     screen.ts              the screen: header, panel, spectrum strip, clickable table
+    trends.ts              colour-by views, state at T, records, orbital boxes, data caveats (pure)
+    preview.ts             the atom behind the title screen while ELEMENTS is hovered
     facts.ts               a fact and a few uses per element (written, not fetched)
+    names.ts               where each element's name comes from (written)
   mathlab/
     drawings.ts            the math lab's drawings: parameters -> strokes, each with its code line (pure)
     run.ts                 draws a drawing a batch of strokes a frame onto a kept canvas

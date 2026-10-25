@@ -161,6 +161,8 @@ export interface DeckState {
   canSave: boolean;
   /** CLEAR: every mode but a challenge (it would wipe the level) */
   canClear: boolean;
+  /** lamps that do nothing on this screen, and 'sky' for the sky row: shown off, not pressable */
+  off: readonly string[];
 }
 
 /** One pickable thing in the rail: a material, a tool, an element. */
@@ -482,10 +484,13 @@ export class Hud {
       const on = !!st.lit[id];
       b.classList.toggle('on', on);
       b.setAttribute('aria-pressed', String(on));
+      b.disabled = st.off.includes(id);
     }
+    const noSky = st.off.includes('sky');
     for (const [id, b] of d.skies) {
       b.classList.toggle('on', id === st.sky);
       b.setAttribute('aria-pressed', String(id === st.sky));
+      b.disabled = noSky;
     }
     for (const [bus, cells] of d.vols) {
       const v = bus === 'music' ? st.music : st.sfx;

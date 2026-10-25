@@ -1483,6 +1483,8 @@ function syncDeck(): void {
     sfx: v.mute.master || v.mute.sfx ? 0 : v.sfx,
     canSave: current.saveable && !mp,
     canClear: !!current.clear && !current.challengeId,
+    // the title screen shows the world: every lamp works there
+    off: screen === 'game' ? (current.deckOff ?? []) : [],
   });
 }
 
@@ -1761,6 +1763,7 @@ post({ t: 'init', w: SIM_W, h: SIM_H, buf: masterBuf }, [masterBuf]);
 const urlCode = takeUrlCode();
 const gardenCode = takeUrlCode('g');
 const mathCode = takeUrlCode('m');
+const elementCode = takeUrlCode('e');
 const urlRoom = roomFromUrl();
 if (urlRoom && hostingCode() === urlRoom) {
   // the host reloaded: same room, from the autosaved world
@@ -1771,6 +1774,13 @@ if (urlRoom && hostingCode() === urlRoom) {
   void hostRoom(urlRoom);
 } else if (urlRoom) {
   void joinRoom(urlRoom);
+} else if (elementCode) {
+  // a shared element: straight to it
+  if (elements.adopt(elementCode)) startMode(elements);
+  else {
+    openMenu(true);
+    toast('SHARED ELEMENT LINK IS CORRUPTED', true);
+  }
 } else if (mathCode) {
   // a shared MATH LAB design: straight into it
   if (mathLab.adopt(mathCode)) startMode(mathLab);

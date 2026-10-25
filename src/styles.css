@@ -1805,6 +1805,73 @@ body.elements-on #screen { opacity: 0; }
 .el-uses li::marker { content: counter(list-item, decimal-leading-zero) '  '; color: var(--el-faint); }
 .el-fact { margin: 10px 0 6px; color: #cdd1ff; line-height: 1.5; }
 .el-source { margin: 0; color: var(--el-faint); }
+/* the table's controls, in its empty top middle: colour by, find, the key, a readout */
+.el-card {
+  grid-column: 3 / 13;
+  grid-row: 1 / 4;
+  display: grid;
+  align-content: start;
+  gap: 3px;
+  padding: 0 8px;
+  min-width: 0;
+}
+.el-card-top { display: flex; gap: 6px; min-width: 0; }
+.el-select, .el-find {
+  min-width: 0;
+  height: 24px;
+  padding: 0 6px;
+  font: 14px 'IBM Plex Mono', monospace;
+  color: var(--el-ink);
+  background: #0c0e22;
+  border: 1px solid var(--el-line);
+  border-radius: 3px;
+}
+.el-select { flex: 1 1 auto; cursor: pointer; }
+.el-find { flex: 0 1 11em; }
+.el-find::placeholder { color: var(--el-faint); }
+.el-select:focus-visible, .el-find:focus-visible { outline: none; border-color: var(--el-tint); }
+.el-find.miss { border-color: #ff6b8a; }
+.el-key { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; min-height: 22px; color: var(--el-dim); }
+.el-key-row { display: flex; align-items: center; gap: 8px; flex: 1 1 100%; }
+.el-key-val { color: var(--el-ink); white-space: nowrap; }
+.el-key-note { color: var(--el-dim); }
+.el-slider { flex: 1 1 auto; min-width: 0; accent-color: var(--el-tint); }
+.el-ramp { flex: 1 1 4em; height: 10px; border-radius: 2px; }
+.el-chip { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.el-chip-dot { width: 10px; height: 10px; border-radius: 2px; background: var(--tint); }
+.el-chip.none .el-chip-dot {
+  background: repeating-linear-gradient(45deg, #2a2e5a 0 2px, #0a0b1d 2px 4px);
+}
+.el-readout { color: var(--el-tint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* coloured by a property, a state or a block: solid cells, text dark or light to suit */
+.el-grid.heat .el-cell { background: var(--tint); color: var(--ink); border-color: transparent; }
+.el-grid.heat .el-cell:hover, .el-grid.heat .el-cell:focus-visible { filter: brightness(1.2); }
+.el-grid.heat .el-cell.sel { box-shadow: 0 0 0 2px #fff, 0 0 10px var(--tint); }
+.el-grid .el-cell.nodata {
+  background: repeating-linear-gradient(45deg, #15183a 0 3px, #0a0b1d 3px 6px);
+  color: #5d6294;
+  border-color: #1d2147;
+}
+.el-grid .el-cell.nodata.sel { box-shadow: 0 0 0 2px #fff; color: #fff; }
+.el-rows dd.none { color: var(--el-faint); font-weight: 400; }
+/* orbital box diagram: a row per subshell, a box per orbital, arrows for electrons */
+.el-boxes { display: grid; gap: 4px; }
+.el-boxrow { display: flex; align-items: center; gap: 10px; }
+.el-boxlabel { width: 2.4em; color: var(--el-dim); }
+.el-boxset { display: flex; flex-wrap: wrap; }
+.el-box {
+  display: inline-grid;
+  place-items: center;
+  width: 2.2em;
+  height: 1.6em;
+  border: 1px solid color-mix(in srgb, var(--el-tint) 55%, transparent);
+  margin-right: -1px;
+  color: var(--el-tint);
+  letter-spacing: 0.08em;
+}
+.el-facts { margin: 0; padding-left: 1.2em; }
+.el-facts li { margin: 4px 0; line-height: 1.45; color: #cdd1ff; }
+.el-facts-k { color: var(--el-dim); letter-spacing: 0.1em; }
 @media (max-width: 900px) and (orientation: portrait) {
   /* the screen is small here: the atom fills it, the table and the panel scroll under it */
   .el-root { display: block; overflow-y: auto; }
@@ -1813,6 +1880,8 @@ body.elements-on #screen { opacity: 0; }
   .el-atom { width: 100%; aspect-ratio: 16 / 9; }
   .el-caption { display: none; }
   .el-panel { border-left: 0; border-top: 1px solid var(--el-line); }
+  /* the table's gap is too small here: its controls go under the table, full width */
+  .el-card { grid-column: 1 / 19; grid-row: 11; padding: 6px 0 0; }
 }
 @media (prefers-reduced-motion: reduce) {
   .el-cell { transition: none; }
@@ -1834,3 +1903,5 @@ body.elements-preview #screen { opacity: 0; }
 }
 .el-preview-sym { font-size: clamp(40px, 7vw, 120px); font-weight: 700; text-shadow: 0 0 24px color-mix(in srgb, var(--el-tint) 55%, transparent); }
 .el-preview-name { font-size: clamp(14px, 1.4vw, 22px); letter-spacing: 0.4em; color: #e6e8ff; }
+/* a deck lamp or sky that does nothing on this screen (ModeController.deckOff) */
+.lamp:disabled, .sky:disabled { opacity: 0.3; cursor: not-allowed; }

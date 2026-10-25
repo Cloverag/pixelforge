@@ -165,3 +165,87 @@ describe('ELEMENTS: spectra (NIST) and words', () => {
     expect(wavelengthRGB(800)).toEqual([0, 0, 0]);
   });
 });
+
+describe('ELEMENTS: trends, records, orbital boxes, find', async () => {
+  const { stateAt, records, boxRows, ramp, domain, position, NUM_PROPS, yearOf } = await import('../src/elements/trends');
+  const { findElement } = await import('../src/elements/screen');
+  const DATA = ELEMENTS as unknown as Parameters<typeof records>[1];
+  const bySym = (s: string) => DATA.find((e) => e.sym === s)!;
+
+  it('at room temperature two elements are liquid (bromine, mercury) and eleven are gases', () => {
+    const at = (state: string) => DATA.filter((e) => stateAt(e, 298) === state).map((e) => e.sym).sort();
+    expect(at('liquid')).toEqual(['Br', 'Hg']);
+    expect(at('gas')).toEqual(['Ar', 'Cl', 'F', 'H', 'He', 'Kr', 'N', 'Ne', 'O', 'Rn', 'Xe']);
+  });
+
+  it('states follow the melting and boiling points, and say unknown without them', () => {
+    expect(stateAt({ melt: 100, boil: 200 }, 50)).toBe('solid');
+    expect(stateAt({ melt: 100, boil: 200 }, 150)).toBe('liquid');
+    expect(stateAt({ melt: 100, boil: 200 }, 250)).toBe('gas');
+    expect(stateAt({ melt: null, boil: null }, 250)).toBe('unknown');
+    expect(stateAt({ melt: 100, boil: null }, 150)).toBe('unknown');
+  });
+
+  it('records come from the data: fluorine the most electronegative, helium the highest ionization energy', () => {
+    expect(records(bySym('F'), DATA).join(' ')).toMatch(/most electronegative of any element/);
+    expect(records(bySym('He'), DATA).join(' ')).toMatch(/highest ionization energy of any element/);
+    expect(records(bySym('H'), DATA).join(' ')).toMatch(/least dense of any element/);
+    // argon has no electronegativity in the data: no record can be claimed for it
+    expect(records(bySym('Ar'), DATA).join(' ')).not.toMatch(/electronegativ/);
+  });
+
+  it("orbital boxes: Hund's rule fills singly first, and iron shows 3d under 4s", () => {
+    const ALLC = ELEMENTS as { sym: string; config: string | null }[];
+    const cfg = (s: string) => ALLC.find((e) => e.sym === s)?.config ?? null;
+    const rowsOf = (s: string) => boxRows(subshells(cfg(s)!, cfg));
+    expect(rowsOf('C')).toEqual([{ label: '2s', boxes: [2] }, { label: '2p', boxes: [1, 1, 0] }]);
+    expect(rowsOf('O')).toEqual([{ label: '2s', boxes: [2] }, { label: '2p', boxes: [2, 1, 1] }]);
+    expect(rowsOf('Fe')).toEqual([{ label: '4s', boxes: [2] }, { label: '3d', boxes: [2, 1, 1, 1, 1] }]);
+  });
+
+  it('the colour ramp runs dark to light, and density sits on a log scale', () => {
+    const lum = (hex: string) => parseInt(hex.slice(1, 3), 16) + parseInt(hex.slice(3, 5), 16) + parseInt(hex.slice(5, 7), 16);
+    expect(lum(ramp(0))).toBeLessThan(lum(ramp(1)));
+    const dens = NUM_PROPS.find((p) => p.key === 'density')!;
+    const d = domain(DATA, dens);
+    // water-ish density lands far from either end on a log scale
+    const t = position(1, d, true);
+    expect(t).toBeGreaterThan(0.3);
+    expect(t).toBeLessThan(0.9);
+  });
+
+  it('ancient elements count as known before any year', () => {
+    expect(yearOf({ year: 'Ancient' })).toBe(-Infinity);
+    expect(yearOf({ year: '1894' })).toBe(1894);
+    expect(yearOf({ year: null })).toBeNull();
+  });
+
+  it('FIND takes a symbol in any case, a number, or the start of a name', () => {
+    expect(findElement('au')?.name).toBe('Gold');
+    expect(findElement('79')?.sym).toBe('Au');
+    expect(findElement('oxy')?.sym).toBe('O');
+    expect(findElement('Fe')?.sym).toBe('Fe');
+    expect(findElement('zzz')).toBeNull();
+    expect(findElement('200')).toBeNull();
+  });
+
+  it('every element has a name origin', async () => {
+    const { NAMED } = await import('../src/elements/names');
+    for (const e of DATA) expect(NAMED[e.sym], e.sym).toBeTruthy();
+  });
+});
+
+describe('ELEMENTS: no record from a value with a caveat', async () => {
+  const { records } = await import('../src/elements/trends');
+  const DATA = ELEMENTS as unknown as Parameters<typeof records>[1];
+  const bySym = (s: string) => DATA.find((e) => e.sym === s)!;
+
+  it("helium's melting point is under pressure, carbon's is not at normal pressure: neither is a record", () => {
+    expect(records(bySym('He'), DATA).join(' ')).not.toMatch(/melting/);
+    expect(records(bySym('C'), DATA).join(' ')).not.toMatch(/melting/);
+    // with carbon set aside, tungsten has the highest melting point
+    expect(records(bySym('W'), DATA).join(' ')).toMatch(/highest melting point of any element/);
+    // and hydrogen, with helium set aside, the lowest
+    expect(records(bySym('H'), DATA).join(' ')).toMatch(/lowest melting point of any element/);
+  });
+});

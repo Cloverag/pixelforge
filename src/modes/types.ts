@@ -45,6 +45,8 @@ export interface ModeController {
   readonly view3d: 'voxel' | 'scene';
   /** set while this is a challenge: rooms never switch out of one */
   readonly challengeId: string | null;
+  /** deck lamps that do nothing on this screen (and 'sky'): the deck shows them off */
+  readonly deckOff?: readonly string[];
   /** keys this mode answers in game, after the global ones */
   readonly keys: Record<string, () => void>;
   /** solo: give the worker this mode's fresh world */

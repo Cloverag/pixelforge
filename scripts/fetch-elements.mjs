@@ -28,6 +28,13 @@ const elements = Table.Row.map(({ Cell: c }) => ({
   block: c[col.GroupBlock],
   config: c[col.ElectronConfiguration] || null,
   year: c[col.YearDiscovered] || null,
+  // g/cm³ (gases at STP), Pauling, pm (van der Waals), eV, eV, "+4, +2, -4"
+  density: num(c[col.Density]),
+  en: num(c[col.Electronegativity]),
+  radius: num(c[col.AtomicRadius]),
+  ie: num(c[col.IonizationEnergy]),
+  ea: num(c[col.ElectronAffinity]),
+  ox: c[col.OxidationStates] || null,
 }));
 if (elements.length !== 118) throw new Error(`expected 118 elements, got ${elements.length}`);
 
