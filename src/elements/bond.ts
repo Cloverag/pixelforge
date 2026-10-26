@@ -145,6 +145,69 @@ export function pictureOf(kind: BondKind, left: BondElement, right: BondElement,
   return { kind: 'apart' };
 }
 
+/**
+ * A molecule the bond view can draw whole: one atom in the middle (`center`,
+ * the side of the pair it is) with `n` of the other round it. CO2 is a
+ * carbon with two oxygens - drawn as one C and one O, it read as CO.
+ */
+export interface Molecule {
+  center: 0 | 1;
+  n: number;
+  shape: 'linear' | 'bent' | 'trigonal planar' | 'trigonal pyramidal' | 'tetrahedral';
+  /** where each of the n sits from the middle: unit vectors, y up */
+  dirs: [number, number, number][];
+}
+
+const deg = Math.PI / 180;
+
+/** n directions `angle` apart, tilted down from straight up (three's y) */
+function cone(n: number, angle: number): [number, number, number][] {
+  // the angle from the axis that puts n bonds `angle` apart: cos(angle) =
+  // cos²φ + sin²φ cos(360°/n), solved for φ
+  const c = Math.cos((2 * Math.PI) / n);
+  const phi = Math.acos(Math.sqrt((Math.cos(angle * deg) - c) / (1 - c)));
+  return Array.from({ length: n }, (_, k) => {
+    const a = (k / n) * 2 * Math.PI + Math.PI / 2;
+    return [Math.sin(phi) * Math.cos(a), -Math.cos(phi), Math.sin(phi) * Math.sin(a)];
+  });
+}
+
+/**
+ * The molecule (left, right) make in compound `c`, if one of them is alone
+ * in its formula and the other is 2 to 4: CO2, H2O, NH3, CH4, MgCl2. Its
+ * shape is the valence-shell rule (VSEPR): the bonds and the middle atom's
+ * lone pairs spread as far apart as they can, the lone pairs pressing the
+ * bonds closer (water's 104.5°). `valence`: the outer electrons of (left,
+ * right). Anything else - NaCl, Fe2O3, PCl5 - is null, drawn as one atom of
+ * each.
+ */
+export function moleculeOf(left: BondElement, right: BondElement, c: Compound | null, pic: BondPicture, valence: [number, number]): Molecule | null {
+  if (!c || (pic.kind !== 'ionic' && pic.kind !== 'covalent')) return null;
+  const k = atomsIn(c.f);
+  const counts = [k[left.sym] ?? 0, k[right.sym] ?? 0];
+  const center: 0 | 1 = counts[0] === 1 ? 0 : 1;
+  const n = counts[1 - center];
+  if (counts[center] !== 1 || n < 2) return null;
+  // ions keep apart evenly; a covalent middle atom's unshared electrons
+  // take room too
+  const used = pic.kind === 'covalent' ? n * pic.order : 0;
+  const lone = pic.kind === 'covalent' ? Math.max(0, Math.floor((valence[center] - used) / 2)) : 0;
+  const steric = n + lone;
+  const flat = (a: number): [number, number, number][] => [
+    [Math.sin(a / 2), -Math.cos(a / 2), 0],
+    [-Math.sin(a / 2), -Math.cos(a / 2), 0],
+  ];
+  if (n === 2 && steric === 2) return { center, n, shape: 'linear', dirs: [[-1, 0, 0], [1, 0, 0]] };
+  if (n === 2 && steric === 3) return { center, n, shape: 'bent', dirs: flat(119 * deg) };
+  if (n === 2 && steric === 4) return { center, n, shape: 'bent', dirs: flat(104.5 * deg) };
+  // flat, and facing the viewer: lying level it would be seen edge on
+  if (n === 3 && steric === 3) return { center, n, shape: 'trigonal planar', dirs: [[0, 1, 0], [-Math.sqrt(3) / 2, -0.5, 0], [Math.sqrt(3) / 2, -0.5, 0]] };
+  if (n === 3 && steric === 4) return { center, n, shape: 'trigonal pyramidal', dirs: cone(3, 107) };
+  if (n === 4 && steric === 4) return { center, n, shape: 'tetrahedral', dirs: cone(3, 109.47).concat([[0, 1, 0]]) };
+  // five or more ways round (PCl5, SF4 with its lone pair): no shape to claim
+  return null;
+}
+
 /** formal charges on both atoms of a bonded structure (C⁻≡O⁺): no δ+/δ− is claimed */
 const formalCharges = (c: Compound | null): c is Compound => !!c && c.o > 0 && c.q[0] !== 0 && c.q[1] !== 0;
 
@@ -183,7 +246,7 @@ const BOND_WORD = ['', 'single', 'double', 'triple'];
  * The panel's account of the bond: which way the electrons go and why, in
  * a sentence or two, from the numbers alone.
  */
-export function explain(kind: BondKind, left: BondElement, right: BondElement, c: Compound | null): string {
+export function explain(kind: BondKind, left: BondElement, right: BondElement, c: Compound | null, whole = false): string {
   const same = left.z === right.z;
   const chi = (e: BondElement) => `(χ ${e.en})`;
   switch (kind) {
@@ -209,7 +272,8 @@ export function explain(kind: BondKind, left: BondElement, right: BondElement, c
       if (c) {
         const n = atomsIn(c.f);
         if (n[left.sym] !== 1 || n[right.sym] !== 1) {
-          s += ` In ${subscript(c.f)}, ${n[left.sym]} ${left.sym} give ${n[left.sym] * q[0]} ${electrons(n[left.sym] * q[0])} to ${n[right.sym]} ${right.sym}; the picture shows one atom of each, ${give} ${electrons(give)} crossing.`;
+          s += ` In ${subscript(c.f)}, ${n[left.sym]} ${left.sym} give ${n[left.sym] * q[0]} ${electrons(n[left.sym] * q[0])} to ${n[right.sym]} ${right.sym}`;
+          s += whole ? '.' : `; the picture shows one atom of each, ${give} ${electrons(give)} crossing.`;
         }
       }
       return s;

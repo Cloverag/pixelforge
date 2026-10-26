@@ -27,6 +27,7 @@ import {
   IONIC_DX,
   KIND_LABEL,
   KIND_TINT,
+  moleculeOf,
   ordered,
   pairKey,
   pictureOf,
@@ -34,6 +35,7 @@ import {
   subscript,
   tagsOf,
   type Compound,
+  type Molecule,
 } from './bond';
 import { FACTS } from './facts';
 import { clampLeft, clampTable, clampTall, loadSizes, PORTRAIT, saveSizes, splitter, type Sizes } from './layout';
@@ -154,6 +156,15 @@ function subsOf(e: ElementData) {
 }
 
 /** What the 3D atom draws for an element, and what its caption needs. */
+/** the molecule (left, right) make in `c`, drawn whole, or null for one atom of each */
+function moleculeFor(kind: ReturnType<typeof bondKind>, left: ElementData, right: ElementData, c: Compound | null): Molecule | null {
+  const outer = (e: ElementData) => {
+    const sh = atomOf(e).shells;
+    return sh[sh.length - 1];
+  };
+  return moleculeOf(left, right, c, pictureOf(kind, left, right, c), [outer(left), outer(right)]);
+}
+
 export function atomOf(e: ElementData) {
   const subs = subsOf(e);
   const shells = shellCounts(subs);
@@ -578,9 +589,10 @@ export class ElementsScreen {
     const c = list[this.pick] ?? null;
     const kind = bondKind(a, b);
     const pic = pictureOf(kind, left, right, c);
+    const mol = moleculeFor(kind, left, right, c);
     this.markCells();
     this.root.style.setProperty('--el-tint', tintOf(a));
-    this.atom.showPair(atomOf(left).spec, atomOf(right).spec, pic, tagsOf(kind, left, right, c, pic));
+    this.atom.showPair(atomOf(left).spec, atomOf(right).spec, pic, tagsOf(kind, left, right, c, pic), mol);
     const dx = deltaChi(a, b);
     this.head.replaceChildren(
       h('div', 'el-z', '● BOND'),
@@ -589,7 +601,13 @@ export class ElementsScreen {
       h('div', 'el-kind', KIND_LABEL[kind] + (dx !== null && kind !== 'metallic' && kind !== 'none' ? ` · Δχ ${dx.toFixed(2)}` : '')),
     );
     const notPaths = 'rings count electrons, not paths';
-    if (pic.kind === 'ionic') {
+    const [mid, round] = mol ? (mol.center === 0 ? [left, right] : [right, left]) : [left, right];
+    if (mol && pic.kind === 'ionic') {
+      const q = ionCharges(left, right, c)!;
+      this.caption.textContent = `${mid.sym} in the middle, ${mol.n} ${round.sym} round it · ${pic.moves} e⁻ ${pic.moves === 1 ? 'crosses' : 'cross'} from ${left.sym} to ${right.sym} in each pair: ${left.sym}${chargeMark(q[0])} and ${right.sym}${chargeMark(q[1])} · ${notPaths}`;
+    } else if (mol && pic.kind === 'covalent') {
+      this.caption.textContent = `${mol.shape}: ${mol.n} bonds from the ${mid.sym}, ${pic.order} shared ${pic.order === 1 ? 'pair' : 'pairs'} in each, one electron from each atom per pair · ${notPaths}`;
+    } else if (pic.kind === 'ionic') {
       const q = ionCharges(left, right, c)!;
       this.caption.textContent = `one atom of each · ${pic.moves} e⁻ cross from ${left.sym} to ${right.sym}: ${left.sym}${chargeMark(q[0])} and ${right.sym}${chargeMark(q[1])} · ${notPaths}`;
     } else if (pic.kind === 'covalent') {
@@ -601,7 +619,7 @@ export class ElementsScreen {
     }
     if (this.view === 'list') this.showList();
     else if (this.view === 'reaction' && this.reaction) this.showReaction(this.reaction);
-    else this.showBondPanel(kind, left, right, list, c);
+    else this.showBondPanel(kind, left, right, list, c, mol !== null);
     this.showReadout();
   }
 
@@ -710,7 +728,13 @@ export class ElementsScreen {
     };
     parts.push(
       section('IN 3D', ''),
-      h('p', 'el-drawn', `The view plays the ${a.sym}–${b.sym} bond${c && r.show[2] ? ` of ${subscript(c.f)}, ${c.name}` : ''}.`),
+      h(
+        'p',
+        'el-drawn',
+        c && r.show[2] && moleculeFor(bondKind(a, b), ...ordered(a, b), c)
+          ? `The view plays ${subscript(c.f)}, ${c.name}, whole.`
+          : `The view plays the ${a.sym}–${b.sym} bond${c && r.show[2] ? ` of ${subscript(c.f)}, ${c.name}` : ''}.`,
+      ),
       bond,
     );
     this.panel.replaceChildren(...parts);
@@ -731,13 +755,14 @@ export class ElementsScreen {
     tick();
   }
 
-  private showBondPanel(kind: ReturnType<typeof bondKind>, left: ElementData, right: ElementData, list: Compound[], c: Compound | null): void {
+  /** `whole`: the view draws the compound's whole molecule, not one atom of each */
+  private showBondPanel(kind: ReturnType<typeof bondKind>, left: ElementData, right: ElementData, list: Compound[], c: Compound | null, whole: boolean): void {
     const dx = deltaChi(left, right);
     const badge = h('div', 'el-kindbadge');
     badge.style.setProperty('--k', KIND_TINT[kind]);
     badge.append(h('span', 'el-kindbadge-k', KIND_LABEL[kind]));
     if (dx !== null && kind !== 'metallic' && kind !== 'none') badge.append(h('span', 'el-kindbadge-dx', `Δχ ${dx.toFixed(2)}`));
-    const why = h('p', 'el-why', explain(kind, left, right, c));
+    const why = h('p', 'el-why', explain(kind, left, right, c, whole));
     const replay = h('button', 'el-replay', '▶ PLAY AGAIN') as HTMLButtonElement;
     replay.type = 'button';
     replay.onclick = () => this.replay();

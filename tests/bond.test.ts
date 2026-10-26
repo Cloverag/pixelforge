@@ -8,6 +8,7 @@ import {
   defaultPartner,
   explain,
   ionCharges,
+  moleculeOf,
   ordered,
   pairKey,
   pictureOf,
@@ -188,5 +189,78 @@ describe('BOND: the labels over the atoms', async () => {
   it('metallic: an electron sea; no bond: no label between', () => {
     expect(tagsOf('metallic', el('Fe'), el('Cu'), null, { kind: 'metallic' }).mid?.text).toBe('electron sea');
     expect(tagsOf('none', el('Ne'), el('F'), null, { kind: 'apart' }).mid).toBeNull();
+  });
+});
+
+describe('BOND: a small molecule drawn whole', () => {
+  const pic = (a: string, b: string, f: string) => {
+    const [l, r] = ordered(el(a), el(b));
+    const c = find(a, b, f)!;
+    return { l, r, c, p: pictureOf(bondKind(l, r), l, r, c) };
+  };
+  // the outer electrons, as the 3D view's shells give them
+  const VALENCE: Record<string, number> = { H: 1, B: 3, C: 4, N: 5, O: 6, F: 7, Mg: 2, S: 6, Cl: 7, P: 5 };
+  const mol = (a: string, b: string, f: string) => {
+    const { l, r, c, p } = pic(a, b, f);
+    return moleculeOf(l, r, c, p, [VALENCE[l.sym], VALENCE[r.sym]]);
+  };
+  const angle = (u: number[], v: number[]) => (Math.acos(u[0] * v[0] + u[1] * v[1] + u[2] * v[2]) * 180) / Math.PI;
+  const angles = (dirs: number[][]) => dirs.flatMap((u, i) => dirs.slice(i + 1).map((v) => angle(u, v)));
+
+  it('carbon dioxide is one carbon between two oxygens, in a straight line', () => {
+    const m = mol('C', 'O', 'CO2')!;
+    expect(m.center).toBe(0); // carbon, the left of the pair
+    expect(m.n).toBe(2);
+    expect(m.shape).toBe('linear');
+    expect(angles(m.dirs)[0]).toBeCloseTo(180, 5);
+  });
+
+  it("water is bent by oxygen's two lone pairs; ammonia a pyramid; methane a tetrahedron", () => {
+    const water = mol('H', 'O', 'H2O')!;
+    expect(water.center).toBe(1); // oxygen, the right of the pair
+    expect(water.shape).toBe('bent');
+    expect(angles(water.dirs)[0]).toBeCloseTo(104.5, 5);
+    const ammonia = mol('N', 'H', 'NH3')!;
+    expect(ammonia.shape).toBe('trigonal pyramidal');
+    for (const a of angles(ammonia.dirs)) expect(a).toBeCloseTo(107, 5);
+    const methane = mol('C', 'H', 'CH4')!;
+    expect(methane.shape).toBe('tetrahedral');
+    expect(angles(methane.dirs)).toHaveLength(6);
+    for (const a of angles(methane.dirs)) expect(a).toBeCloseTo(109.47, 1);
+  });
+
+  it('no lone pair, flat: boron trifluoride and sulfur trioxide; one lone pair bends sulfur dioxide', () => {
+    for (const [a, b, f] of [['B', 'F', 'BF3'], ['S', 'O', 'SO3']]) {
+      const m = mol(a, b, f)!;
+      expect(m.shape).toBe('trigonal planar');
+      for (const x of angles(m.dirs)) expect(x).toBeCloseTo(120, 5);
+    }
+    const so2 = mol('S', 'O', 'SO2')!;
+    expect(so2.shape).toBe('bent');
+    expect(angles(so2.dirs)[0]).toBeCloseTo(119, 5);
+  });
+
+  it('ions round one ion: magnesium chloride is a magnesium between two chlorides', () => {
+    const m = mol('Mg', 'Cl', 'MgCl2')!;
+    expect(m.center).toBe(0);
+    expect(m.n).toBe(2);
+    expect(m.shape).toBe('linear');
+  });
+
+  it('one of each, or no single middle atom: drawn as one atom of each', () => {
+    expect(mol('Na', 'Cl', 'NaCl')).toBeNull();
+    expect(mol('C', 'O', 'CO')).toBeNull();
+    // five round one: more room than four ways round
+    expect(mol('P', 'Cl', 'PCl5')).toBeNull();
+    const alumina: Compound = { f: 'Al2O3', name: 'Aluminum Oxide', cid: 9989226, o: 0, q: [3, -2] };
+    expect(moleculeOf(el('Al'), el('O'), alumina, pictureOf('ionic', el('Al'), el('O'), alumina), [3, 6])).toBeNull();
+  });
+
+  it('the account of an ionic bond stops saying the picture shows one atom of each once it shows the whole', () => {
+    const { l, r, c } = pic('Mg', 'Cl', 'MgCl2');
+    expect(explain('ionic', l, r, c)).toMatch(/the picture shows one atom of each/);
+    const whole = explain('ionic', l, r, c, true);
+    expect(whole).toMatch(/In MgCl₂, 1 Mg give 2 electrons to 2 Cl\.$/);
+    expect(whole).not.toMatch(/the picture shows/);
   });
 });

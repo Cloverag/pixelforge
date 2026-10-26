@@ -431,15 +431,24 @@ it; the electrons in play glow warm):
 
 - **Ionic** (Δχ 1.7 or more): electrons arc from the left atom's outer shell
   into the right one's. Sodium's lone 3s electron goes over, its M shell goes
-  dark and chlorine's fills to 8: Na⁺ and Cl⁻. The picture is one atom of
-  each; the panel does the whole formula ("In Al₂O₃, 2 Al give 6 electrons to
-  3 O").
+  dark and chlorine's fills to 8: Na⁺ and Cl⁻. Where the formula has no
+  single middle atom the picture is one atom of each, and the panel does the
+  whole formula ("In Al₂O₃, 2 Al give 6 electrons to 3 O").
 - **Covalent** (polar from 0.4, else nonpolar): one electron from each atom
   per shared pair, circling between them, as many pairs as the bond order in
   PubChem's structure (C≡O three, O=C=O two, C–H one).
 - **Metallic** (two metals): every outer electron leaves its shell and roams
   over both atoms.
 - **None**: a noble gas, with only oxidation state 0 in PubChem's list.
+
+A compound with one atom in the middle and two to four of the other round
+it is drawn whole: CO₂ is a carbon between two oxygens, not one of each
+(which read as CO). Its shape is the valence-shell rule (VSEPR): the bonds
+and the middle atom's lone pairs spread as far apart as they can, so CO₂ and
+MgCl₂ are straight, water bent (104.5°, two lone pairs on the O), BF₃ and SO₃
+flat triangles, SO₂ bent, NH₃ a pyramid, CH₄ a tetrahedron. Every bond plays
+in turn, and the caption names the shape. Five or more round one (PCl₅) has
+no shape here and stays one atom of each.
 
 The kind comes from the electronegativity gap, and the panel says it is a
 rule of thumb, with Δχ marked on a nonpolar / polar / ionic bar. Where
@@ -693,8 +702,8 @@ src/
     view.ts                the garden's own canvas over the world's; the title preview
   elements/
     atom.ts                configurations -> shells, last subshell, orbitals (real harmonics), wavelength colour (pure)
-    atom3d.ts              the atom in three.js: nucleus, shells, orbital lobes, bloom; two atoms and their bond
-    bond.ts                BOND: kind by Δχ, charges, what the picture plays, its labels, the explanation (pure)
+    atom3d.ts              the atom in three.js: nucleus, shells, orbital lobes, bloom; two atoms and their bond, or a small molecule
+    bond.ts                BOND: kind by Δχ, charges, what the picture plays, a molecule's shape, its labels, the explanation (pure)
     reactions.ts           REACTIONS: famous and formation equations, balancing, steps, search, what comes next (pure)
     layout.ts              resizable panes: splitters, their limits, each device's sizes
     screen.ts              the screen: header, panel, spectrum strip, clickable table
