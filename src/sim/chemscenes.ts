@@ -36,21 +36,15 @@ function tank(g: Grid, x0: number, y0: number, x1: number, y1: number): void {
 }
 
 /**
- * A conical (Erlenmeyer) flask on the floor: walls 2 cells thick sloping in
- * to a neck `nw` across, the neck rising to `top`. `fill` from row `level`
- * down.
+ * A graduated cylinder on a wide foot: a glass tube `hw` cells either side of
+ * `cx` (walls 2 thick) from `top` down, filled with `fill` from row `level`,
+ * marked every 20 rows.
  */
-function conical(g: Grid, cx: number, top: number, neckY: number, base: number, nw: number, fill: number, level: number): void {
-  rect(g, cx - base - 1, FLOOR - 1, cx + base + 1, FLOOR, Mat.GLASS);
-  for (let y = top; y < FLOOR - 1; y++) {
-    const t = y < neckY ? 0 : (y - neckY) / (FLOOR - 1 - neckY);
-    const hw = Math.round(nw + (base - nw) * t);
-    put(g, cx - hw - 1, y, Mat.GLASS);
-    put(g, cx - hw, y, Mat.GLASS);
-    put(g, cx + hw, y, Mat.GLASS);
-    put(g, cx + hw + 1, y, Mat.GLASS);
-    if (y >= level) for (let x = cx - hw + 1; x < cx + hw; x++) put(g, x, y, fill);
-  }
+function cylinder(g: Grid, cx: number, top: number, hw: number, fill: number, level: number): void {
+  rect(g, cx - hw - 16, FLOOR - 2, cx + hw + 16, FLOOR, Mat.GLASS);
+  tank(g, cx - hw - 1, top, cx + hw + 1, FLOOR - 2);
+  for (let y = FLOOR - 22; y > top + 10; y -= 20) rect(g, cx - hw - 4, y, cx - hw - 2, y, Mat.GLASS);
+  rect(g, cx - hw + 1, level, cx + hw - 1, FLOOR - 4, fill);
 }
 
 /** A round-bottomed flask: a glass ball of radius r with a neck to `top`, filled with `fill` from row `level`. */
@@ -143,11 +137,14 @@ export const CHEM_SCENES: ChemScene[] = [
   {
     id: 'toothpaste',
     label: 'ELEPHANT TOOTHPASTE',
-    tip: 'Iodide dropped into a flask of strong peroxide: it splits into oxygen, and the foam pours out of the neck',
+    tip: 'Iodide dropped into a cylinder of strong peroxide: it splits into oxygen, and a column of foam shoots out of the top',
     build(g) {
-      conical(g, 320, 150, 210, 96, 12, Mat.PEROXIDE, 250);
-      // the iodide, a spoonful just dropped into the neck
-      rect(g, 312, 156, 328, 166, Mat.IODIDE);
+      // a tall narrow cylinder, as the demonstration is done: it fills in
+      // a moment and the foam leaves it as a column (a wide flask took
+      // seven seconds to fill, then oozed)
+      cylinder(g, 320, 150, 15, Mat.PEROXIDE, 230);
+      // the iodide, a spoonful just dropped in
+      rect(g, 312, 214, 328, 222, Mat.IODIDE);
     },
   },
   {

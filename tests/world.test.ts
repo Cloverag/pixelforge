@@ -28,6 +28,20 @@ describe('falling sand world', () => {
     expect(w.grid.counts[Mat.SAND]).toBe(30);
   });
 
+  it('a pile does not lean: a sand column slumps as much to the left as to the right', () => {
+    // chunks ran left to right every frame, so a grain sliding right found
+    // the chunk beside it not yet stepped - every heap leaned right, a third
+    // more sand on that side (1161 against 1999 cells)
+    const w = new World(5);
+    for (let x = 0; x < SIM_W; x++) w.grid.setXY(x, SIM_H - 1, Mat.STONE);
+    for (let y = 200; y < SIM_H - 1; y++) for (let x = 310; x < 330; x++) w.grid.setXY(x, y, Mat.SAND);
+    stepN(w, 600);
+    let left = 0;
+    let right = 0;
+    for (let i = 0; i < w.grid.cells.length; i++) if (w.grid.cells[i] === Mat.SAND) (i % SIM_W < 320 ? left++ : right++);
+    expect(Math.abs(left - right)).toBeLessThan((left + right) * 0.05);
+  });
+
   it('sand sinks through water and rests on the pool floor', () => {
     const w = new World(99);
     for (let y = 20; y < 40; y++)
@@ -348,14 +362,17 @@ describe('water flow', () => {
   it('a dropped block settles level and then stops moving', () => {
     const w = basin(7);
     for (let x = 110; x < 150; x++) for (let y = 200; y < 290; y++) w.grid.setXY(x, y, Mat.WATER);
-    stepN(w, 2600);
+    // level by 3200 frames (range 1 from frame ~3200 on seeds 7-9). It was
+    // 2600 while chunks always ran left to right: water then ran right at
+    // up to three times its speed left, and this pool levelled that way
+    stepN(w, 3400);
     expect(surfaceRange(w, 104, 300)).toBeLessThanOrEqual(1);
     const prev = new Uint8Array(w.grid.cells);
     stepN(w, 60);
     let moved = 0;
     for (let i = 0; i < prev.length; i++) if (prev[i] !== w.grid.cells[i]) moved++;
     expect(moved).toBe(0);
-  }, 30_000); // thousands of frames by design; 4 s alone, 8 s on a busy machine
+  }, 40_000); // thousands of frames by design; 5 s alone, 10 s on a busy machine
 
   it('resting water still pours out when its wall is removed', () => {
     const w = basin(8);
@@ -420,18 +437,21 @@ describe('water momentum', () => {
   it('the current carries floating ash along', () => {
     const w = new World(34);
     for (let x = 40; x <= 320; x++) w.grid.setXY(x, 200, Mat.STONE); // trough floor, drop past 320
-    for (let y = 180; y < 200; y++) w.grid.setXY(40, y, Mat.STONE);
-    for (let x = 41; x < 160; x++) for (let y = 195; y < 200; y++) w.grid.setXY(x, y, Mat.WATER);
+    // 25 deep: a 5-deep sheet only ran off fast while chunks always ran
+    // left to right (water ran right at up to three times its speed left);
+    // run fairly both ways, it barely flows and there is no current to test
+    for (let y = 160; y < 200; y++) w.grid.setXY(40, y, Mat.STONE);
+    for (let x = 41; x < 160; x++) for (let y = 175; y < 200; y++) w.grid.setXY(x, y, Mat.WATER);
     const ashX0: number[] = [];
-    for (let x = 50; x < 150; x += 4) { w.grid.setXY(x, 194, Mat.ASH); ashX0.push(x); }
-    stepN(w, 400);
+    for (let x = 50; x < 150; x += 4) { w.grid.setXY(x, 174, Mat.ASH); ashX0.push(x); }
+    stepN(w, 600);
     let sum = 0, n = 0;
     for (let i = 0; i < w.grid.cells.length; i++)
       if (w.grid.cells[i] === Mat.ASH) { sum += i % SIM_W; n++; }
     const mean0 = ashX0.reduce((a, b) => a + b, 0) / ashX0.length;
     expect(n).toBeGreaterThan(0);
-    // measured: ~28 cells of drift with the current carrying, ~0.4 without
-    expect(sum / n - mean0).toBeGreaterThan(12);
+    // measured: ~14 cells of drift with the current carrying, ~3 without
+    expect(sum / n - mean0).toBeGreaterThan(8);
   });
 });
 

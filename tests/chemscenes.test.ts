@@ -66,16 +66,51 @@ describe('chem lab experiments', { timeout: 120_000 }, () => {
     expect(scene('flames').grid.counts[Mat.TORCH]).toBe(7 * 2 * 57);
   });
 
-  it('ELEPHANT TOOTHPASTE: the foam pours out of the flask, and the iodide is never used up', () => {
+  /** Foam in rows [y0, y1) of a world: the topmost row, and how wide each row's foam runs. */
+  function foamRows(w: World, y0 = 0, y1 = 360): { top: number; width: (y: number) => number } {
+    const width = (y: number) => {
+      let a = 640, b = -1;
+      for (let x = 0; x < 640; x++) if (w.grid.cells[y * 640 + x] === Mat.FOAM) (a = Math.min(a, x)), (b = Math.max(b, x));
+      return b < 0 ? 0 : b - a + 1;
+    };
+    let top = 360;
+    for (let y = y1 - 1; y >= y0; y--) if (width(y) > 0) top = y;
+    return { top, width };
+  }
+
+  it('ELEPHANT TOOTHPASTE: a column of foam shoots out of the cylinder, round-headed, and the iodide is never used up', () => {
+    // the cylinder is 33 cells across its glass and its rim is row 150
     const w = scene('toothpaste');
     const iodide = w.grid.counts[Mat.IODIDE];
-    for (let f = 0; f < 900; f++) w.step();
-    // outside the flask: above its mouth (row 150) or beside its base (96 cells either side of x 320)
-    let out = 0;
-    for (let y = 0; y < 360; y++)
-      for (let x = 0; x < 640; x++) if (w.grid.cells[y * 640 + x] === Mat.FOAM && (y < 150 || Math.abs(x - 320) > 98)) out++;
-    expect(out).toBeGreaterThan(2000);
+    let out = -1;
+    for (let f = 1; f <= 1500; f++) {
+      w.step();
+      // out in a few seconds (147-184 frames measured): the foam's surface
+      // inside the cylinder took itself for the mouth and pushed at the
+      // mouth's rate instead of growing, and took 312
+      if (out < 0 && foamRows(w, 140, 141).top === 140) out = f;
+      if (f === 250) expect(out, 'out of the cylinder').toBeGreaterThan(0);
+      if (f % 50 || out < 0) continue;
+      const { top, width } = foamRows(w, 0, 145);
+      // a column, not a block: what is out of the cylinder stays about its
+      // width (41 measured; the old eruption was a slab 85 cells wide, and
+      // foam falling a cell a tick hung beside it in a curtain, 46)
+      for (let y = top; y < 145; y++) expect(width(y), `frame ${f} row ${y}`).toBeLessThan(44);
+      // with a head, not a spike and not a flat top: 9-15 cells across three
+      // rows down (pushing every tick, single columns shot up as spikes, 1)
+      if (top < 140) {
+        expect(width(top + 3), `frame ${f} head`).toBeGreaterThan(5);
+        expect(width(top + 3), `frame ${f} head`).toBeLessThan(20);
+      }
+    }
     expect(w.grid.counts[Mat.IODIDE]).toBe(iodide);
+  });
+
+  it('ELEPHANT TOOTHPASTE: what spills spreads into a low, wide mound', () => {
+    const w = scene('toothpaste');
+    for (let f = 0; f < 2400; f++) w.step();
+    // 240-244 cells across the bench measured; slumping like sand, 216
+    expect(foamRows(w).width(355)).toBeGreaterThan(228);
   });
 
   it('ELEPHANT TOOTHPASTE: no iodide, no foam', () => {

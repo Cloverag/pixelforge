@@ -44,11 +44,20 @@ const DEB_G = 0.14;
 const DEB_DRAG = 0.995;
 const DEB_VMAX = 8;
 /** how far past the blast radius loose ground is kicked up, in radii */
-/** FOAM meta: the gas still in a cell (low bits) and the jet bit (still shooting up) */
+/** FOAM meta: the gas still to come out of a cell */
 const FOAM_GAS = 0x7f;
-const FOAM_JET = 0x80;
-/** the chance each cell up a jet carries it on: the column's height, about 1 / (1 - p) cells */
-const FOAM_JET_KEEP = 0.97;
+/**
+ * the chance a tick the flask's mouth pushes, per cell across it, at full
+ * pressure (FOAM_PRESSURE gas in a mouth cell, or more); less gas, fewer
+ * pushes, so it bursts out and then tails off. Pushing every tick, single
+ * columns shot up out of the head as spikes
+ */
+const FOAM_PUSH = 0.3;
+const FOAM_PRESSURE = 16;
+/** how far falling foam drops in a tick, in cells */
+const FOAM_FALL = 6;
+/** a push reaches no further than this up a column, in cells */
+const FOAM_REACH = 160;
 /** how many cells deep silver soaks into glass from where it plated */
 const MIRROR_DEPTH = 3;
 /** how far a neutron flies, in cells */
@@ -525,7 +534,11 @@ export class World {
     this.wind.step(g.chunks);
     g.clock.fill(0); // per-frame updated flags
 
-    g.chunks.beginFrame();
+    // chunks run left to right one frame, right to left the next. Always
+    // left to right, a grain moving right met the next chunk not yet stepped
+    // and went further: sand heaps leaned right (1161 cells left of centre,
+    // 1999 right) and water poured on a floor ran right three times as far
+    g.chunks.beginFrame((this.f & 1) === 1);
     const list = g.chunks.list;
     for (let li = 0; li < list.length; li++) {
       const ci = list[li];
@@ -674,19 +687,25 @@ export class World {
   // ---------- elephant toothpaste ----------
 
   /**
-   * Foam: oxygen caught in soapy water. meta's low 7 bits are the gas still
-   * to come out of a cell; FOAM_JET marks foam still shooting up. A cell
-   * with gas grows into an empty neighbour, sharing what is left with the
-   * new cell; boxed in, it hands its gas to the foam above (or beside) it,
-   * so gas made at the bottom of a flask travels up the column and comes
-   * out of the neck rather than sitting where the iodide is.
+   * Foam: oxygen caught in soapy water. meta is the gas still to come out
+   * of a cell. A cell with gas grows into an empty neighbour, sharing what
+   * is left with the new cell; boxed in, it hands its gas to the foam above
+   * (or beside) it, so gas made at the bottom of a flask travels up the
+   * column and comes out of the neck rather than sitting where the iodide is.
    *
    * Inside the flask (glass past the foam on both sides) it can only grow
-   * up, and what leaves the neck is a jet: it keeps growing straight up for
-   * a while, then loses it and swells sideways and down - the column rises,
-   * flops over and slumps down the glass. Plain open-air foam never grows
-   * up (a heap whose top grew up became a field of spires). Foam floats up
-   * through liquid; spent foam is a light, stiff powder whose surface pops.
+   * up. At the mouth - walled here, open air above - it pushes: the whole
+   * column over it moves up a cell and a new cell comes in under it, so the
+   * foam is squeezed out of the neck like paste from a tube, a moving rope
+   * as wide as the neck, whose head crumbles and pours down its sides.
+   * Pushed foam carries no gas: growing in the open is what made a solid
+   * block of the old eruption.
+   *
+   * Plain open-air foam (iodide dropped in a puddle) grows sideways and
+   * down, never up (a heap whose top grew up became a field of spires).
+   * Foam floats up through liquid; spent foam is a light powder (sticky
+   * foam stacked what fell beside the column into walls, and the column
+   * swelled back into a block) whose surface pops.
    */
   private foam(x: number, y: number, i: number): void {
     const g = this.grid;
@@ -696,16 +715,22 @@ export class World {
     const s = this.rng.chance(0.5) ? 1 : -1;
     if (MATS[g.get(x, y - 1)].cat === Cat.LIQUID && this.tryMoveTo(x, y, x, y - 1, dens)) return;
     if (MATS[g.get(x + s, y - 1)].cat === Cat.LIQUID && this.tryMoveTo(x, y, x + s, y - 1, dens)) return;
-    const jet = g.meta[i] & FOAM_JET;
     const gas = g.meta[i] & FOAM_GAS;
     if (gas > 0) {
       g.chunks.wakeCell(x, y);
-      const up = jet !== 0 || this.foamWalled(x, y);
-      if (
-        up
-          ? this.foamGrow(i, gas, x, y - 1, true) || this.foamGrow(i, gas, x + s, y - 1, true) || this.foamGrow(i, gas, x - s, y - 1, true)
-          : this.foamGrow(i, gas, x + s, y, false) || this.foamGrow(i, gas, x - s, y, false) || this.foamGrow(i, gas, x, y + 1, false) ||
-            this.foamGrow(i, gas, x + s, y + 1, false) || this.foamGrow(i, gas, x - s, y + 1, false)
+      if (this.foamWalled(x, y)) {
+        // the mouth: open air (or the column already out) straight above,
+        // no glass either side of it
+        const above = g.get(x, y - 1);
+        if ((above === Mat.EMPTY || above === Mat.FOAM) && !this.foamInside(x, y - 1)) {
+          // pushed foam carries no gas, so none is handed up to it either
+          if ((this.rng.chance(Math.min(FOAM_PUSH, gas / FOAM_PRESSURE)) && this.foamPush(i, gas, x, y)) || this.foamPass(i, gas, x + s, y) || this.foamPass(i, gas, x - s, y)) return;
+          if (this.rng.chance(0.05)) g.meta[i] = gas - 1;
+          return;
+        } else if (this.foamGrow(i, gas, x, y - 1) || this.foamGrow(i, gas, x + s, y - 1) || this.foamGrow(i, gas, x - s, y - 1)) return;
+      } else if (
+        this.foamGrow(i, gas, x + s, y) || this.foamGrow(i, gas, x - s, y) || this.foamGrow(i, gas, x, y + 1) ||
+        this.foamGrow(i, gas, x + s, y + 1) || this.foamGrow(i, gas, x - s, y + 1)
       )
         return;
       if (this.foamPass(i, gas, x, y - 1) || this.foamPass(i, gas, x + s, y) || this.foamPass(i, gas, x - s, y)) return;
@@ -719,7 +744,20 @@ export class World {
       g.setXY(x, y, Mat.EMPTY);
       return;
     }
+    // falling, it drops up to FOAM_FALL cells a tick: the foam spilling off
+    // the head is the column's whole flow, and falling a cell a tick that
+    // curtain hung down its sides as thick as the column itself - a block
+    if (g.get(x, y + 1) === Mat.EMPTY) {
+      let cy = y;
+      while (cy < y + FOAM_FALL && g.get(x, cy + 1) === Mat.EMPTY) cy++;
+      g.swap(i, g.idx(x, cy));
+      return;
+    }
     this.powder(x, y, Mat.FOAM);
+    // and it slumps lower than sand: off a step it moves two across for one
+    // down, so it spreads into a wide mound. A sand slope stacked tens of
+    // thousands of cells beside the column up to its head - a block again
+    if (g.cells[i] === Mat.FOAM && g.get(x + s, y) === Mat.EMPTY && this.rng.chance(0.5)) this.tryMoveTo(x, y, x + 2 * s, y + 1, dens);
   }
 
   /** Looking left and right past foam (up to 100 cells), is there something solid on both sides - inside a flask - or open air? */
@@ -737,16 +775,48 @@ export class World {
   }
 
   /**
-   * Foam grows into (nx, ny) if it is empty: the new cell takes half the gas
-   * left. Growing up (`jet`), the new cell carries the jet on - most times -
-   * and the cell it came from, now inside the column, lets it go.
+   * Is (x, y) between walls - something solid within 40 cells both ways,
+   * looking across foam and empty space? Inside a flask, above the foam,
+   * is not the mouth: the surface took itself for one and only pushed (at
+   * FOAM_PUSH's rate) where it should grow freely, and filled slowly.
    */
-  private foamGrow(i: number, gas: number, nx: number, ny: number, jet: boolean): boolean {
+  private foamInside(x: number, y: number): boolean {
+    const g = this.grid;
+    const side = (d: number): boolean => {
+      for (let k = 1; k <= 40; k++) {
+        const t = g.get(x + d * k, y);
+        if (t !== Mat.EMPTY && t !== Mat.FOAM) return true;
+      }
+      return false;
+    };
+    return side(-1) && side(1);
+  }
+
+  /** Foam grows into (nx, ny) if it is empty: the new cell takes half the gas left. */
+  private foamGrow(i: number, gas: number, nx: number, ny: number): boolean {
     const g = this.grid;
     if (g.get(nx, ny) !== Mat.EMPTY) return false;
     const child = (gas - 1) >> 1;
-    g.setXY(nx, ny, Mat.FOAM, child | (jet && this.rng.chance(FOAM_JET_KEEP) ? FOAM_JET : 0));
+    g.setXY(nx, ny, Mat.FOAM, child);
     g.meta[i] = gas - 1 - child;
+    return true;
+  }
+
+  /**
+   * The flask's mouth pushes the foam column over (x, y) up a cell and puts
+   * a new cell, gas spent, under it. The column tops out by itself: its top
+   * cells slide off its edges like sand, so the head comes out round and
+   * pours down the column's sides.
+   */
+  private foamPush(i: number, gas: number, x: number, y: number): boolean {
+    const g = this.grid;
+    let top = y - 1;
+    while (g.get(x, top) === Mat.FOAM) if (y - --top > FOAM_REACH) return false;
+    if (g.get(x, top) !== Mat.EMPTY) return false;
+    // the empty cell over the column sinks to the mouth, everything moving up one
+    for (let k = top; k < y - 1; k++) g.swap(g.idx(x, k), g.idx(x, k + 1));
+    g.setXY(x, y - 1, Mat.FOAM);
+    g.meta[i] = gas - 1;
     return true;
   }
 
@@ -755,10 +825,10 @@ export class World {
     const g = this.grid;
     if (g.get(nx, ny) !== Mat.FOAM) return false;
     const j = g.idx(nx, ny);
-    const sum = (g.meta[j] & FOAM_GAS) + gas;
+    const sum = g.meta[j] + gas;
     const took = Math.min(FOAM_GAS, sum);
-    g.meta[j] = (g.meta[j] & FOAM_JET) | took;
-    g.meta[i] = (g.meta[i] & FOAM_JET) | (sum - took);
+    g.meta[j] = took;
+    g.meta[i] = sum - took;
     g.chunks.wakeCell(nx, ny);
     return sum - took !== gas;
   }

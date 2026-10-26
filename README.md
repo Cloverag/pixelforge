@@ -223,13 +223,17 @@ lava, plants, glass and wall.
 - **Experiments**: ALKALI BATH, THERMITE (a magnesium ribbon burns into a
   crucible that melts down and through its floor), FLAME TESTS, CRITICAL MASS,
   REACTOR, ELEPHANT TOOTHPASTE and SILVER MIRROR.
-- **Elephant toothpaste**: iodide dropped into a flask of strong peroxide.
-  Foam cells carry the gas still to come out of them; a cell grows into an
-  empty neighbour, sharing its gas, or hands the gas on to the foam above, so
-  gas made at the bottom travels up the column. Inside the flask foam can only
-  grow up; leaving the neck it shoots up a little, then swells sideways and
-  down - out in the open it never grows up, which is what keeps it a slumping
-  heap and not a field of spires. The iodide is a catalyst: never used up.
+- **Elephant toothpaste**: iodide dropped into a tall cylinder of strong
+  peroxide. Foam cells carry the gas still to come out of them; a cell grows
+  into an empty neighbour, sharing its gas, or hands the gas on to the foam
+  above, so gas made at the bottom travels up the column. Inside the cylinder
+  foam can only grow up. At the mouth it pushes: the whole column above moves
+  up a cell and a new one comes in under it, so the foam is squeezed out like
+  paste from a tube, faster while there is more gas behind it. The column's
+  head crumbles and pours down its sides, and the spent foam slumps lower than
+  sand, into a wide mound around the cylinder. Out in the open (iodide in a
+  puddle) foam never grows up, which keeps it a heap and not a field of
+  spires. The iodide is a catalyst: never used up.
 - **Silver mirror**: sugar dropped into Tollens' reagent (silver in ammonia)
   darkens it as silver forms, the darkening spreads through the liquid, and
   the silver plates the glass it touches - soaking 3 cells into the wall, so

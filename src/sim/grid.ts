@@ -54,15 +54,16 @@ export class ChunkSys {
     this.nxt.set(a);
   }
 
-  beginFrame(): void {
+  beginFrame(rtl = false): void {
     const tmp = this.act;
     this.act = this.nxt;
     this.nxt = tmp;
     this.nxt.fill(0);
     this.list.length = 0;
-    // bottom-up rows, left-to-right within a row
+    // bottom-up rows; within a row left to right, or right to left (`rtl`)
     for (let cy = CHUNKS_Y - 1; cy >= 0; cy--) {
-      for (let cx = 0; cx < CHUNKS_X; cx++) {
+      for (let k = 0; k < CHUNKS_X; k++) {
+        const cx = rtl ? CHUNKS_X - 1 - k : k;
         if (this.act[cy * CHUNKS_X + cx]) this.list.push(cy * CHUNKS_X + cx);
       }
     }
