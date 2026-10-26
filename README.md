@@ -252,6 +252,10 @@ lava, plants, glass and wall.
   Measured: a 90x90 uranium lump loses about half its metal in 50 s and
   bursts, a 30x30 one 2% (plutonium 30x30: 63%), and a boron cage keeps the
   reactor at 1% where a stone one lets it burst.
+  A Geiger counter ticks once for every neutron let out: a lump at rest
+  clicks now and then, and a chain reaction roars. Measured on a 20x20 lump:
+  uranium about 1 click a second, plutonium about 8 (it splits by itself
+  more often, and is nearer critical, so more of those set off others).
 - Real densities keep their order: sodium, potassium and lithium float on
   water, iron and copper sink, and mercury and gold sink under everything else.
 - **Element data** comes from [PubChem](https://pubchem.ncbi.nlm.nih.gov/periodic-table/)

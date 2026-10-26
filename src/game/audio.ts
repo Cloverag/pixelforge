@@ -533,6 +533,16 @@ export class Sfx {
   }
 
   /**
+   * A Geiger counter: one dry tick per neutron, scattered across the frame
+   * so they land at random like real counts. A runaway chain is more than
+   * a counter can tick out: past a handful a frame it becomes a roar.
+   */
+  geiger(n: number): void {
+    if (!this.ac || this.muted) return;
+    for (let k = Math.min(n, 5); k > 0; k--) this.noise(0.006, 7000, 2500, 0.07, 0, 'highpass', Math.random() * 16);
+  }
+
+  /**
    * Ambient fire: random dry clicks, denser the more is burning. Called every
    * frame with the current fire cell count; costs nothing when nothing burns.
    */

@@ -909,6 +909,7 @@ export class World {
    */
   private neutronRay(x: number, y: number, n: number): void {
     const g = this.grid;
+    this.events.clicks += n;
     for (let k = 0; k < n; k++) {
       const a = this.rng.next() * Math.PI * 2;
       const dx = Math.cos(a);
