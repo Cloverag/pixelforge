@@ -144,10 +144,12 @@ export interface SimEvents {
   zaps: number;
   /** TNT cells newly lit */
   fuses: number;
+  /** neutrons let out by uranium and plutonium: a Geiger counter's clicks */
+  clicks: number;
 }
 
 export function emptyEvents(): SimEvents {
-  return { booms: [], ignites: 0, sizzles: 0, zaps: 0, fuses: 0 };
+  return { booms: [], ignites: 0, sizzles: 0, zaps: 0, fuses: 0, clicks: 0 };
 }
 
 export interface Res {

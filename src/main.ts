@@ -341,6 +341,7 @@ function playEvents(ev: SimEvents): void {
   if (ev.fuses) sfx.fuse();
   if (ev.sizzles) sfx.sizzle(ev.sizzles);
   if (ev.zaps) sfx.zap();
+  if (ev.clicks) sfx.geiger(ev.clicks);
   if (ev.ignites) sfx.ignite(ev.ignites);
 }
 

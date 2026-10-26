@@ -73,3 +73,33 @@ describe('nuclear: fission and critical mass', { timeout: 120_000 }, () => {
     expect(pu.grid.counts[Mat.PU]).toBeLessThan(900 * 0.7);
   });
 });
+
+describe('nuclear: the Geiger counter', { timeout: 120_000 }, () => {
+  /** clicks over `frames` steps, and the most in any one step */
+  const listen = (w: World, frames: number) => {
+    let total = 0, most = 0;
+    for (let f = 0; f < frames; f++) {
+      w.step();
+      const n = w.takeEvents().clicks;
+      total += n;
+      most = Math.max(most, n);
+    }
+    return { total, most };
+  };
+
+  it('a lump at rest ticks now and then, plutonium faster than uranium; an empty lab is silent', () => {
+    const empty = new World(3);
+    empty.applyInput({ k: 'mode', m: 'chem' });
+    expect(listen(empty, 600).total).toBe(0);
+    const u = listen(lump(Mat.U, 20), 3000);
+    const pu = listen(lump(Mat.PU, 20), 3000);
+    expect(u.total).toBeGreaterThan(5);
+    expect(pu.total).toBeGreaterThan(u.total * 1.5);
+    // a calm lump is a tick at a time, never a burst
+    expect(u.most).toBeLessThan(6);
+  });
+
+  it('a chain reaction is a roar: dozens of neutrons in one step', () => {
+    expect(listen(scene('critical'), 900).most).toBeGreaterThan(30);
+  });
+});
