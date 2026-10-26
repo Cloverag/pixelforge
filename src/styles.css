@@ -1649,6 +1649,10 @@ body.math-on #screen { opacity: 0; }
 }
 .math-title { font-family: var(--font-display); font-size: 14px; color: var(--gold); margin-bottom: 6px; }
 .math-idea { margin: 0 0 10px; line-height: 1.45; color: #b9b0de; font-family: var(--font-read); font-size: 1.05em; }
+/* the drawing's maths, typeset by KaTeX: a formula card above the code */
+.math-tex { margin: 0 0 12px; padding: 4px 12px; min-height: 3.2em; background: #07060f; border-left: 3px solid var(--gold); border-radius: 6px; color: #fff3c4; overflow-x: auto; overflow-y: hidden; }
+.math-tex .katex-display { margin: 0.5em 0; }
+.math-tex .katex { font-size: 1.5em; }
 .math-lines { margin: 0 0 12px; padding: 8px 0 8px 2.6em; background: #07060f; border-radius: 6px; line-height: 1.55; }
 .math-lines li { white-space: pre; padding-right: 8px; color: #cfc8ef; }
 .math-lines li::marker { color: #5c5480; }

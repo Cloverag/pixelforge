@@ -17,6 +17,8 @@ export interface Surface {
   idea: string;
   params: Param[];
   code(p: Record<string, number>): string[];
+  /** the maths, typeset (KaTeX), with the current values written in */
+  tex(p: Record<string, number>): string;
   /** the code line lit while it builds */
   plotLine: number;
   /** the grid: nu x nv points, row by row along v */
@@ -38,6 +40,9 @@ function heightColour(h: number): V3 {
   return stops[i].map((c, j) => c + (stops[i + 1][j] - c) * k) as V3;
 }
 
+/** a number in front of a bracket: 1 and -1 are not written */
+const coef = (k: number) => (k === 1 ? '' : k === -1 ? '-' : `${k}\\,`);
+
 function grid(nu: number, nv: number, at: (u: number, v: number) => V3): { nu: number; nv: number; pts: V3[] } {
   const pts: V3[] = [];
   for (let j = 0; j < nv; j++) for (let i = 0; i < nu; i++) pts.push(at(i / (nu - 1), j / (nv - 1)));
@@ -54,6 +59,7 @@ const rose: Surface = {
     { key: 'turns', label: 'TURNS', min: 4, max: 30, step: 1, value: 20 },
     { key: 'open', label: 'OPEN', min: 2, max: 16, step: 0.5, value: 8 },
   ],
+  tex: (p) => String.raw`\begin{gathered} \varphi = \frac{\pi}{2}\, e^{-t / (${p.open}\pi)} \\ X = 1 - \frac{1}{2}\left(\frac{5}{4}\left(1 - \frac{(${p.petals}\, t) \bmod 2\pi}{\pi}\right)^2 - \frac{1}{4}\right)^2 \\ r = X \left(x \sin \varphi + y \cos \varphi\right) \\ z = X \left(x \cos \varphi - y \sin \varphi\right) \end{gathered}`,
   code: (p) => [
     'for x in linspace(0, 1, 18):              # across a petal',
     `  for t in linspace(-pi/4, ${p.turns}*pi, 260):  # round and round`,
@@ -89,6 +95,7 @@ const ripple: Surface = {
     { key: 'freq', label: 'FREQUENCY', min: 0.3, max: 3, step: 0.1, value: 1 },
     { key: 'amp', label: 'HEIGHT', min: 1, max: 8, step: 0.5, value: 4 },
   ],
+  tex: (p) => String.raw`z = ${coef(p.amp)} \frac{\sin\left(${coef(p.freq)} r\right)}{${coef(p.freq)} r}, \quad r = \sqrt{x^2 + y^2}`,
   code: (p) => [
     'for x in linspace(-10, 10, 49):     # 49: one point is the middle',
     '  for y in linspace(-10, 10, 49):',
@@ -114,6 +121,7 @@ const saddle: Surface = {
   name: 'SADDLE',
   idea: 'z = k(x^2 - y^2): curving up one way and down the other. The middle is a saddle point - flat, but neither a top nor a bottom.',
   params: [{ key: 'k', label: 'CURVE', min: -2, max: 2, step: 0.1, value: 1 }],
+  tex: (p) => String.raw`z = ${coef(p.k)} \left(x^2 - y^2\right)`,
   code: (p) => [
     'for x in linspace(-1, 1, 36):',
     '  for y in linspace(-1, 1, 36):',
@@ -140,6 +148,7 @@ const waves: Surface = {
     { key: 'a', label: 'A (ALONG X)', min: 0.5, max: 4, step: 0.5, value: 1.5 },
     { key: 'b', label: 'B (ALONG Y)', min: 0.5, max: 4, step: 0.5, value: 1 },
   ],
+  tex: (p) => String.raw`z = \sin\left(${coef(p.a)} x\right) \cos\left(${coef(p.b)} y\right)`,
   code: (p) => [
     'for x in linspace(-pi, pi, 40):',
     '  for y in linspace(-pi, pi, 40):',

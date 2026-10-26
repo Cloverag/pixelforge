@@ -1,5 +1,5 @@
 import { rng } from '../garden/flowers';
-import { compile } from './expr';
+import { compile, toTex } from './expr';
 
 /**
  * MATH LAB's drawings: classic turtle-graphics maths - a parametric heart,
@@ -40,6 +40,8 @@ export interface Drawing {
   params: Param[];
   /** a formula the player types (YOUR CURVE): its label, starting text and ideas to try */
   formula?: { label: string; value: string; examples: string[] };
+  /** the maths, typeset (KaTeX), with the current values written in; null when the formula cannot be read */
+  tex(p: Record<string, number>, formula?: string): string | null;
   /** the program, Python-turtle style, with the current values (and formula) written in */
   code(p: Record<string, number>, formula?: string): string[];
   /** throws, with a message for the player, if the formula cannot be read */
@@ -75,6 +77,7 @@ const heart: Drawing = {
     { key: 'spread', label: 'SPREAD', min: 0, max: 1, step: 0.05, value: 0.5 },
     { key: 'len', label: 'LENGTH', min: 4, max: 30, step: 1, value: 14 },
   ],
+  tex: () => String.raw`\begin{gathered} x = 16 \sin^3 t \\ y = 13 \cos t - 5 \cos 2t - 2 \cos 3t - \cos 4t \end{gathered}`,
   code: (p) => [
     'def heart(t, s):',
     '    x = 16 * sin(t)**3 * s',
@@ -130,6 +133,7 @@ const butterfly: Drawing = {
     { key: 'turns', label: 'TURNS', min: 1, max: 12, step: 1, value: 1 },
     { key: 'len', label: 'LENGTH', min: 2, max: 20, step: 1, value: 8 },
   ],
+  tex: () => String.raw`r = e^{\cos t} - 2 \cos 4t + \sin^5\!\left(\frac{t}{12}\right)`,
   code: (p) => [
     'def butterfly(t, s):',
     '    r = (exp(cos(t)) - 2*cos(4*t) + sin(t/12)**5) * s',
@@ -180,6 +184,7 @@ const rosette: Drawing = {
     { key: 'steps', label: 'STEPS', min: 20, max: 150, step: 5, value: 75 },
     { key: 'twist', label: 'TWIST', min: 0, max: 4, step: 0.1, value: 1.8 },
   ],
+  tex: (p) => String.raw`\begin{gathered} r = 30 + 225\, t^{0.9} \\ \theta = \frac{2\pi i}{${p.arms}} + ${p.twist}\, t^{1.2} - 0.4 \sin \pi t \\ (x, y) = (r \cos \theta,\ r \sin \theta) \end{gathered}`,
   code: (p) => [
     `arms, steps = ${p.arms}, ${p.steps}`,
     'for j in range(steps):',
@@ -216,6 +221,7 @@ const sphere: Drawing = {
     { key: 'lat', label: 'LATITUDES', min: 0, max: 12, step: 1, value: 5 },
     { key: 'tilt', label: 'TILT', min: 0, max: 80, step: 5, value: 20 },
   ],
+  tex: (p) => String.raw`\begin{gathered} w_k = R \cos \frac{\pi k}{${p.rings}} \\ h^2 + w^2 = R^2 \end{gathered}`,
   code: (p) => [
     'R = 180',
     'circle(0, 0, R)                  # the outline',
@@ -264,6 +270,7 @@ const tree: Drawing = {
     { key: 'ratio', label: 'RATIO', min: 0.55, max: 0.85, step: 0.01, value: 0.8 },
     { key: 'min', label: 'SMALLEST', min: 4, max: 30, step: 1, value: 10 },
   ],
+  tex: (p) => String.raw`\begin{gathered} L_0 = ${p.len}, \quad L_{n+1} = ${p.ratio}\, L_n \\ \text{turn } \pm ${p.angle}^\circ \text{ until } L_n < ${p.min} \end{gathered}`,
   code: (p) => [
     'def tree(length):',
     `    if length < ${p.min}:`,
@@ -307,6 +314,7 @@ const sunflower: Drawing = {
     { key: 'angle', label: 'ANGLE', min: 130, max: 145, step: 0.1, value: 137.5 },
     { key: 'size', label: 'SEED SIZE', min: 1, max: 6, step: 0.5, value: 2.5 },
   ],
+  tex: (p) => String.raw`\begin{gathered} \theta_n = n \cdot ${p.angle}^\circ, \quad r_n = 6 \sqrt{n} \\ \text{golden angle} = 360^\circ \left(2 - \varphi\right) \approx 137.5^\circ \end{gathered}`,
   code: (p) => [
     `golden = ${p.angle}          # degrees; 137.5 is the golden angle`,
     `for n in range(${p.n}):`,
@@ -338,6 +346,7 @@ const maurer: Drawing = {
     { key: 'n', label: 'PETALS N', min: 1, max: 12, step: 1, value: 6 },
     { key: 'd', label: 'JUMP D', min: 1, max: 179, step: 1, value: 71 },
   ],
+  tex: (p) => String.raw`r = \sin\left(${p.n}\, \theta\right), \quad \theta_k = k \cdot ${p.d}^\circ`,
   code: (p) => [
     'for k in range(361):',
     `    theta = radians(k * ${p.d})       # jump d degrees`,
@@ -377,6 +386,7 @@ const spiro: Drawing = {
     { key: 'r', label: 'WHEEL R', min: 5, max: 100, step: 1, value: 33 },
     { key: 'd', label: 'PEN D', min: 5, max: 120, step: 1, value: 60 },
   ],
+  tex: (p) => String.raw`\begin{gathered} x = (R - r) \cos t + d \cos\left(\frac{R - r}{r}\, t\right) \\ y = (R - r) \sin t - d \sin\left(\frac{R - r}{r}\, t\right) \\ R = ${p.R},\ r = ${p.r},\ d = ${p.d} \end{gathered}`,
   code: (p) => [
     `R, r, d = ${p.R}, ${p.r}, ${p.d}     # ring, wheel, pen`,
     'turns = r / gcd(R, r)            # when it closes',
@@ -415,6 +425,13 @@ const yours: Drawing = {
     label: 'r(t) =',
     value: '1 + 2cos(5t)',
     examples: ['cos(4t)', '1 + 2cos(5t)', 'sin(t)^2 + 0.6sin(9t)', 'exp(sin t) - 2cos(4t)', 't / 6', '1 - sin(t)', 'cos(7t / 4)'],
+  },
+  tex(_p, f = '') {
+    try {
+      return String.raw`r(t) = ${toTex(f, ['t'])}`;
+    } catch {
+      return null;
+    }
   },
   code: (p, f = '') => [
     'def r(t):',

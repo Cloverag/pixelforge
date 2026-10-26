@@ -6,6 +6,7 @@ import { copyText, shareUrl } from '../game/share';
 import { SURFACES, SurfaceRun, type Surface } from '../mathlab/surface';
 import { PY_EXAMPLES, PYTHON } from '../mathlab/pyexamples';
 import { PyRunner } from '../mathlab/python';
+import { renderTex } from '../mathlab/tex';
 import type { Stroke } from '../mathlab/drawings';
 import type { PointerEvt } from '../core/input';
 import type { PaletteSection, Swatch } from '../ui/hud';
@@ -75,6 +76,8 @@ export class MathMode implements ModeController {
   /** what the player has typed for YOUR CURVE (kept while they look at other drawings) */
   private formula = YOURS.formula!.value;
   private formulaError: HTMLElement | null = null;
+  /** the drawing's maths, typeset */
+  private texEl: HTMLElement | null = null;
   private lines: HTMLElement[] = [];
 
   constructor(private ctx: ModeCtx) {}
@@ -143,10 +146,14 @@ export class MathMode implements ModeController {
     const d = this.drawing;
     p.replaceChildren(h('div', 'math-title', d.name), h('p', 'math-idea', d.idea));
     this.formulaError = null;
+    this.texEl = null;
     if (d === PYTHON) {
       this.pythonPanel(p);
       return;
     }
+    this.texEl = h('div', 'math-tex');
+    p.append(this.texEl);
+    this.showTex();
     if ('formula' in d && d.formula) p.append(this.formulaBox(d.formula));
     const code = h('ol', 'math-lines');
     this.lines = this.codeText().map((t) => {
@@ -347,6 +354,15 @@ export class MathMode implements ModeController {
 
   private showCode(): void {
     this.codeText().forEach((t, i) => (this.lines[i].firstChild!.textContent = t));
+    this.showTex();
+  }
+
+  /** The maths with today's numbers; a formula that cannot be read leaves the last one up (its error says why). */
+  private showTex(): void {
+    const d = this.drawing;
+    if (!this.texEl || d === PYTHON) return;
+    const tex = 'strokes' in d ? d.tex(this.params, this.formula) : 'mesh' in d ? d.tex(this.params) : null;
+    if (tex !== null) renderTex(this.texEl, tex);
   }
 
   private redraw(): void {

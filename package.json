@@ -17,6 +17,7 @@
     "vitest": "^2.1.4"
   },
   "dependencies": {
+    "katex": "0.18.11",
     "three": "^0.185.1",
     "trystero": "0.25.4"
   }

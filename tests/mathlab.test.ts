@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import katex from 'katex';
 import { defaults, DRAWINGS as BASE, MATH_FLOWERS, YOURS } from '../src/mathlab/drawings';
 import { decodeDesign, encodeDesign } from '../src/mathlab/link';
 
@@ -43,6 +44,31 @@ describe('MATH LAB drawings', () => {
         expect(moved, `${d.id}.${q.key}`).not.toBe(text);
       }
     }
+  });
+});
+
+describe('MATH LAB formulas (KaTeX)', () => {
+  const ok = (tex: string | null, what: string) => {
+    expect(tex, what).toBeTypeOf('string');
+    expect(() => katex.renderToString(tex!, { displayMode: true, throwOnError: true }), what).not.toThrow();
+  };
+
+  it('every drawing and 3D graph typesets its maths at any slider setting', () => {
+    for (const d of DRAWINGS) for (const p of settings(d)) ok(d.tex(p, F(d)), d.id);
+    const ends = (s: (typeof SURFACES)[number]) => [Object.fromEntries(s.params.map((q) => [q.key, q.min])), defaults(s), Object.fromEntries(s.params.map((q) => [q.key, q.max]))];
+    for (const s of SURFACES) for (const p of ends(s)) ok(s.tex(p), s.id);
+  });
+
+  it("YOUR CURVE shows the player's own formula, and nothing for one it cannot read", () => {
+    expect(YOURS.tex(defaults(YOURS), 't / 6')).toBe('r(t) = \\frac{t}{6}');
+    expect(YOURS.tex(defaults(YOURS), '1 +')).toBeNull();
+  });
+
+  it('a slider that is in the maths changes the typeset formula', () => {
+    const p = { ...defaults(SURFACES.find((s) => s.id === 'saddle')!) };
+    const saddle = SURFACES.find((s) => s.id === 'saddle')!;
+    expect(saddle.tex({ ...p, k: 1 })).toBe('z =  \\left(x^2 - y^2\\right)');
+    expect(saddle.tex({ ...p, k: -1.5 })).toBe('z = -1.5\\, \\left(x^2 - y^2\\right)');
   });
 });
 
