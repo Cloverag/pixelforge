@@ -294,8 +294,8 @@ describe('chem lab reactions', { timeout: 120_000 }, () => {
     // flames run fire(), not the reaction table
     for (const m of FLAMES) expect([MATS[m].name, CHEM[m]]).toEqual([MATS[m].name, 0]);
     // appended, never renumbered: the ids a room snapshot already holds
-    expect([Mat.FLAME_WHITE, Mat.HE, Mat.HG, Mat.U, Mat.PU, Mat.NEUTRON]).toEqual([65, 66, 75, 76, 77, 78]);
-    expect(NMATS).toBe(79);
+    expect([Mat.FLAME_WHITE, Mat.HE, Mat.HG, Mat.U, Mat.PU, Mat.NEUTRON, Mat.PEROXIDE, Mat.MIRROR]).toEqual([65, 66, 75, 76, 77, 78, 79, 85]);
+    expect(NMATS).toBe(86);
   });
 
   it('keeps the chem materials out of the sandbox rail', () => {

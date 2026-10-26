@@ -37,6 +37,8 @@ const NONMETALS = [Mat.C, Mat.P, Mat.S, Mat.I, Mat.B, Mat.SI];
 const LIQUIDS = [Mat.BR, Mat.HG];
 /** fission: the two fissile metals, neutrons to start them, boron to stop them */
 const NUCLEAR = [Mat.U, Mat.PU, Mat.NEUTRON, Mat.B];
+/** the demonstrations' compounds: peroxide + iodide, Tollens' + glucose */
+const COMPOUNDS = [Mat.PEROXIDE, Mat.IODIDE, Mat.TOLLENS, Mat.GLUCOSE];
 /** the bench: things to react elements with, and to hold them */
 const BENCH = [Mat.WATER, Mat.ACID, Mat.LYE, Mat.RUST, Mat.FIRE, Mat.TORCH, Mat.LAVA, Mat.PLANT, Mat.GLASS, Mat.WALL];
 
@@ -116,6 +118,7 @@ export class ChemMode implements ModeController {
       { label: 'NON-METALS', swatches: NONMETALS.map(swatch), tiles: true },
       { label: 'LIQUIDS', swatches: LIQUIDS.map(swatch), tiles: true },
       { label: 'NUCLEAR', swatches: NUCLEAR.map(swatch), tiles: true },
+      { label: 'COMPOUNDS', swatches: COMPOUNDS.map(swatch) },
       { label: 'BENCH', swatches: BENCH.map(swatch) },
       {
         label: 'TOOLS',
@@ -195,6 +198,10 @@ export class ChemMode implements ModeController {
 
 /** Bench materials whose lab role is not a rule of their own. */
 const CHEM_NOTE: Partial<Record<number, string>> = {
+  [Mat.PEROXIDE]: 'Strong hydrogen peroxide. Iodide (or rust, slowly) splits it into water and oxygen - and the oxygen makes a rush of foam.',
+  [Mat.IODIDE]: 'Potassium iodide: a catalyst. Drop it into peroxide and it splits it into oxygen without ever being used up.',
+  [Mat.TOLLENS]: "Tollens' reagent: silver in ammonia. Add glucose and it turns dark as silver forms, and the silver plates the glass into a mirror.",
+  [Mat.GLUCOSE]: "Sugar. It dissolves into Tollens' reagent and turns its silver into metal.",
   [Mat.U]: 'A neutron splits it into heat and 2 more neutrons. A small lump lets them escape; a big one (critical mass) keeps them - a chain reaction.',
   [Mat.PU]: 'Splits more easily than uranium and gives 3 neutrons: its critical mass is much smaller.',
   [Mat.NEUTRON]: 'Paint them to fire neutrons in every direction. They pass through most things; boron soaks them up.',

@@ -106,6 +106,18 @@ export const RULES: Rule[] = [
   r(M.AL, M.HG, M.OXIDE, KEEP, 0.02, 'amalgam: aluminium crumbles to white oxide'),
   r(M.I, M.FIRE, M.IODINE_GAS, KEEP, 0.2, 'turns straight to violet vapour in a flame'),
   r(M.I, M.LAVA, M.IODINE_GAS, KEEP, 0.3, 'turns straight to violet vapour on lava'),
+  // ---- the bench's demonstrations ----
+  // elephant toothpaste: the iodide is a catalyst, it is never used up
+  r(M.PEROXIDE, M.IODIDE, M.FOAM, KEEP, 0.6, 'iodide splits it into oxygen: a rush of foam', { fx: 'fizz' }),
+  // the iodide dissolves into the mix, so the foam carries it on through the peroxide
+  r(M.PEROXIDE, M.FOAM, M.FOAM, KEEP, 0.04, 'the iodide carried in the foam keeps splitting it'),
+  r(M.PEROXIDE, M.RUST, M.FOAM, KEEP, 0.02, 'rust splits it slowly into foam', { fx: 'fizz' }),
+  // silver mirror: the sugar dissolves, the darkening spreads, silver plates out
+  r(M.GLUCOSE, M.TOLLENS, M.SILVER_SOL, M.SILVER_SOL, 0.2, "turns Tollens' reagent dark as silver forms"),
+  r(M.SILVER_SOL, M.TOLLENS, KEEP, M.SILVER_SOL, 0.12, 'the darkening spreads through the solution'),
+  r(M.SILVER_SOL, M.GLASS, M.WATER, M.MIRROR, 0.08, 'silver plates onto glass: a mirror'),
+  r(M.SILVER_SOL, M.MIRROR, M.WATER, KEEP, 0.01, 'more silver plates onto the mirror'),
+  r(M.SILVER_SOL, M.WATER, M.WATER, KEEP, 0.04, 'clears as the silver settles out'),
   // ---- light ----
   r(M.NE, M.TORCH, M.NEON_GLOW, KEEP, 0.5, 'glows red-orange beside a torch'),
   r(M.NE, M.NEON_GLOW, M.NEON_GLOW, KEEP, 0.25, 'passes the glow along'),
@@ -139,6 +151,8 @@ for (let m = Mat.H; m <= Mat.NEON_GLOW; m++) CHEM[m] = 1;
 for (const m of [Mat.HE, Mat.B, Mat.F, Mat.SI, Mat.BR, Mat.AG, Mat.SN, Mat.CS, Mat.AU, Mat.HG]) CHEM[m] = 1;
 // nuclear: chem lab materials too, though they move by their own code (world.ts fissile/neutron), not the table
 for (const m of [Mat.U, Mat.PU, Mat.NEUTRON]) CHEM[m] = 1;
+// the demonstrations' compounds; FOAM and MIRROR also run their own code (world.ts foam, mirror)
+for (const m of [Mat.PEROXIDE, Mat.IODIDE, Mat.FOAM, Mat.TOLLENS, Mat.GLUCOSE, Mat.SILVER_SOL, Mat.MIRROR]) CHEM[m] = 1;
 
 /** What sets off a 'heat' rule. */
 export const HOT = new Uint8Array(NMATS);

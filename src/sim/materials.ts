@@ -84,6 +84,14 @@ export const Mat = {
   U: 76,
   PU: 77,
   NEUTRON: 78,
+  // ---- CHEM LAB: compounds for the bench's demonstrations ----
+  PEROXIDE: 79,
+  IODIDE: 80,
+  FOAM: 81,
+  TOLLENS: 82,
+  GLUCOSE: 83,
+  SILVER_SOL: 84,
+  MIRROR: 85,
 } as const;
 
 export type MatId = (typeof Mat)[keyof typeof Mat];
@@ -254,6 +262,20 @@ chem(Mat.HG, 'MERCURY', Cat.LIQUID, 13.5, ['#d8dce4', '#c6cad4', '#eceff4', '#b2
 chem(Mat.U, 'URANIUM', Cat.SOLID, 19.1, ['#4a6a3a', '#3e5c30', '#5a7c46', '#334e28'], { acidChance: 0 });
 chem(Mat.PU, 'PLUTONIUM', Cat.SOLID, 19.8, ['#7a6a5a', '#6c5c4c', '#8a7a68', '#5e4e40'], { acidChance: 0 });
 chem(Mat.NEUTRON, 'NEUTRON', Cat.GAS, 0.0001, ['#e6fbff', '#c8f4ff', '#ffffff', '#a8ecff'], { acidChance: 0 });
+
+// Two classroom demonstrations. ELEPHANT TOOTHPASTE: iodide splits strong
+// hydrogen peroxide into water and oxygen, and the oxygen whips soapy water
+// into foam - yellow from a trace of iodine. FOAM's meta is the gas still to
+// come out of it (world.ts foam()); its life is the gas a fresh cell starts
+// with. SILVER MIRROR: sugar turns Tollens' reagent (silver in ammonia) dark
+// as silver forms, and the silver plates onto the glass it touches.
+chem(Mat.PEROXIDE, 'PEROXIDE', Cat.LIQUID, 1.45, ['#d4ecf6', '#c2e0ee', '#e2f4fa', '#b0d4e6'], { disp: 4, acidChance: 0 });
+chem(Mat.IODIDE, 'IODIDE', Cat.POWDER, 3.1, ['#f2efe2', '#e2ddca', '#faf8ee', '#d4cdb4'], { acidChance: 0 });
+chem(Mat.FOAM, 'FOAM', Cat.POWDER, 0.3, ['#f6e3a0', '#eed283', '#fcf0c6', '#e4c36c'], { life: [4, 7], acidChance: 0.02 });
+chem(Mat.TOLLENS, 'TOLLENS', Cat.LIQUID, 1.05, ['#dfe4ea', '#d0d6de', '#eceff3', '#c2c9d2'], { disp: 4, acidChance: 0 });
+chem(Mat.GLUCOSE, 'GLUCOSE', Cat.POWDER, 1.54, ['#fbfaf4', '#eeece2', '#ffffff', '#e0ddd0'], { flam: 0.05, acidChance: 0.02 });
+chem(Mat.SILVER_SOL, 'SILVERING', Cat.LIQUID, 1.08, ['#7a7066', '#6a6058', '#8a8076', '#5c534b'], { disp: 4, acidChance: 0 });
+chem(Mat.MIRROR, 'MIRROR', Cat.SOLID, 100, ['#8d96a2', '#6c7480', '#e6ebf0', '#59606b'], { acidChance: 0 });
 
 /** The coloured flames: each burns exactly like FIRE. */
 export const FLAMES = new Set<number>([

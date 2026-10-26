@@ -176,6 +176,17 @@ vec3 clearWater(vec3 c, ivec2 p, vec2 cf) {
   return c;
 }
 
+// Polished silver (the chem lab's SILVER MIRROR): the sky's colour in it,
+// and a bright band of light sliding across, so it reads as a mirror and
+// not as more glass.
+vec3 mirrorFx(vec3 c, ivec2 p, vec2 cf) {
+  vec3 sky = skyTint((float(p.y) + 0.5) / uSim.y);
+  c = mix(c, sky * 0.9 + 0.1, 0.25);
+  float band = fract((cf.x + cf.y) * 0.012 - uTime * 0.15);
+  c += vec3(0.9) * smoothstep(0.0, 0.04, band) * (1.0 - smoothstep(0.04, 0.12, band));
+  return c;
+}
+
 void main() {
   // Every screen pixel shows its cell's colour exactly: cells are crisp
   // squares at any size. Light (glow, dye) is sampled smoothly on top.
@@ -190,6 +201,7 @@ void main() {
   // light sources stay flat and bright; everything with a body gets shaped
   if (uShade > 0.5 && uCellPx >= 2.0 && info.b > 0.5 && info.g < 0.5) c = cellShade(c, p, id, fract(cf));
   if (info.r > 0.5) c = waterFx(c, p);
+  if (id == ${Mat.MIRROR}) c = mirrorFx(c, p, cf);
 
   if (uSky > 0.5) {
     if (id == 255 && distance(px.rgb, uBgCol) < 0.01) {

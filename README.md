@@ -55,9 +55,9 @@ get their own layout.
 | **PLAY TOGETHER (beta)** | A room for friends: open one, send the link, and everyone builds in the same world - the sandbox or the playground. See [Playing together](#playing-together). |
 | **PARTICLE PLAYGROUND** | Light shows instead of materials: emitters, forces, bumpers that play notes, portals - with a film-look renderer, a full 3D view and sound design. See [The playground](#the-playground). |
 | **ASCII GARDEN** | Flowers, an eye made of words and 3D lilies, drawn as coloured text. Solo only. See [The ASCII garden](#the-ascii-garden). |
-| **MATH LAB** | Watch maths draw itself: a parametric heart, a neon butterfly, a spiral rosette, a globe of ellipses, a recursive tree - and 3D graphs (a rose surface, ripple, saddle, waves) you can turn. The code sits beside the drawing and lights the line drawing now; sliders change its numbers. Solo only. See [The math lab](#the-math-lab). |
+| **MATH LAB** | Watch maths draw itself: a parametric heart, a neon butterfly, a spiral rosette, a globe of ellipses, a recursive tree - and 3D graphs (a rose surface, ripple, saddle, waves) you can turn. The formula, typeset, and the code sit beside the drawing, the code lighting the line drawing now; sliders change its numbers. Solo only. See [The math lab](#the-math-lab). |
 | **ELEMENTS** | The periodic table in 3D: pick any of the 118 and its atom turns in front of you - nucleus, electron shells and the shapes of its outer orbitals - beside its numbers, its visible spectrum and what it is used for. Solo only. See [The elements](#the-elements). |
-| **CHEM LAB** | Pick elements off a periodic table and drop them into water, acid, fire or each other: 32 elements (uranium and plutonium among them: fission and critical mass), 70 reactions, 5 ready-made experiments. See [The chem lab](#the-chem-lab). |
+| **CHEM LAB** | Pick elements off a periodic table and drop them into water, acid, fire or each other: 32 elements (uranium and plutonium among them: fission and critical mass), 78 reactions, 7 ready-made experiments (ELEPHANT TOOTHPASTE and SILVER MIRROR among them). See [The chem lab](#the-chem-lab). |
 | **SURPRISE ME** | A brand-new generated playground scene every click (`R`). |
 | **CHALLENGES** | 7 goal-based puzzles with material budgets, time limits, win/lose checks and a 3-star rating. Levels unlock in order; stars persist in `localStorage`. |
 
@@ -204,10 +204,25 @@ lava, plants, glass and wall.
 | iron + oxygen or water | rusts, slowly |
 | neon + torch | glows red-orange, and passes the glow along |
 | iodine + fire or lava | turns straight to violet vapour, which settles back as crystals |
+| peroxide + iodide (or rust, slowly) | splits into oxygen: foam, and the iodide is never used up |
+| glucose + Tollens' reagent | the liquid turns dark as silver forms; the silver plates the glass into a mirror |
 
 - **Experiments**: ALKALI BATH, THERMITE (a magnesium ribbon burns into a
-  crucible that melts down and through its floor), FLAME TESTS, CRITICAL MASS
-  and REACTOR.
+  crucible that melts down and through its floor), FLAME TESTS, CRITICAL MASS,
+  REACTOR, ELEPHANT TOOTHPASTE and SILVER MIRROR.
+- **Elephant toothpaste**: iodide dropped into a flask of strong peroxide.
+  Foam cells carry the gas still to come out of them; a cell grows into an
+  empty neighbour, sharing its gas, or hands the gas on to the foam above, so
+  gas made at the bottom travels up the column. Inside the flask foam can only
+  grow up; leaving the neck it shoots up a little, then swells sideways and
+  down - out in the open it never grows up, which is what keeps it a slumping
+  heap and not a field of spires. The iodide is a catalyst: never used up.
+- **Silver mirror**: sugar dropped into Tollens' reagent (silver in ammonia)
+  darkens it as silver forms, the darkening spreads through the liquid, and
+  the silver plates the glass it touches - soaking 3 cells into the wall, so
+  the wetted part of the flask turns silver and the dry neck stays glass.
+  The silver has its own look: the sky in it and a highlight sliding across.
+  Erase the liquid to see the mirror.
 - **Nuclear**: uranium and plutonium on the NUCLEAR rail with neutrons and
   boron. A neutron is traced in a straight line the moment it is let out;
   each uranium cell it crosses has a 3% chance to catch it (plutonium 5%),
@@ -292,8 +307,9 @@ code and starts the drawing again.
 | **TREE** | Recursion: a branch is a line with two smaller branches on its end, until they are tiny | TRUNK, ANGLE, RATIO, SMALLEST |
 
 **YOUR CURVE** is a formula box: type `r(t) =` anything - `1 + 2cos(5t)`,
-`exp(sin t) - 2cos(4t)` - and it is drawn as you type. The formula reader
-(`src/mathlab/expr.ts`) parses it into plain operations, never `eval`, and
+`exp(sin t) - 2cos(4t)` - and it is drawn, and typeset with KaTeX, as you
+type. The formula reader (`src/mathlab/expr.ts`) parses it into a tree of
+plain operations, never `eval`, which both runs and prints as TeX, and
 says what is wrong ("missing ')'", "unknown name 'x'") while keeping the last
 good drawing. **MATH FLOWERS** are maths that makes flowers: SUNFLOWER (seeds
 at the golden angle, 137.5 degrees - nudge it and the spiral breaks into

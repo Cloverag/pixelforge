@@ -35,6 +35,38 @@ function tank(g: Grid, x0: number, y0: number, x1: number, y1: number): void {
   rect(g, x1 - 1, y0, x1, y1, Mat.GLASS);
 }
 
+/**
+ * A conical (Erlenmeyer) flask on the floor: walls 2 cells thick sloping in
+ * to a neck `nw` across, the neck rising to `top`. `fill` from row `level`
+ * down.
+ */
+function conical(g: Grid, cx: number, top: number, neckY: number, base: number, nw: number, fill: number, level: number): void {
+  rect(g, cx - base - 1, FLOOR - 1, cx + base + 1, FLOOR, Mat.GLASS);
+  for (let y = top; y < FLOOR - 1; y++) {
+    const t = y < neckY ? 0 : (y - neckY) / (FLOOR - 1 - neckY);
+    const hw = Math.round(nw + (base - nw) * t);
+    put(g, cx - hw - 1, y, Mat.GLASS);
+    put(g, cx - hw, y, Mat.GLASS);
+    put(g, cx + hw, y, Mat.GLASS);
+    put(g, cx + hw + 1, y, Mat.GLASS);
+    if (y >= level) for (let x = cx - hw + 1; x < cx + hw; x++) put(g, x, y, fill);
+  }
+}
+
+/** A round-bottomed flask: a glass ball of radius r with a neck to `top`, filled with `fill` from row `level`. */
+function roundFlask(g: Grid, cx: number, cy: number, r: number, nw: number, top: number, fill: number, level: number): void {
+  for (let y = cy - r; y <= cy + r; y++)
+    for (let x = cx - r; x <= cx + r; x++) {
+      const d = Math.hypot(x - cx, y - cy);
+      // the ball's shell, open at the top where the neck joins
+      if (d <= r && d >= r - 3.5 && !(y < cy && Math.abs(x - cx) < nw)) put(g, x, y, Mat.GLASS);
+      else if (d < r - 3.5 && y >= level) put(g, x, y, fill);
+    }
+  const join = Math.round(cy - Math.sqrt(r * r - nw * nw));
+  rect(g, cx - nw - 2, top, cx - nw, join, Mat.GLASS);
+  rect(g, cx + nw, top, cx + nw + 2, join, Mat.GLASS);
+}
+
 export const CHEM_SCENES: ChemScene[] = [
   {
     id: 'alkali',
@@ -106,6 +138,26 @@ export const CHEM_SCENES: ChemScene[] = [
       // the core: fuel in a grid of boron control rods every 12 cells
       for (let y = 230; y <= 330; y++)
         for (let x = 260; x <= 380; x++) put(g, x, y, (x - 260) % 12 === 0 || (y - 230) % 12 === 0 ? Mat.B : Mat.U);
+    },
+  },
+  {
+    id: 'toothpaste',
+    label: 'ELEPHANT TOOTHPASTE',
+    tip: 'Iodide dropped into a flask of strong peroxide: it splits into oxygen, and the foam pours out of the neck',
+    build(g) {
+      conical(g, 320, 150, 210, 96, 12, Mat.PEROXIDE, 250);
+      // the iodide, a spoonful just dropped into the neck
+      rect(g, 312, 156, 328, 166, Mat.IODIDE);
+    },
+  },
+  {
+    id: 'mirror',
+    label: 'SILVER MIRROR',
+    tip: "Sugar dropped into Tollens' reagent: the liquid turns dark as silver forms, and the silver plates the flask into a mirror",
+    build(g) {
+      rect(g, 270, 343, 370, FLOOR, Mat.WOOD); // a block for it to sit on
+      roundFlask(g, 320, 276, 66, 13, 160, Mat.TOLLENS, 222);
+      rect(g, 314, 116, 326, 122, Mat.GLUCOSE);
     },
   },
 ];

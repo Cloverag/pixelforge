@@ -44,6 +44,13 @@ const DEB_G = 0.14;
 const DEB_DRAG = 0.995;
 const DEB_VMAX = 8;
 /** how far past the blast radius loose ground is kicked up, in radii */
+/** FOAM meta: the gas still in a cell (low bits) and the jet bit (still shooting up) */
+const FOAM_GAS = 0x7f;
+const FOAM_JET = 0x80;
+/** the chance each cell up a jet carries it on: the column's height, about 1 / (1 - p) cells */
+const FOAM_JET_KEEP = 0.97;
+/** how many cells deep silver soaks into glass from where it plated */
+const MIRROR_DEPTH = 3;
 /** how far a neutron flies, in cells */
 const NEUTRON_RANGE = 60;
 /** fissions in one step that blow the metal apart */
@@ -650,12 +657,132 @@ export class World {
       case Mat.NEUTRON:
         this.neutron(x, y, i);
         break;
+      case Mat.FOAM:
+        this.foam(x, y, i);
+        break;
+      case Mat.MIRROR:
+        this.mirror(x, y, i);
+        break;
       default:
         // a tinted flame burns exactly like fire; elements run the reaction table
         if (FLAMES.has(m)) this.fire(x, y, i);
         else if (CHEM[m]) this.chem(x, y, m);
         break; // static solids
     }
+  }
+
+  // ---------- elephant toothpaste ----------
+
+  /**
+   * Foam: oxygen caught in soapy water. meta's low 7 bits are the gas still
+   * to come out of a cell; FOAM_JET marks foam still shooting up. A cell
+   * with gas grows into an empty neighbour, sharing what is left with the
+   * new cell; boxed in, it hands its gas to the foam above (or beside) it,
+   * so gas made at the bottom of a flask travels up the column and comes
+   * out of the neck rather than sitting where the iodide is.
+   *
+   * Inside the flask (glass past the foam on both sides) it can only grow
+   * up, and what leaves the neck is a jet: it keeps growing straight up for
+   * a while, then loses it and swells sideways and down - the column rises,
+   * flops over and slumps down the glass. Plain open-air foam never grows
+   * up (a heap whose top grew up became a field of spires). Foam floats up
+   * through liquid; spent foam is a light, stiff powder whose surface pops.
+   */
+  private foam(x: number, y: number, i: number): void {
+    const g = this.grid;
+    // lighter than any liquid: rise through the peroxide it came from (up,
+    // or up a slope), so fresh peroxide keeps reaching the iodide below
+    const dens = MATS[Mat.FOAM].dens;
+    const s = this.rng.chance(0.5) ? 1 : -1;
+    if (MATS[g.get(x, y - 1)].cat === Cat.LIQUID && this.tryMoveTo(x, y, x, y - 1, dens)) return;
+    if (MATS[g.get(x + s, y - 1)].cat === Cat.LIQUID && this.tryMoveTo(x, y, x + s, y - 1, dens)) return;
+    const jet = g.meta[i] & FOAM_JET;
+    const gas = g.meta[i] & FOAM_GAS;
+    if (gas > 0) {
+      g.chunks.wakeCell(x, y);
+      const up = jet !== 0 || this.foamWalled(x, y);
+      if (
+        up
+          ? this.foamGrow(i, gas, x, y - 1, true) || this.foamGrow(i, gas, x + s, y - 1, true) || this.foamGrow(i, gas, x - s, y - 1, true)
+          : this.foamGrow(i, gas, x + s, y, false) || this.foamGrow(i, gas, x - s, y, false) || this.foamGrow(i, gas, x, y + 1, false) ||
+            this.foamGrow(i, gas, x + s, y + 1, false) || this.foamGrow(i, gas, x - s, y + 1, false)
+      )
+        return;
+      if (this.foamPass(i, gas, x, y - 1) || this.foamPass(i, gas, x + s, y) || this.foamPass(i, gas, x - s, y)) return;
+      // nowhere to grow and nobody to take it: now and then a bubble seeps
+      // out, so a buried cell goes quiet in the end (and its chunk can
+      // sleep) instead of staying awake for ever
+      if (this.rng.chance(0.05)) g.meta[i] = gas - 1;
+    } else if (g.get(x, y - 1) === Mat.EMPTY && this.rng.chance(1 / 5000)) {
+      // only the surface pops: a hole inside the heap would bring the
+      // column above it down, and thousands of those keep every chunk awake
+      g.setXY(x, y, Mat.EMPTY);
+      return;
+    }
+    this.powder(x, y, Mat.FOAM);
+  }
+
+  /** Looking left and right past foam (up to 100 cells), is there something solid on both sides - inside a flask - or open air? */
+  private foamWalled(x: number, y: number): boolean {
+    const g = this.grid;
+    const side = (d: number): boolean => {
+      for (let k = 1; k <= 100; k++) {
+        const t = g.get(x + d * k, y);
+        if (t === Mat.EMPTY) return false;
+        if (t !== Mat.FOAM) return true;
+      }
+      return false;
+    };
+    return side(-1) && side(1);
+  }
+
+  /**
+   * Foam grows into (nx, ny) if it is empty: the new cell takes half the gas
+   * left. Growing up (`jet`), the new cell carries the jet on - most times -
+   * and the cell it came from, now inside the column, lets it go.
+   */
+  private foamGrow(i: number, gas: number, nx: number, ny: number, jet: boolean): boolean {
+    const g = this.grid;
+    if (g.get(nx, ny) !== Mat.EMPTY) return false;
+    const child = (gas - 1) >> 1;
+    g.setXY(nx, ny, Mat.FOAM, child | (jet && this.rng.chance(FOAM_JET_KEEP) ? FOAM_JET : 0));
+    g.meta[i] = gas - 1 - child;
+    return true;
+  }
+
+  /** Boxed-in foam hands its gas on to the foam at (nx, ny), up to what a cell holds. */
+  private foamPass(i: number, gas: number, nx: number, ny: number): boolean {
+    const g = this.grid;
+    if (g.get(nx, ny) !== Mat.FOAM) return false;
+    const j = g.idx(nx, ny);
+    const sum = (g.meta[j] & FOAM_GAS) + gas;
+    const took = Math.min(FOAM_GAS, sum);
+    g.meta[j] = (g.meta[j] & FOAM_JET) | took;
+    g.meta[i] = (g.meta[i] & FOAM_JET) | (sum - took);
+    g.chunks.wakeCell(nx, ny);
+    return sum - took !== gas;
+  }
+
+  // ---------- silver mirror ----------
+
+  /**
+   * Silver plated onto glass soaks a few cells into it, so the wetted part of
+   * a flask turns silver through its whole wall (one plated cell, a pixel
+   * and a half on screen, read as more glass). meta is how far in from the
+   * solution this cell is; the soaking stops MIRROR_DEPTH cells in, so a
+   * mirror never creeps through every piece of glass it is joined to.
+   */
+  private mirror(x: number, y: number, i: number): void {
+    const g = this.grid;
+    const depth = g.meta[i];
+    if (depth >= MIRROR_DEPTH) return;
+    if (g.get(x + 1, y) !== Mat.GLASS && g.get(x - 1, y) !== Mat.GLASS && g.get(x, y + 1) !== Mat.GLASS && g.get(x, y - 1) !== Mat.GLASS) return;
+    g.chunks.wakeCell(x, y);
+    if (!this.rng.chance(0.05)) return;
+    const d = this.rng.int(4);
+    const nx = d === 0 ? x + 1 : d === 1 ? x - 1 : x;
+    const ny = d === 2 ? y + 1 : d === 3 ? y - 1 : y;
+    if (g.get(nx, ny) === Mat.GLASS) g.setXY(nx, ny, Mat.MIRROR, depth + 1);
   }
 
   // ---------- nuclear ----------
