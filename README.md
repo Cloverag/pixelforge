@@ -326,6 +326,8 @@ code and starts the drawing again.
 | **ROSETTE** | Polar coordinates: `x = r cos a`, `y = r sin a`; each arm is a spiral of shrinking circles | ARMS, STEPS, TWIST |
 | **SPHERE** | A circle seen at an angle is an ellipse: rings turned around the axis, `width = R cos(turn)`, make a globe | RINGS, LATITUDES, TILT |
 | **TREE** | Recursion: a branch is a line with two smaller branches on its end, until they are tiny | TRUNK, ANGLE, RATIO, SMALLEST |
+| **LISSAJOUS** | Two swings at right angles, `x = sin(a t + phase)`, `y = sin(b t)`: whole numbers close into a knot, 1:1 is a line, ellipse or circle | ACROSS A, UP B, PHASE |
+| **FIBONACCI** | Squares each as wide as the two before (1, 1, 2, 3, 5...), drawn by a turtle; a quarter circle across each makes the spiral, and neighbours head for the golden ratio | SQUARES |
 
 **YOUR CURVE** is a formula box: type `r(t) =` anything - `1 + 2cos(5t)`,
 `exp(sin t) - 2cos(4t)` - and it is drawn, and typeset with KaTeX, as you

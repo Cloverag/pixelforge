@@ -304,6 +304,129 @@ const tree: Drawing = {
   },
 };
 
+/** Two swings at right angles: what an oscilloscope draws. */
+const lissajous: Drawing = {
+  id: 'lissajous',
+  name: 'LISSAJOUS',
+  idea: 'Two swings at right angles: x swings a times while y swings b times. Whole numbers close into a knot, and the phase turns it - a 1:1 swing is a line, an ellipse or a circle.',
+  params: [
+    { key: 'a', label: 'ACROSS A', min: 1, max: 9, step: 1, value: 3 },
+    { key: 'b', label: 'UP B', min: 1, max: 9, step: 1, value: 4 },
+    { key: 'phase', label: 'PHASE', min: 0, max: 180, step: 5, value: 90 },
+  ],
+  tex: (p) => String.raw`\begin{gathered} x = \sin\left(${p.a}\, t + ${p.phase}^\circ\right) \\ y = \sin\left(${p.b}\, t\right) \end{gathered}`,
+  code: (p) => [
+    `a, b = ${p.a}, ${p.b}     # across, up`,
+    `phase = radians(${p.phase})`,
+    'for i in range(2001):',
+    '    t = 2*pi * i / 2000',
+    '    x = 250 * sin(a*t + phase)',
+    '    y = 250 * sin(b*t)',
+    '    line_to(x, y)',
+  ],
+  strokes(p) {
+    const out: Stroke[] = [];
+    const ph = (p.phase * Math.PI) / 180;
+    let px = 0, py = 0;
+    for (let i = 0; i <= 2000; i++) {
+      const t = (TAU * i) / 2000;
+      const x = 250 * Math.sin(p.a * t + ph);
+      const y = 250 * Math.sin(p.b * t);
+      if (i > 0) out.push({ x1: px, y1: py, x2: x, y2: y, col: hsl(120 + (i / 2000) * 80, 90, 60), w: 1.6, line: 6 });
+      px = x;
+      py = y;
+    }
+    return out;
+  },
+};
+
+/**
+ * Squares whose sides are the Fibonacci numbers, each laid against the ones
+ * before, with a quarter circle across each: the turtle draws a square, then
+ * the arc carries it to the far corner, turned, ready for the next.
+ */
+const fibonacci: Drawing = {
+  id: 'fibonacci',
+  name: 'FIBONACCI',
+  idea: 'Each square is as wide as the two before it together: 1, 1, 2, 3, 5, 8... A quarter circle across each makes a spiral, and the ratio of one to the last heads for the golden ratio, 1.618.',
+  params: [{ key: 'n', label: 'SQUARES', min: 2, max: 14, step: 1, value: 10 }],
+  tex(p) {
+    const f = fib(p.n);
+    const [a, b] = [f[p.n - 1], f[p.n - 2]];
+    return String.raw`\begin{gathered} F_{k+1} = F_k + F_{k-1} \\ F_{${p.n}} = ${a}, \quad F_{${p.n - 1}} = ${b} \\ \frac{${a}}{${b}} = ${(a / b).toFixed(4)} \to \varphi \approx 1.618 \end{gathered}`;
+  },
+  code: (p) => [
+    'a, b = 1, 1     # 1, 1, 2, 3, 5, 8...',
+    `for k in range(${p.n}):`,
+    '    for side in range(4):',
+    `        forward(a * ${fibUnit(p.n).toFixed(2)}); left(90)`,
+    `    circle(a * ${fibUnit(p.n).toFixed(2)}, 90)   # quarter turn`,
+    '    a, b = b, a + b',
+  ],
+  strokes(p) {
+    const f = fib(p.n);
+    const u = fibUnit(p.n);
+    // walk the turtle once at unit size to find the middle, then draw it centred
+    const walk = (emit: (x1: number, y1: number, x2: number, y2: number, k: number, arc: boolean) => void) => {
+      let x = 0, y = 0, hx = 1, hy = 0;
+      for (let k = 0; k < p.n; k++) {
+        const s = f[k];
+        let cx = x, cy = y, dx = hx, dy = hy;
+        for (let side = 0; side < 4; side++) {
+          emit(cx, cy, cx + dx * s, cy + dy * s, k, false);
+          cx += dx * s;
+          cy += dy * s;
+          [dx, dy] = [-dy, dx];
+        }
+        // turtle's circle(s, 90) turns left round a centre s to its left
+        const ox = x - hy * s, oy = y + hx * s;
+        const a0 = Math.atan2(y - oy, x - ox);
+        const steps = Math.max(4, Math.round(s * u * 0.4));
+        for (let j = 0; j < steps; j++) {
+          const a1 = a0 + (j / steps) * (Math.PI / 2), a2 = a0 + ((j + 1) / steps) * (Math.PI / 2);
+          emit(ox + s * Math.cos(a1), oy + s * Math.sin(a1), ox + s * Math.cos(a2), oy + s * Math.sin(a2), k, true);
+        }
+        x = ox + s * Math.cos(a0 + Math.PI / 2);
+        y = oy + s * Math.sin(a0 + Math.PI / 2);
+        [hx, hy] = [-hy, hx];
+      }
+    };
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    walk((ax, ay, bx, by) => {
+      x0 = Math.min(x0, ax, bx);
+      x1 = Math.max(x1, ax, bx);
+      y0 = Math.min(y0, ay, by);
+      y1 = Math.max(y1, ay, by);
+    });
+    const mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
+    const out: Stroke[] = [];
+    walk((ax, ay, bx, by, k, arc) =>
+      out.push({
+        x1: (ax - mx) * u,
+        y1: (ay - my) * u,
+        x2: (bx - mx) * u,
+        y2: (by - my) * u,
+        col: arc ? hsl(42, 100, 62) : hsl(200 + (k / p.n) * 120, 60, 58),
+        w: arc ? 2.4 : 1,
+        line: arc ? 4 : 3,
+      }),
+    );
+    return out;
+  },
+};
+
+/** The first n Fibonacci numbers, 1, 1, 2, 3, 5... */
+function fib(n: number): number[] {
+  const f = [1, 1];
+  while (f.length < n) f.push(f[f.length - 1] + f[f.length - 2]);
+  return f.slice(0, Math.max(2, n));
+}
+
+/** How long a side of 1 is drawn, so n squares fill the canvas: they span F(n+1) by F(n), turning as they go. */
+function fibUnit(n: number): number {
+  return 520 / fib(n + 1)[n];
+}
+
 /** Phyllotaxis: how a sunflower packs its seeds. Each one turns the golden angle further. */
 const sunflower: Drawing = {
   id: 'sunflower',
@@ -458,7 +581,7 @@ const yours: Drawing = {
   },
 };
 
-export const DRAWINGS: Drawing[] = [heart, butterfly, rosette, sphere, tree];
+export const DRAWINGS: Drawing[] = [heart, butterfly, rosette, sphere, tree, lissajous, fibonacci];
 /** maths that makes flowers */
 export const MATH_FLOWERS: Drawing[] = [sunflower, maurer, spiro];
 /** the player's own */
