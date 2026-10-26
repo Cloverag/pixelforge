@@ -96,6 +96,17 @@ const BY_SYM = new Map(ALL.map((e) => [e.sym, e]));
 const BONDS = BONDS_JSON as unknown as Record<string, Compound[]>;
 /** the two-element compounds of a pair on record, most common oxidation state first */
 export const compoundsOf = (a: ElementData, b: ElementData): Compound[] => BONDS[pairKey(a, b)] ?? [];
+/** the toolbar's icons: stroked paths in a 24-unit box */
+const ICON = {
+  orbitals: '<ellipse cx="12" cy="7" rx="4" ry="5"/><ellipse cx="12" cy="17" rx="4" ry="5"/>',
+  shells: '<circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="9"/>',
+  spin: '<path d="M20 12a8 8 0 1 1-3-6.2"/><path d="M17 3v4h4"/>',
+  bond: '<circle cx="7" cy="12" r="4"/><circle cx="17" cy="12" r="4"/><path d="M11 12h2"/>',
+  reactions: '<path d="M4 12h13M13 7l5 5-5 5"/>',
+  light: '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7" class="fill"/>',
+  focus: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
+};
+
 /** every reaction: the famous first, then each compound on record made from its elements */
 const REACTIONS: Reaction[] = [...FAMOUS, ...formations(BONDS, (s) => BY_SYM.get(s)!)];
 /** rows the reaction list draws at once: a search narrows the rest */
@@ -215,6 +226,8 @@ export class ElementsScreen {
   private query = '';
   private stepsRaf = 0;
   private left = h('div', 'el-left');
+  /** the 3D view's own box, beside the toolbar column rather than under it */
+  private viewBox = h('div', 'el-view');
   private tools = h('div', 'el-tools');
   private toolBtns = new Map<string, HTMLButtonElement>();
   private lightSel = document.createElement('select');
@@ -229,16 +242,15 @@ export class ElementsScreen {
     private act: ScreenTools | null = null,
   ) {
     const left = this.left;
-    this.stage.append(this.head, this.caption, this.tools);
+    this.stage.append(this.viewBox, this.head, this.caption, this.tools);
     left.append(this.stage, this.splitTable(), this.table);
     this.root.append(left, this.splitPanel(), this.panel);
     this.panel.setAttribute('aria-live', 'polite');
     this.buildTools();
     this.applySizes();
     this.buildTable();
-    this.atom = new Atom3D(this.stage);
-    // the canvas goes under the header, the caption and the bond view's labels
-    this.stage.prepend(this.stage.querySelector('canvas')!);
+    // the view is the stage's first child: the header, caption and toolbar draw over it
+    this.atom = new Atom3D(this.viewBox);
     this.recolour();
   }
 
@@ -272,45 +284,69 @@ export class ElementsScreen {
 
   // ---- the frame's toolbar ----
 
-  /** The atom's controls inside the frame: they work with the rail folded, and on a phone. */
+  /**
+   * The atom's controls, a column of icon tiles down the frame's right edge:
+   * they never cover the atom, its labels or the header, and they work with
+   * the rail folded and on a phone. LIGHT UP is a tile over the device's own
+   * picker. The view toggles light gold, BOND and REACTIONS cyan.
+   */
   private buildTools(): void {
     this.tools.setAttribute('role', 'toolbar');
     this.tools.setAttribute('aria-label', 'Atom');
+    this.tools.setAttribute('aria-orientation', 'vertical');
     const act = this.act;
     if (!act) return;
-    const add = (id: string, label: string, title: string, run: () => void) => {
-      const b = h('button', 'el-tool', label) as HTMLButtonElement;
+    const tile = (cls: string, icon: string, label: string) => {
+      const b = h('button', `el-tool ${cls}`) as HTMLButtonElement;
       b.type = 'button';
-      b.title = title;
+      b.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${icon}</svg>`;
+      b.append(h('span', 'el-tool-nm', label));
+      return b;
+    };
+    const add = (id: string, cls: string, icon: string, label: string, name: string, run: () => void) => {
+      const b = tile(cls, icon, label);
+      b.title = name;
+      b.setAttribute('aria-label', name.replace(/ \(.\)$/, ''));
       b.onclick = run;
       this.tools.append(b);
       this.toolBtns.set(id, b);
     };
-    add('orbitals', 'ORBITALS', 'The shapes of the outer orbitals (O)', act.orbitals);
-    add('shells', 'SHELLS', 'The electron shells (K)', act.shells);
-    add('spin', 'SPIN', 'Turn the atom slowly; drag to turn it yourself (R)', act.spin);
-    add('bond', 'BOND', 'Bond it with a second element (J)', act.bond);
-    add('reactions', 'REACTIONS', 'Search reactions (X)', act.reactions);
-    const light = this.lightSel;
-    light.className = 'el-tool el-light';
-    light.setAttribute('aria-label', 'Light up one category');
+    const sep = () => this.tools.append(h('span', 'el-tool-sep'));
+    add('orbitals', 'view', ICON.orbitals, 'ORBITALS', 'Orbitals: the shapes of the outer orbitals (O)', act.orbitals);
+    add('shells', 'view', ICON.shells, 'SHELLS', 'Shells: the electron shells (K)', act.shells);
+    add('spin', 'view', ICON.spin, 'SPIN', 'Spin: turn the atom slowly; drag to turn it yourself (R)', act.spin);
+    sep();
+    add('bond', 'explore', ICON.bond, 'BOND', 'Bond: pair it with a second element (J)', act.bond);
+    add('reactions', 'explore', ICON.reactions, 'REACT', 'Reactions: search them, see how each happens (X)', act.reactions);
+    // LIGHT UP: the tile shows the choice; the transparent picker over it takes the tap
+    const light = tile('light', ICON.light, 'LIGHT');
+    light.tabIndex = -1;
+    const sel = this.lightSel;
+    sel.className = 'el-light';
+    sel.setAttribute('aria-label', 'Light up one category');
+    sel.title = 'Light up one category';
     const opt = (value: string, text: string) => {
       const o = document.createElement('option');
       o.value = value;
       o.textContent = text;
-      light.append(o);
+      sel.append(o);
     };
-    opt('all', 'LIGHT UP: ALL');
-    for (const c of CATEGORIES) opt(c.block, `LIGHT UP: ${c.label.replace(/\u00ad/g, '')}`);
-    light.onchange = () => act.light(light.value);
-    light.addEventListener('keydown', (ev) => ev.stopPropagation());
-    this.tools.append(light);
-    add('focus', '⤢ FOCUS', 'Fill the screen with the elements; again, or ESC, to come back (I)', act.focus);
+    opt('all', 'ALL ELEMENTS');
+    for (const c of CATEGORIES) opt(c.block, c.label.replace(/\u00ad/g, ''));
+    sel.onchange = () => act.light(sel.value);
+    sel.addEventListener('keydown', (ev) => ev.stopPropagation());
+    const wrap = h('div', 'el-tool-wrap');
+    wrap.append(light, sel);
+    this.tools.append(wrap);
+    this.lightTile = light;
+    add('focus', 'focus', ICON.focus, 'FOCUS', 'Focus: fill the screen with the elements; again, or ESC, to come back (I)', act.focus);
     window.addEventListener('resize', this.onResize);
     this.syncTools();
   }
 
-  /** the toolbar's buttons lit as the atom, the bond, the reactions and FOCUS stand */
+  private lightTile: HTMLButtonElement | null = null;
+
+  /** the toolbar's tiles lit as the atom, the bond, the reactions and FOCUS stand */
   syncTools(): void {
     const on: Record<string, boolean> = {
       orbitals: this.layers.orbitals,
@@ -322,10 +358,17 @@ export class ElementsScreen {
     };
     for (const [id, b] of this.toolBtns) {
       b.classList.toggle('on', on[id]);
-      b.setAttribute('aria-pressed', String(on[id]));
+      if (id !== 'focus') b.setAttribute('aria-pressed', String(on[id]));
     }
     const f = this.toolBtns.get('focus');
-    if (f) f.textContent = on.focus ? '⤡ EXIT FOCUS' : '⤢ FOCUS';
+    if (f) {
+      f.querySelector('.el-tool-nm')!.textContent = on.focus ? 'EXIT' : 'FOCUS';
+      f.setAttribute('aria-label', on.focus ? 'Leave focus' : 'Focus: fill the screen');
+    }
+    // LIGHT UP: lit, in the category's colour, while one is chosen
+    const cat = CATEGORIES.find((c) => c.block === this.lightSel.value);
+    this.lightTile?.classList.toggle('on', !!cat);
+    this.lightTile?.style.setProperty('--cat', cat?.tint ?? '');
   }
 
   /** immersive mode and a turned tablet both arrive as a resize */
@@ -408,6 +451,7 @@ export class ElementsScreen {
   /** Dim every category but one (null: show them all). */
   setFilter(block: string | null): void {
     this.lightSel.value = block ?? 'all';
+    this.syncTools();
     for (const [z, cell] of this.cells) cell.classList.toggle('dim', block !== null && ALL[z - 1].block !== block);
   }
 

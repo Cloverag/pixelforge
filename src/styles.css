@@ -1797,35 +1797,68 @@ body.elements-on.el-folded #deck { display: none; }
 .el-split:hover span, .el-split.held span, .el-split:focus-visible span { background: var(--el-tint); }
 .el-split:focus-visible { box-shadow: inset 0 0 0 2px var(--el-tint); }
 html.el-dragging, html.el-dragging * { user-select: none; -webkit-user-select: none; }
-/* the atom's toolbar, in the frame: top right in landscape, a row under the atom upright */
+/* the atom's toolbar: a column of icon tiles down the frame's right edge; the 3D view
+   (.el-view) stops at it, so nothing the atom shows is ever under a button */
+.el-view { position: absolute; top: 0; left: 0; bottom: 0; right: var(--el-col, 84px); }
 .el-tools {
   position: absolute;
-  top: 10px;
-  right: 10px;
+  top: 0;
+  right: 0;
+  bottom: 0;
   z-index: 2;
+  width: var(--el-col, 84px);
+  box-sizing: border-box;
   display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 6px;
-  max-width: 64%;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 0;
+  overflow-y: auto;
+  /* a short pane scrolls the column; the half-shown last tile says so */
+  scrollbar-width: none;
+  background: rgba(13, 15, 38, 0.94);
+  border-left: 1px solid var(--el-line);
 }
 .el-tool {
-  height: 36px;
-  padding: 0 12px;
+  position: relative;
+  flex: none;
+  width: 72px;
+  min-height: 56px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 4px 0;
   font: 600 14px 'IBM Plex Mono', monospace;
   color: var(--el-ink);
-  background: rgba(16, 19, 46, 0.86);
+  background: #15183a;
   border: 1px solid #3a3f78;
-  border-radius: 18px;
+  border-radius: 10px;
   cursor: pointer;
-  white-space: nowrap;
 }
-.el-tool.on { color: #070816; background: #ffd23f; border-color: #ffd23f; }
+.el-tool svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.el-tool svg .fill { fill: currentColor; }
 .el-tool:hover, .el-tool:focus-visible { border-color: var(--el-tint); outline: none; }
-.el-tool.on:hover, .el-tool.on:focus-visible { border-color: #fff; }
-select.el-tool { max-width: 15em; padding: 0 8px; }
-@media (pointer: coarse) {
-  .el-tool { height: 44px; border-radius: 22px; }
+.el-tool.view.on { color: #070816; background: #ffd23f; border-color: #ffd23f; }
+.el-tool.explore.on { color: #070816; background: #5ad8ff; border-color: #5ad8ff; font-weight: 700; }
+.el-tool.light.on { color: #070816; background: var(--cat, #ffd23f); border-color: var(--cat, #ffd23f); }
+.el-tool.focus { margin-top: auto; color: #070816; background: #8cf06a; border-color: #8cf06a; font-weight: 700; }
+.el-tool.on:hover, .el-tool.on:focus-visible, .el-tool.focus:hover, .el-tool.focus:focus-visible { border-color: #fff; }
+.el-tool-sep { flex: none; width: 44px; height: 1px; margin: 4px 0; background: #3a3f78; }
+/* LIGHT UP: the device's own picker, invisible, over the tile */
+.el-tool-wrap { position: relative; flex: none; }
+.el-light { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; font-size: 16px; }
+.el-tool-wrap:focus-within .el-tool { border-color: var(--el-tint); }
+.el-caption { right: calc(var(--el-col, 84px) + 16px); }
+.el-head { right: calc(var(--el-col, 84px) + 8px); }
+/* a short pane (a phone held upright): words only, 44px tiles */
+@container (max-height: 440px) {
+  .el-tool { min-height: 44px; }
+  .el-tool svg { display: none; }
+  /* and a tighter header, so the bond's labels have room */
+  .el-name { letter-spacing: 0.1em; font-size: 14px; }
+  .el-kind { letter-spacing: 0.04em; }
 }
 .el-cell {
   min-width: 0;
@@ -2164,18 +2197,6 @@ select.el-tool { max-width: 15em; padding: 0 8px; }
   .el-atom { position: sticky; top: 0; z-index: 3; flex: none; height: var(--el-tall, 46%); background: #070816; }
   .el-split.h { position: sticky; top: var(--el-tall, 46%); z-index: 3; flex: none; height: 20px; }
   .el-split.v { display: none; }
-  .el-tools {
-    top: auto;
-    bottom: 8px;
-    left: 8px;
-    right: 8px;
-    max-width: none;
-    flex-wrap: nowrap;
-    justify-content: flex-start;
-    overflow-x: auto;
-    /* the half-shown last button says the row goes on; no bar needed */
-    scrollbar-width: none;
-  }
   .el-caption { display: none; }
   /* the table scrolls sideways before its cells get too small to tap */
   .el-table { flex: none; overflow-x: auto; overflow-y: visible; }

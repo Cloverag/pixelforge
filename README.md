@@ -374,9 +374,12 @@ record is claimed from those (`CAVEATS` in `src/elements/trends.ts`).
 fills the stage instead of keeping the worlds' 16:9, the rail folds to its
 colour chips (« FOLD / », remembered; folded at first on a touch screen or
 under 1400px wide) and the deck, whose lamps do nothing here, goes with it.
-The atom's controls sit in the frame: ORBITALS, SHELLS, SPIN, BOND,
-REACTIONS, LIGHT UP and **FOCUS**, which fills the whole screen (immersive
-mode). Drag a splitter to give the atom, the table or the panel more room
+The atom's controls are a column of icon tiles down the frame's right
+edge, beside the 3D view rather than over it, so they never cover the atom,
+its labels or the header: ORBITALS, SHELLS, SPIN (gold when on), BOND,
+REACT (cyan), LIGHT (the device's own picker, lit in the category's colour)
+and **FOCUS**, which fills the whole screen (immersive mode). On a short
+pane the tiles drop their icons and the column scrolls. Drag a splitter to give the atom, the table or the panel more room
 (or focus it and use the arrow keys; double-click to reset); a taller table
 grows every cell, and each device remembers its own sizes. Held upright the
 atom keeps the top with a splitter under it, and the table and the panel
