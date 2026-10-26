@@ -18,6 +18,7 @@ import { MpSession, newRoomCode, roomFromUrl, roomUrl, type MpHooks } from './ne
 import type { NetInput, Snapshot } from './sim/protocol';
 import { RoomPill } from './ui/roompill';
 import { CursorLayer, REACT_MS } from './ui/cursors';
+import { HoverTag } from './ui/hovertag';
 import { confirmDialog, isDialogOpen, nameDialog } from './ui/dialog';
 import { pictureDialog } from './ui/picture';
 import { EmoteLayer } from './ui/emotes';
@@ -347,8 +348,19 @@ function post(msg: Req, transfer?: ArrayBuffer[]): void {
   worker.postMessage(msg, transfer ?? []);
 }
 
+/** the name of what the cursor is over, beside it: in the worlds of cells, the sandbox and the chem lab */
+const hoverTag = new HoverTag(
+  (x, y) => post({ t: 'probe', x, y }),
+  () => screen === 'game' && (current.id === 'sand' || current.id === 'chem'),
+  { w: SIM_W, h: SIM_H },
+);
+
 worker.onmessage = (e: MessageEvent<Res>) => {
   const r = e.data;
+  if (r.t === 'probe') {
+    hoverTag.answer(r.m ?? 0);
+    return;
+  }
   if (r.t === 'ready') {
     stepBuf = new ArrayBuffer(SIM_W * SIM_H * 4);
     // The worker discards everything that arrives before `init`, and the HUD
@@ -371,6 +383,7 @@ worker.onmessage = (e: MessageEvent<Res>) => {
     );
     renderer.present(r.buf);
     drawAscii(r.buf);
+    hoverTag.tick();
     if (snap && view3dOn && view3d) view3d.update(snap, r.snapW!, r.snapH!);
     if (r.pg3d && pgView?.visible) pgView.update(new Float32Array(r.pg3d), r.pgN ?? 0, r.pgForces ?? []);
     if (r.pgWalls && pgView) pgView.setWalls(new Uint8Array(r.pgWalls));

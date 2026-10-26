@@ -281,6 +281,38 @@ body.gl-render.crt-on #crt { background: radial-gradient(ellipse at center, tran
 #brush-ring[data-mode='wind'] { border: 2px dashed var(--ink); }
 #brush-ring[data-mode='flood'] { border-radius: 3px; rotate: 45deg; }
 
+/* --- what the cursor is over, named beside it (ui/hovertag.ts) --- */
+#hover-tag {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 8;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  font-family: var(--font-read);
+  font-size: 15px;
+  white-space: nowrap;
+  color: #f3f0ff;
+  background: rgba(7, 8, 22, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 4px;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+#hover-tag.on { opacity: 1; }
+#hover-tag .hover-chip {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+}
+@media (prefers-reduced-motion: reduce) {
+  #hover-tag { transition: none; }
+}
+
 /* --- on the screen: an empty world's invitation, PAUSED, FPS --- */
 #empty-hint {
   position: absolute;

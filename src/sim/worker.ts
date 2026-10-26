@@ -1,6 +1,7 @@
 /// <reference lib="webworker" />
 import { CHUNKS_X, CHUNKS_Y, HASH_EVERY, SIM_H, SIM_W, NetInput, Req, Res, SaveData } from './protocol';
 import { World } from './world';
+import { Mat } from './materials';
 import { RULES } from './reactions';
 import { rxDiff } from './rxdelta';
 import { setBackground } from './background';
@@ -77,6 +78,13 @@ function handle(e: MessageEvent<Req>): void {
       watchFluid = msg.on;
       windDirty = true;
       break;
+
+    case 'probe': {
+      const { x, y } = msg;
+      const inWorld = w.mode !== 'playground' && x >= 0 && y >= 0 && x < w.grid.W && y < w.grid.H;
+      respond({ t: 'probe', m: inWorld ? w.grid.get(x, y) : Mat.EMPTY });
+      break;
+    }
 
     // the empty world's colour: drawing only, so no cell, hash or snapshot ever sees it
     case 'bg':

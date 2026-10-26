@@ -595,6 +595,12 @@ no icon set, no images.
   CHEM LAB its five experiments, ASCII GARDEN its four scenes, MATH LAB its
   drawings and 3D graphs.
 - Explosions shake the canvas, flash and boom.
+- **What is under the cursor** is named beside it, with a swatch of its
+  colour, in the sandbox and the chem lab: a dozen metals are grey, so
+  pointing is how to tell sodium from tin. The sim runs in the worker, so the
+  label asks it (a `probe` message) for the cell under the pointer, on every
+  move to a new cell and once a frame while it rests, since sand flows past
+  a still cursor.
 - **SKY** (the deck, VIEW in the pause menu, OPTIONS on the title screen): the
   lit skies (see [Light and sky](#light-and-sky)) or the flat colour of the
   empty world, from eight presets. It only changes how the world is drawn. It never goes into a

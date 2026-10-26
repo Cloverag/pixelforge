@@ -62,6 +62,8 @@ export type Req =
   | { t: 'bg'; id: string }
   /** draw the current frame again without stepping (a paused world after a presentation change) */
   | { t: 'redraw'; buf: ArrayBuffer }
+  /** what is at cell (x, y): the label beside the cursor (ui/hovertag.ts); presentation only */
+  | { t: 'probe'; x: number; y: number }
   /**
    * Step the world. In multiplayer `inputs` holds one batch per frame: each
    * is applied before its step, so a guest that fell behind catches up
@@ -149,7 +151,9 @@ export function emptyEvents(): SimEvents {
 }
 
 export interface Res {
-  t: 'ready' | 'frame' | 'state' | 'netSnap' | 'error';
+  t: 'ready' | 'frame' | 'state' | 'netSnap' | 'error' | 'probe';
+  /** t 'probe': the material at the cell asked about (EMPTY off the world, or in the playground) */
+  m?: number;
   /** t 'error': what the worker threw, with its stack */
   error?: string;
   /** multiplayer: a full snapshot, for t 'netSnap' */
