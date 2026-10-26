@@ -16,6 +16,15 @@ import type { CursorMsg, EmoteMsg, Identity, PeerInfo } from './presence';
 
 /** keeps PIXELFORGE rooms apart from every other Trystero app */
 const APP_ID = 'pixelforge.cloverag.github.io/v1';
+/**
+ * The most people in one room, the host included. Every browser connects to
+ * every other and the host sends each frame to every guest, so a room stays
+ * small; a class splits into several rooms instead.
+ */
+export const ROOM_MAX = 9;
+/** host: whether one more can join, with `guests` already in */
+export const roomHasSpace = (guests: number): boolean => guests + 1 < ROOM_MAX;
+
 /** a guest that hears no host in this long gives up */
 const JOIN_TIMEOUT_MS = 20_000;
 
@@ -52,7 +61,7 @@ const PING_MS = 3000;
 /** host -> guests: my world's fingerprint at frame f */
 type HashMsg = { t: 'hash'; f: number; h: number; p?: number[] };
 const PART_NAMES = ['cells', 'meta', 'clock', 'wake', 'wind', 'rng', 'frame', 'debris'];
-type HostMsg = Wire | { t: 'host' } | HashMsg | { t: 'closing' };
+type HostMsg = Wire | { t: 'host' } | HashMsg | { t: 'closing' } | { t: 'full' };
 
 /** result of comparing fingerprints with the host */
 export interface SyncStats {
@@ -90,6 +99,8 @@ export class MpSession {
   /** guests: the peer that sent us our world */
   private hostId: string | null = null;
   private peers = new Set<string>();
+  /** host: joiners turned away because the room was full, until they leave */
+  private turnedAway = new Set<string>();
   private room: { leave(): Promise<void> } | null = null;
   private sendWire!: (m: HostMsg, to?: string) => void;
   private sendSnap!: (data: Uint8Array, to: string, f: number) => void;
@@ -182,6 +193,11 @@ export class MpSession {
         else if (m.t === 'resync') void this.welcome(peerId, true);
         return;
       }
+      if (m.t === 'full') {
+        // the host turned us away; only believed before we have joined
+        if (!this.hostId) this.end(`ROOM ${this.code} IS FULL - ${ROOM_MAX} PEOPLE AT MOST. ASK FOR ANOTHER ROOM`);
+        return;
+      }
       if (m.t === 'closing') {
         // the host left on purpose: no point waiting for it
         if (peerId === this.hostId) this.end('THE HOST CLOSED THE ROOM - THE WORLD IS YOURS NOW');
@@ -241,6 +257,13 @@ export class MpSession {
     };
 
     room.onPeerJoin = (id) => {
+      // host: a full room turns the newcomer away, and never counts or announces them
+      if (this.host && !roomHasSpace(this.peers.size)) {
+        this.turnedAway.add(id);
+        this.sendWire({ t: 'full' }, id);
+        this.hooks.onNotice(`SOMEONE TRIED TO JOIN - THE ROOM IS FULL (${ROOM_MAX})`);
+        return;
+      }
       this.peers.add(id);
       this.hooks.onPeople(this.peers.size + 1);
       if (this.host) void this.welcome(id);
@@ -248,6 +271,7 @@ export class MpSession {
       this.sendCursor(this.lastCursor ?? this.idle(), id);
     };
     room.onPeerLeave = (id) => {
+      if (this.turnedAway.delete(id)) return;
       this.peers.delete(id);
       this.roster.delete(id);
       this.emitRoster();

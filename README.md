@@ -95,6 +95,9 @@ your world. Pasted into WhatsApp or Discord, the link shows a preview card.
   `→ CHEM LAB` / `→ SANDBOX` button takes the whole room to the next one;
   fireworks, portals, scenes, reactions and experiments are shared like
   everything else.
+- **Up to 9 people** a room, the host included: browsers connect to each
+  other directly, so a class plays in several small rooms. A tenth gets
+  "ROOM … IS FULL" and their own world back.
 - **Leaving** asks first. A host who refreshes reopens the same room from the
   autosave and guests re-sync on their own; a host who leaves closes it.
 
