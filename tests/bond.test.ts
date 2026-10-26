@@ -8,6 +8,7 @@ import {
   defaultPartner,
   explain,
   ionCharges,
+  ionRoute,
   moleculeOf,
   ordered,
   pairKey,
@@ -209,42 +210,74 @@ describe('BOND: a small molecule drawn whole', () => {
 
   it('carbon dioxide is one carbon between two oxygens, in a straight line', () => {
     const m = mol('C', 'O', 'CO2')!;
-    expect(m.center).toBe(0); // carbon, the left of the pair
-    expect(m.n).toBe(2);
+    expect(m.side).toEqual([0, 1, 1]); // a carbon, the left of the pair, and two oxygens
     expect(m.shape).toBe('linear');
-    expect(angles(m.dirs)[0]).toBeCloseTo(180, 5);
+    expect(angles(m.at.slice(1))[0]).toBeCloseTo(180, 5);
   });
 
   it("water is bent by oxygen's two lone pairs; ammonia a pyramid; methane a tetrahedron", () => {
     const water = mol('H', 'O', 'H2O')!;
-    expect(water.center).toBe(1); // oxygen, the right of the pair
+    expect(water.side).toEqual([1, 0, 0]); // an oxygen, the right of the pair, and two hydrogens
     expect(water.shape).toBe('bent');
-    expect(angles(water.dirs)[0]).toBeCloseTo(104.5, 5);
+    expect(angles(water.at.slice(1))[0]).toBeCloseTo(104.5, 5);
     const ammonia = mol('N', 'H', 'NH3')!;
     expect(ammonia.shape).toBe('trigonal pyramidal');
-    for (const a of angles(ammonia.dirs)) expect(a).toBeCloseTo(107, 5);
+    for (const a of angles(ammonia.at.slice(1))) expect(a).toBeCloseTo(107, 5);
     const methane = mol('C', 'H', 'CH4')!;
     expect(methane.shape).toBe('tetrahedral');
-    expect(angles(methane.dirs)).toHaveLength(6);
-    for (const a of angles(methane.dirs)) expect(a).toBeCloseTo(109.47, 1);
+    expect(angles(methane.at.slice(1))).toHaveLength(6);
+    for (const a of angles(methane.at.slice(1))) expect(a).toBeCloseTo(109.47, 1);
   });
 
   it('no lone pair, flat: boron trifluoride and sulfur trioxide; one lone pair bends sulfur dioxide', () => {
     for (const [a, b, f] of [['B', 'F', 'BF3'], ['S', 'O', 'SO3']]) {
       const m = mol(a, b, f)!;
       expect(m.shape).toBe('trigonal planar');
-      for (const x of angles(m.dirs)) expect(x).toBeCloseTo(120, 5);
+      for (const x of angles(m.at.slice(1))) expect(x).toBeCloseTo(120, 5);
     }
     const so2 = mol('S', 'O', 'SO2')!;
     expect(so2.shape).toBe('bent');
-    expect(angles(so2.dirs)[0]).toBeCloseTo(119, 5);
+    expect(angles(so2.at.slice(1))[0]).toBeCloseTo(119, 5);
   });
 
   it('ions round one ion: magnesium chloride is a magnesium between two chlorides', () => {
     const m = mol('Mg', 'Cl', 'MgCl2')!;
-    expect(m.center).toBe(0);
-    expect(m.n).toBe(2);
+    expect(m.side).toEqual([0, 1, 1]);
     expect(m.shape).toBe('linear');
+    // magnesium's two electrons, one to each chlorine
+    expect(m.bonds).toEqual([[0, 1, 1], [0, 2, 1]]);
+  });
+
+  it('ions with no single middle one are a row: in Al2O3 each Al gives 3, each O takes 2', () => {
+    const m = mol('Al', 'O', 'Al2O3')!;
+    expect(m.shape).toBe('ions');
+    expect(m.side).toEqual([1, 0, 1, 0, 1]); // O Al O Al O
+    // neighbours a bond length apart
+    for (let i = 1; i < m.at.length; i++) expect(Math.hypot(m.at[i][0] - m.at[i - 1][0], m.at[i][1] - m.at[i - 1][1])).toBeCloseTo(1, 5);
+    // to the nearest oxygens
+    expect(m.bonds).toEqual([[1, 0, 2], [1, 2, 1], [3, 2, 1], [3, 4, 2]]);
+    const given = (i: number) => m.bonds.filter((b) => b[0] === i).reduce((s, b) => s + b[2], 0);
+    const taken = (i: number) => m.bonds.filter((b) => b[1] === i).reduce((s, b) => s + b[2], 0);
+    expect([given(1), given(3)]).toEqual([3, 3]);
+    expect([taken(0), taken(2), taken(4)]).toEqual([2, 2, 2]);
+  });
+
+  it('a positive ion gives to its nearest neighbours, not the first that has room', () => {
+    // the giver (2) has takers at 1 and 3 beside it and one at 0, further off
+    expect(ionRoute([1, 1, 0, 1], 2, 1)).toEqual([[2, 1, 1], [2, 3, 1]]);
+  });
+
+  it('hands every electron over, however the ions fall: Mg3P2, Nb2O5', () => {
+    for (const [side, give, take] of [
+      [[0, 1, 0, 1, 0], 2, 3],
+      [[1, 0, 1, 1, 1, 0, 1], 5, 2],
+    ] as [(0 | 1)[], number, number][]) {
+      const r = ionRoute(side, give, take);
+      side.forEach((x, i) => {
+        const moved = r.filter((b) => b[x === 0 ? 0 : 1] === i).reduce((s, b) => s + b[2], 0);
+        expect(moved, `ion ${i}`).toBe(x === 0 ? give : take);
+      });
+    }
   });
 
   it('one of each, or no single middle atom: drawn as one atom of each', () => {
@@ -252,8 +285,9 @@ describe('BOND: a small molecule drawn whole', () => {
     expect(mol('C', 'O', 'CO')).toBeNull();
     // five round one: more room than four ways round
     expect(mol('P', 'Cl', 'PCl5')).toBeNull();
-    const alumina: Compound = { f: 'Al2O3', name: 'Aluminum Oxide', cid: 9989226, o: 0, q: [3, -2] };
-    expect(moleculeOf(el('Al'), el('O'), alumina, pictureOf('ionic', el('Al'), el('O'), alumina), [3, 6])).toBeNull();
+    // too many ions to read in a row
+    const many: Compound = { f: 'Tc2O7', name: 'Technetium Heptoxide', cid: 0, o: 0, q: [7, -2] };
+    expect(moleculeOf(el('Tc'), el('O'), many, pictureOf('ionic', el('Tc'), el('O'), many), [7, 6])).toBeNull();
   });
 
   it('the account of an ionic bond stops saying the picture shows one atom of each once it shows the whole', () => {

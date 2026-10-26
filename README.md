@@ -431,9 +431,9 @@ it; the electrons in play glow warm):
 
 - **Ionic** (Δχ 1.7 or more): electrons arc from the left atom's outer shell
   into the right one's. Sodium's lone 3s electron goes over, its M shell goes
-  dark and chlorine's fills to 8: Na⁺ and Cl⁻. Where the formula has no
-  single middle atom the picture is one atom of each, and the panel does the
-  whole formula ("In Al₂O₃, 2 Al give 6 electrons to 3 O").
+  dark and chlorine's fills to 8: Na⁺ and Cl⁻. A formula of up to seven
+  ions is drawn whole (see below); past that the picture is one atom of each,
+  and the panel does the whole formula.
 - **Covalent** (polar from 0.4, else nonpolar): one electron from each atom
   per shared pair, circling between them, as many pairs as the bond order in
   PubChem's structure (C≡O three, O=C=O two, C–H one).
@@ -449,6 +449,13 @@ MgCl₂ are straight, water bent (104.5°, two lone pairs on the O), BF₃ and S
 flat triangles, SO₂ bent, NH₃ a pyramid, CH₄ a tetrahedron. Every bond plays
 in turn, and the caption names the shape. Five or more round one (PCl₅) has
 no shape here and stays one atom of each.
+
+Ions with no single middle one - Al₂O₃, Mg₃N₂, Fe₂O₃ - stand in a zig-zag
+row, the fewer kind spread among the more (O Al O Al O), each positive ion
+giving its electrons to the nearest negative ones still short: each Al gives
+3, each O takes 2, so both Al end as Al³⁺ with their outer shell gone. One
+atom of each could not show it: one Al and one O had Al³⁺ with only two
+electrons crossing.
 
 The kind comes from the electronegativity gap, and the panel says it is a
 rule of thumb, with Δχ marked on a nonpolar / polar / ionic bar. Where

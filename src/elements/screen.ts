@@ -601,12 +601,14 @@ export class ElementsScreen {
       h('div', 'el-kind', KIND_LABEL[kind] + (dx !== null && kind !== 'metallic' && kind !== 'none' ? ` · Δχ ${dx.toFixed(2)}` : '')),
     );
     const notPaths = 'rings count electrons, not paths';
-    const [mid, round] = mol ? (mol.center === 0 ? [left, right] : [right, left]) : [left, right];
     if (mol && pic.kind === 'ionic') {
       const q = ionCharges(left, right, c)!;
-      this.caption.textContent = `${mid.sym} in the middle, ${mol.n} ${round.sym} round it · ${pic.moves} e⁻ ${pic.moves === 1 ? 'crosses' : 'cross'} from ${left.sym} to ${right.sym} in each pair: ${left.sym}${chargeMark(q[0])} and ${right.sym}${chargeMark(q[1])} · ${notPaths}`;
+      const n = (k: 0 | 1) => mol.side.filter((x) => x === k).length;
+      this.caption.textContent = `${n(0)} ${left.sym} and ${n(1)} ${right.sym} · each ${left.sym} gives ${q[0]} e⁻, each ${right.sym} takes ${-q[1]}: ${left.sym}${chargeMark(q[0])} and ${right.sym}${chargeMark(q[1])} · ${notPaths}`;
     } else if (mol && pic.kind === 'covalent') {
-      this.caption.textContent = `${mol.shape}: ${mol.n} bonds from the ${mid.sym}, ${pic.order} shared ${pic.order === 1 ? 'pair' : 'pairs'} in each, one electron from each atom per pair · ${notPaths}`;
+      const mid = mol.side[0] === 0 ? left : right;
+      const n = mol.side.length - 1;
+      this.caption.textContent = `${mol.shape}: ${n} bonds from the ${mid.sym}, ${pic.order} shared ${pic.order === 1 ? 'pair' : 'pairs'} in each, one electron from each atom per pair · ${notPaths}`;
     } else if (pic.kind === 'ionic') {
       const q = ionCharges(left, right, c)!;
       this.caption.textContent = `one atom of each · ${pic.moves} e⁻ cross from ${left.sym} to ${right.sym}: ${left.sym}${chargeMark(q[0])} and ${right.sym}${chargeMark(q[1])} · ${notPaths}`;

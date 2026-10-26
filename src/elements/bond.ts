@@ -146,16 +146,19 @@ export function pictureOf(kind: BondKind, left: BondElement, right: BondElement,
 }
 
 /**
- * A molecule the bond view can draw whole: one atom in the middle (`center`,
- * the side of the pair it is) with `n` of the other round it. CO2 is a
- * carbon with two oxygens - drawn as one C and one O, it read as CO.
+ * A compound the bond view draws whole, not as one atom of each: CO2 drawn
+ * as one C and one O read as CO, and Al2O3 as one Al and one O showed Al³⁺
+ * with only two electrons gone.
  */
 export interface Molecule {
-  center: 0 | 1;
-  n: number;
-  shape: 'linear' | 'bent' | 'trigonal planar' | 'trigonal pyramidal' | 'tetrahedral';
-  /** where each of the n sits from the middle: unit vectors, y up */
-  dirs: [number, number, number][];
+  /** a small molecule's shape round its middle atom; 'ions' for a row of ions */
+  shape: 'linear' | 'bent' | 'trigonal planar' | 'trigonal pyramidal' | 'tetrahedral' | 'ions';
+  /** which of the pair each atom is: 0 the left, 1 the right. A molecule's middle atom is first */
+  side: (0 | 1)[];
+  /** where each atom sits, in bond lengths, y up */
+  at: [number, number, number][];
+  /** what is bonded: two atoms, the left element's first, and the electrons that cross (ionic) */
+  bonds: [number, number, number][];
 }
 
 const deg = Math.PI / 180;
@@ -173,23 +176,67 @@ function cone(n: number, angle: number): [number, number, number][] {
 }
 
 /**
- * The molecule (left, right) make in compound `c`, if one of them is alone
- * in its formula and the other is 2 to 4: CO2, H2O, NH3, CH4, MgCl2. Its
- * shape is the valence-shell rule (VSEPR): the bonds and the middle atom's
- * lone pairs spread as far apart as they can, the lone pairs pressing the
- * bonds closer (water's 104.5°). `valence`: the outer electrons of (left,
- * right). Anything else - NaCl, Fe2O3, PCl5 - is null, drawn as one atom of
- * each.
+ * Who gives to whom in a set of ions: each positive ion (side 0) hands its
+ * `give` electrons to the nearest negative ions (by place in `side`) still
+ * short of `take`. [giver, taker, electrons] for each hand-over.
+ */
+export function ionRoute(side: (0 | 1)[], give: number, take: number): [number, number, number][] {
+  const need = side.map((x) => (x === 1 ? take : 0));
+  const out: [number, number, number][] = [];
+  side.forEach((x, i) => {
+    let left = x === 0 ? give : 0;
+    while (left > 0) {
+      let j = -1;
+      need.forEach((n, k) => {
+        if (n > 0 && (j < 0 || Math.abs(k - i) < Math.abs(j - i))) j = k;
+      });
+      if (j < 0) break;
+      const n = Math.min(left, need[j]);
+      out.push([i, j, n]);
+      need[j] -= n;
+      left -= n;
+    }
+  });
+  return out;
+}
+
+/** the most ions drawn in a row: past that they are too small to read */
+const MAX_IONS = 7;
+
+/**
+ * The compound (left, right) make in `c`, drawn whole - or null, for one
+ * atom of each (NaCl, PCl5, N2O4).
+ *
+ * One atom in the middle and two to four of the other round it (CO2, H2O,
+ * NH3, CH4, MgCl2): its shape is the valence-shell rule (VSEPR), the bonds
+ * and the middle atom's lone pairs spread as far apart as they can, the lone
+ * pairs pressing the bonds closer (water's 104.5°). Ions just spread evenly.
+ * Ions with no single middle one (Al2O3, Mg3P2): a zig-zag row, the fewer
+ * kind spread among the more, each positive ion giving its electrons to the
+ * nearest negative ones. `valence`: the outer electrons of (left, right).
  */
 export function moleculeOf(left: BondElement, right: BondElement, c: Compound | null, pic: BondPicture, valence: [number, number]): Molecule | null {
   if (!c || (pic.kind !== 'ionic' && pic.kind !== 'covalent')) return null;
   const k = atomsIn(c.f);
   const counts = [k[left.sym] ?? 0, k[right.sym] ?? 0];
+  const q = pic.kind === 'ionic' ? ionCharges(left, right, c) : null;
+  if (counts[0] !== 1 && counts[1] !== 1) {
+    const total = counts[0] + counts[1];
+    if (!q || total > MAX_IONS) return null;
+    // the fewer kind at even places among the more
+    const few: 0 | 1 = counts[0] < counts[1] ? 0 : 1;
+    const m = counts[few];
+    const side: (0 | 1)[] = Array.from({ length: total }, () => (1 - few) as 0 | 1);
+    for (let j = 0; j < m; j++) side[Math.floor(((j + 0.5) * total) / m)] = few;
+    // neighbours a bond length apart, steeply zig-zagged: a flatter row ran
+    // off the sides of the view
+    const at = side.map((_, i): [number, number, number] => [(i - (total - 1) / 2) * 0.6, i % 2 ? -0.4 : 0.4, 0]);
+    return { shape: 'ions', side, at, bonds: ionRoute(side, q[0], -q[1]) };
+  }
   const center: 0 | 1 = counts[0] === 1 ? 0 : 1;
   const n = counts[1 - center];
-  if (counts[center] !== 1 || n < 2) return null;
-  // ions keep apart evenly; a covalent middle atom's unshared electrons
-  // take room too
+  if (n < 2) return null;
+  // a covalent middle atom's unshared electrons take room too
   const used = pic.kind === 'covalent' ? n * pic.order : 0;
   const lone = pic.kind === 'covalent' ? Math.max(0, Math.floor((valence[center] - used) / 2)) : 0;
   const steric = n + lone;
@@ -197,13 +244,20 @@ export function moleculeOf(left: BondElement, right: BondElement, c: Compound | 
     [Math.sin(a / 2), -Math.cos(a / 2), 0],
     [-Math.sin(a / 2), -Math.cos(a / 2), 0],
   ];
-  if (n === 2 && steric === 2) return { center, n, shape: 'linear', dirs: [[-1, 0, 0], [1, 0, 0]] };
-  if (n === 2 && steric === 3) return { center, n, shape: 'bent', dirs: flat(119 * deg) };
-  if (n === 2 && steric === 4) return { center, n, shape: 'bent', dirs: flat(104.5 * deg) };
+  const round = (shape: Molecule['shape'], dirs: [number, number, number][]): Molecule => {
+    const side: (0 | 1)[] = [center, ...dirs.map(() => (1 - center) as 0 | 1)];
+    const bonds: [number, number, number][] = q
+      ? ionRoute(side, q[0], -q[1])
+      : dirs.map((_, j) => (center === 0 ? [0, j + 1, 0] : [j + 1, 0, 0]));
+    return { shape, side, at: [[0, 0, 0], ...dirs], bonds };
+  };
+  if (n === 2 && steric === 2) return round('linear', [[-1, 0, 0], [1, 0, 0]]);
+  if (n === 2 && steric === 3) return round('bent', flat(119 * deg));
+  if (n === 2 && steric === 4) return round('bent', flat(104.5 * deg));
   // flat, and facing the viewer: lying level it would be seen edge on
-  if (n === 3 && steric === 3) return { center, n, shape: 'trigonal planar', dirs: [[0, 1, 0], [-Math.sqrt(3) / 2, -0.5, 0], [Math.sqrt(3) / 2, -0.5, 0]] };
-  if (n === 3 && steric === 4) return { center, n, shape: 'trigonal pyramidal', dirs: cone(3, 107) };
-  if (n === 4 && steric === 4) return { center, n, shape: 'tetrahedral', dirs: cone(3, 109.47).concat([[0, 1, 0]]) };
+  if (n === 3 && steric === 3) return round('trigonal planar', [[0, 1, 0], [-Math.sqrt(3) / 2, -0.5, 0], [Math.sqrt(3) / 2, -0.5, 0]]);
+  if (n === 3 && steric === 4) return round('trigonal pyramidal', cone(3, 107));
+  if (n === 4 && steric === 4) return round('tetrahedral', cone(3, 109.47).concat([[0, 1, 0]]));
   // five or more ways round (PCl5, SF4 with its lone pair): no shape to claim
   return null;
 }

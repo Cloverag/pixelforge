@@ -218,6 +218,8 @@ interface Mover {
 interface Bond {
   a: number;
   b: number;
+  /** ionic: the electrons that cross */
+  moves: number;
   /** where shared electrons gather: the middle of where the two outer shells meet */
   mid: THREE.Vector3;
   /** two directions across the bond, for the shared electrons to circle in */
@@ -226,10 +228,15 @@ interface Bond {
   glow: THREE.Mesh<THREE.SphereGeometry, THREE.ShaderMaterial> | null;
 }
 
-/** A molecule drawn whole: atom `center` of the pair in the middle, one of the other at each of `dirs` (unit vectors, y up). */
+/**
+ * A compound drawn whole: which of the pair each atom is (0 the left), where
+ * it sits in bond lengths (y up), and its bonds - two atoms, the left
+ * element's first, and the electrons that cross (ionic).
+ */
 export interface MoleculeLayout {
-  center: 0 | 1;
-  dirs: [number, number, number][];
+  side: (0 | 1)[];
+  at: [number, number, number][];
+  bonds: [number, number, number][];
 }
 
 /** Two atoms side by side - or a whole small molecule - and what passes between them. */
@@ -250,7 +257,7 @@ interface Pair {
   shells0: number[][];
   /** outer radius of each atom, in the group's units */
   radii: number[];
-  /** a molecule drawn whole: its labels sit away from its middle atom (atoms[0]) */
+  /** a compound drawn whole: its labels sit away from its middle */
   whole: boolean;
   tags: { atoms: HTMLElement[]; mid: HTMLElement | null; e: HTMLElement; spec: PairTags } | null;
   born: number;
@@ -375,15 +382,15 @@ export class Atom3D {
   /**
    * Two atoms side by side, `a` on the left, and the bond between them
    * played out once: no orbital lobes here, the shells carry the story.
-   * With `mol`, the whole molecule: one atom in the middle and the others
-   * round it, every bond played (CO2 drawn as one C and one O read as CO).
+   * With `mol`, the whole compound, every bond played in turn (CO2 drawn as
+   * one C and one O read as CO).
    */
   showPair(a: AtomSpec, b: AtomSpec, pic: BondPicture, tags: PairTags | null = null, mol: MoleculeLayout | null = null): void {
     // from one atom: face the pair square on, so the two stand side by side
     if (!this.pair) this.camera.position.set(0, 4, 26).setLength(this.camera.position.length());
     this.clear();
     const specs = [a, b];
-    const side: (0 | 1)[] = mol ? [mol.center, ...mol.dirs.map(() => (1 - mol.center) as 0 | 1)] : [0, 1];
+    const side: (0 | 1)[] = mol ? mol.side : [0, 1];
     const atoms = side.map((k) => this.build({ ...specs[k], orbitals: [] }));
     const radii = atoms.map((x) => SHELL_R0 + (x.electrons.length - 1) * SHELL_DR);
     const ra = radii[side.indexOf(0)];
@@ -391,10 +398,8 @@ export class Atom3D {
     // ions stand apart; atoms that share or pool electrons overlap their outer shells
     const gap = pic.kind === 'ionic' ? 1.2 : pic.kind === 'covalent' ? -0.35 * Math.min(ra, rb) : pic.kind === 'metallic' ? -0.2 * Math.min(ra, rb) : 1.5;
     const d = ra + gap + rb;
-    // the middle atom at the origin and the rest round it; a pair along x
-    const pos = mol
-      ? [new THREE.Vector3(), ...mol.dirs.map((u) => new THREE.Vector3(...u).multiplyScalar(d))]
-      : [new THREE.Vector3(-d / 2, 0, 0), new THREE.Vector3(d / 2, 0, 0)];
+    // a pair along x
+    const pos = mol ? mol.at.map((u) => new THREE.Vector3(...u).multiplyScalar(d)) : [new THREE.Vector3(-d / 2, 0, 0), new THREE.Vector3(d / 2, 0, 0)];
     // centred on what is drawn, so a bent molecule does not hang below the middle
     const lo = new THREE.Vector3(Infinity, Infinity, Infinity);
     const hi = new THREE.Vector3(-Infinity, -Infinity, -Infinity);
@@ -410,9 +415,8 @@ export class Atom3D {
       x.group.scale.setScalar(1);
       group.add(x.group);
     });
-    // each bond: the left element's atom first
-    const pairs: [number, number][] = mol ? mol.dirs.map((_, j) => (mol.center === 0 ? [0, j + 1] : [j + 1, 0])) : [[0, 1]];
-    const bonds: Bond[] = pairs.map(([ia, ib]) => {
+    const pairs: [number, number, number][] = mol ? mol.bonds : [[0, 1, pic.kind === 'ionic' ? pic.moves : 0]];
+    const bonds: Bond[] = pairs.map(([ia, ib, moves]) => {
       const axis = pos[ib].clone().sub(pos[ia]).normalize();
       // the middle of where the two outer shells meet
       const mid = pos[ia].clone().addScaledVector(axis, radii[ia]).add(pos[ib].clone().addScaledVector(axis, -radii[ib])).multiplyScalar(0.5);
@@ -438,7 +442,7 @@ export class Atom3D {
         glow.position.copy(mid);
         group.add(glow);
       }
-      return { a: ia, b: ib, mid, u, v, glow };
+      return { a: ia, b: ib, moves, mid, u, v, glow };
     });
     const shells0 = side.map((k) => specs[k].shells.slice());
     const movers = this.movers(pic, shells0, bonds);
@@ -448,7 +452,8 @@ export class Atom3D {
     group.add(free);
     // across, and up as it rolls (about x)
     const tall = 2 * Math.max(...pos.map((p, k) => Math.hypot(p.y, p.z) + radii[k]));
-    const fit = Math.min(FIT_R / Math.max(ra, rb, FIT_MIN), PAIR_W / (hi.x - lo.x), mol ? PAIR_H / tall : Infinity);
+    // a compound keeps a margin: a row of five ran off both sides
+    const fit = Math.min(FIT_R / Math.max(ra, rb, FIT_MIN), (mol ? 0.85 * PAIR_W : PAIR_W) / (hi.x - lo.x), mol ? PAIR_H / tall : Infinity);
     group.scale.setScalar(0.7 * fit);
     const tag = (t: Tag) => {
       const el = document.createElement('span');
@@ -527,9 +532,10 @@ export class Atom3D {
       out.push({ from, shell: k, start, slot: sh[k] - 1, of: sh[k], to, join, bond, i });
       sh[k]--;
     };
+    let t0 = BOND_T0;
     bonds.forEach((b, j) => {
-      const steps = pic.kind === 'ionic' ? Math.min(4, pic.moves) : pic.kind === 'covalent' ? Math.max(1, Math.min(3, pic.order)) : 0;
-      const t0 = BOND_T0 + j * (steps * STAGGER + 0.3);
+      const steps = pic.kind === 'ionic' ? Math.min(4, b.moves) : pic.kind === 'covalent' ? Math.max(1, Math.min(3, pic.order)) : 0;
+      if (j > 0) t0 += 0.3;
       for (let i = 0; i < steps; i++) {
         if (pic.kind === 'ionic') take(b.a, t0 + i * STAGGER, b.b, j);
         else {
@@ -537,6 +543,7 @@ export class Atom3D {
           take(b.b, t0 + i * STAGGER, b.a, j);
         }
       }
+      t0 += steps * STAGGER;
     });
     if (pic.kind === 'metallic') {
       for (const [k, atom] of [bonds[0].a, bonds[0].b].entries()) {
@@ -725,13 +732,12 @@ export class Atom3D {
       return [((v.x + 1) / 2) * w, ((1 - v.y) / 2) * h];
     };
     const made = age >= this.madeAt(p);
-    // a molecule's labels go above or below each atom, whichever is away
-    // from the middle atom on screen - all below, they landed on each other
-    // and on the caption; pushed out along the bonds, off the view
+    // a compound's labels go above or below each atom, whichever is away
+    // from its middle on screen - all below, they landed on each other and
+    // on the caption; pushed out along the bonds, off the view
     const ys = p.atoms.map((b) => screen(b.group.getWorldPosition(up))[1]);
-    const below = p.atoms.map((_, k) =>
-      !p.whole ? true : k > 0 ? ys[k] >= ys[0] - 6 : ys.filter((y, j) => j > 0 && y > ys[0]).length * 2 <= ys.length - 1,
-    );
+    const middle = ys.reduce((a, y) => a + y, 0) / ys.length;
+    const below = ys.map((y) => !p.whole || y >= middle - 6);
     p.atoms.forEach((b, k) => {
       const el = t.atoms[k];
       const spec = (p.side[k] === 0 ? t.spec.left : t.spec.right)[made ? 1 : 0];
