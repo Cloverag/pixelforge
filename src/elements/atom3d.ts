@@ -52,6 +52,19 @@ export type BondPicture =
   | { kind: 'metallic' }
   | { kind: 'apart' };
 
+/** A label floating over the bond view; its role sets its colour (positive blue, negative red, shared gold). */
+export interface Tag {
+  text: string;
+  role: 'pos' | 'neg' | 'shared' | 'plain';
+}
+
+/** The bond view's labels: each atom's before and once the bond is made, and one under the bond. */
+export interface PairTags {
+  left: [Tag, Tag];
+  right: [Tag, Tag];
+  mid: Tag | null;
+}
+
 const SHELL_R0 = 2.4;
 const SHELL_DR = 1.15;
 const NUCLEON_R = 0.2;
@@ -212,6 +225,9 @@ interface Pair {
   span: number;
   /** electrons per shell before any move */
   shells0: [number[], number[]];
+  /** outer radius of each atom, in the group's units */
+  radii: [number, number];
+  tags: { left: HTMLElement; right: HTMLElement; mid: HTMLElement | null; e: HTMLElement; spec: PairTags } | null;
   born: number;
   fit: number;
 }
@@ -235,6 +251,8 @@ export class Atom3D {
   private nucleonGeo = new THREE.SphereGeometry(NUCLEON_R, 14, 10);
   private electronGeo = new THREE.SphereGeometry(0.11, 12, 8);
   private reduced = matchMedia('(prefers-reduced-motion: reduce)');
+  /** the bond view's labels, over the canvas */
+  private tagLayer: HTMLElement;
 
   /**
    * `shiftX`: move the atom off centre by this share of the width (the title
@@ -252,6 +270,10 @@ export class Atom3D {
     r.domElement.style.cssText = 'width:100%;height:100%;display:block;touch-action:none;cursor:grab';
     container.appendChild(r.domElement);
     this.renderer = r;
+    this.tagLayer = document.createElement('div');
+    this.tagLayer.className = 'el-tags';
+    this.tagLayer.setAttribute('aria-hidden', 'true');
+    container.appendChild(this.tagLayer);
 
     this.scene.background = new THREE.Color(0x070816);
     this.camera = new THREE.PerspectiveCamera(38, 1, 0.1, 200);
@@ -329,7 +351,7 @@ export class Atom3D {
    * Two atoms side by side, `a` on the left, and the bond between them
    * played out once: no orbital lobes here, the shells carry the story.
    */
-  showPair(a: AtomSpec, b: AtomSpec, pic: BondPicture): void {
+  showPair(a: AtomSpec, b: AtomSpec, pic: BondPicture, tags: PairTags | null = null): void {
     // from one atom: face the pair square on, so the two stand side by side
     if (!this.pair) this.camera.position.set(0, 4, 26).setLength(this.camera.position.length());
     this.clear();
@@ -377,7 +399,17 @@ export class Atom3D {
     }
     const fit = Math.min(FIT_R / Math.max(ra, rb, FIT_MIN), PAIR_W / (ra + d + rb));
     group.scale.setScalar(0.7 * fit);
-    this.pair = { group, atoms, pic, movers, free, glow, mid, span: d / 2 + 0.5 * Math.min(ra, rb), shells0, born: this.time, fit };
+    const tag = (t: Tag) => {
+      const el = document.createElement('span');
+      el.className = `el-tag ${t.role}`;
+      el.textContent = t.text;
+      this.tagLayer.append(el);
+      return el;
+    };
+    const tagEls = tags
+      ? { left: tag(tags.left[0]), right: tag(tags.right[0]), mid: tags.mid ? tag(tags.mid) : null, e: tag({ text: 'e⁻', role: 'shared' }), spec: tags }
+      : null;
+    this.pair = { group, atoms, pic, movers, free, glow, mid, span: d / 2 + 0.5 * Math.min(ra, rb), shells0, radii: [ra, rb], tags: tagEls, born: this.time, fit };
     this.scene.add(group);
     this.setSpin(this.spin);
     this.setLayers(this.layers);
@@ -400,6 +432,7 @@ export class Atom3D {
       (p.free.material as THREE.Material).dispose();
       p.glow?.geometry.dispose();
       p.glow?.material.dispose();
+      this.tagLayer.replaceChildren();
       this.pair = null;
       this.setSpin(this.spin);
     }
@@ -449,6 +482,7 @@ export class Atom3D {
     } else if (this.pair) {
       this.pair.group.scale.setScalar(this.pair.fit);
       this.placePair(this.pair, Infinity);
+      this.placeTags(this.pair, Infinity);
     } else return;
     this.composer.render(0);
   }
@@ -587,6 +621,64 @@ export class Atom3D {
     }
   }
 
+  /** an electron in flight this frame (the first), in the pair's frame: the e⁻ label follows it */
+  private flying: THREE.Vector3 | null = null;
+
+  /** seconds after the pair appears that its last electron has landed: the bond is made */
+  private madeAt(p: Pair): number {
+    return p.movers.reduce((t, m) => Math.max(t, m.start + FLY), 0);
+  }
+
+  /**
+   * The labels follow the atoms on screen: each atom's under it, its charge
+   * or δ once the bond is made; the shared pair's under the bond; e⁻ on an
+   * electron in flight.
+   */
+  private placeTags(p: Pair, age: number): void {
+    const t = p.tags;
+    if (!t) return;
+    const w = this.container.clientWidth;
+    const h = this.container.clientHeight;
+    const v = new THREE.Vector3();
+    const up = new THREE.Vector3();
+    const s = p.group.scale.x;
+    const at = (el: HTMLElement, x: number, y: number) => {
+      el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) translate(-50%, -50%)`;
+    };
+    const screen = (world: THREE.Vector3): [number, number] => {
+      v.copy(world).project(this.camera);
+      return [((v.x + 1) / 2) * w, ((1 - v.y) / 2) * h];
+    };
+    const made = age >= this.madeAt(p);
+    p.atoms.forEach((b, side) => {
+      const el = side === 0 ? t.left : t.right;
+      const spec = (side === 0 ? t.spec.left : t.spec.right)[made ? 1 : 0];
+      if (el.textContent !== spec.text) {
+        el.textContent = spec.text;
+        el.className = `el-tag ${spec.role}`;
+      }
+      // under the atom (the header sits above), by world up: the pair rolls, the labels do not
+      b.group.getWorldPosition(up);
+      up.y -= (p.radii[side] + 0.9) * s;
+      at(el, ...screen(up));
+    });
+    if (t.mid) {
+      t.mid.style.opacity = made ? '1' : '0';
+      up.set(p.mid, 0, 0);
+      p.group.localToWorld(up);
+      // over the bond, clear of the atoms' own labels below
+      up.y += 2.4 * s;
+      at(t.mid, ...screen(up));
+    }
+    t.e.style.opacity = this.flying ? '1' : '0';
+    if (this.flying) {
+      up.copy(this.flying);
+      p.group.localToWorld(up);
+      const [x, y] = screen(up);
+      at(t.e, x + 16, y - 16);
+    }
+  }
+
   /** The pair `age` seconds after it appeared: who has left, who has arrived, and where the rest are. */
   private placePair(p: Pair, age: number): void {
     const t = this.time;
@@ -609,6 +701,7 @@ export class Atom3D {
     const to = new THREE.Vector3();
     const shared = p.movers.filter((m) => m.join === null).length;
     let n = 0;
+    this.flying = null;
     for (const m of p.movers) {
       if (age < m.start) continue;
       const k = (age - m.start) / FLY;
@@ -637,6 +730,7 @@ export class Atom3D {
         // over the top, not through the nuclei
         to.sub(from).multiplyScalar(e).add(from);
         to.y += Math.sin(Math.PI * k) * 1.4;
+        this.flying ??= to.clone();
       }
       p.free.setMatrixAt(n++, mat.makeTranslation(to.x, to.y, to.z));
     }
@@ -673,6 +767,7 @@ export class Atom3D {
       if (this.spin) p.group.rotation.x += dt * 0.35;
       // with reduced motion, the bond is shown made
       this.placePair(p, this.reduced.matches ? Infinity : age);
+      this.placeTags(p, this.reduced.matches ? Infinity : age);
     }
     this.controls.update(dt);
     this.composer.render(dt);

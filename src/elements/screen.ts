@@ -26,11 +26,13 @@ import {
   ionCharges,
   IONIC_DX,
   KIND_LABEL,
+  KIND_TINT,
   ordered,
   pairKey,
   pictureOf,
   POLAR_DX,
   subscript,
+  tagsOf,
   type Compound,
 } from './bond';
 import { FACTS } from './facts';
@@ -194,8 +196,8 @@ export class ElementsScreen {
     this.panel.setAttribute('aria-live', 'polite');
     this.buildTable();
     this.atom = new Atom3D(this.stage);
-    // the canvas goes under the header and caption
-    this.stage.prepend(this.stage.lastElementChild!);
+    // the canvas goes under the header, the caption and the bond view's labels
+    this.stage.prepend(this.stage.querySelector('canvas')!);
     this.recolour();
   }
 
@@ -318,7 +320,7 @@ export class ElementsScreen {
     const pic = pictureOf(kind, left, right, c);
     this.markCells();
     this.root.style.setProperty('--el-tint', tintOf(a));
-    this.atom.showPair(atomOf(left).spec, atomOf(right).spec, pic);
+    this.atom.showPair(atomOf(left).spec, atomOf(right).spec, pic, tagsOf(kind, left, right, c, pic));
     const dx = deltaChi(a, b);
     this.head.replaceChildren(
       h('div', 'el-z', '● BOND'),
@@ -342,35 +344,41 @@ export class ElementsScreen {
   }
 
   private showBondPanel(kind: ReturnType<typeof bondKind>, left: ElementData, right: ElementData, list: Compound[], c: Compound | null): void {
+    const dx = deltaChi(left, right);
+    const badge = h('div', 'el-kindbadge');
+    badge.style.setProperty('--k', KIND_TINT[kind]);
+    badge.append(h('span', 'el-kindbadge-k', KIND_LABEL[kind]));
+    if (dx !== null && kind !== 'metallic' && kind !== 'none') badge.append(h('span', 'el-kindbadge-dx', `Δχ ${dx.toFixed(2)}`));
     const why = h('p', 'el-why', explain(kind, left, right, c));
     const replay = h('button', 'el-replay', '▶ PLAY AGAIN') as HTMLButtonElement;
     replay.type = 'button';
     replay.onclick = () => this.replay();
 
-    const parts: HTMLElement[] = [section('BOND', 'Δχ RULE OF THUMB'), this.dxScale(deltaChi(left, right), kind), why, replay];
+    const parts: HTMLElement[] = [section('BOND', 'Δχ RULE OF THUMB'), badge, this.dxScale(dx, kind), why, replay];
 
     if (kind !== 'metallic' && kind !== 'none') {
       parts.push(section('ON RECORD', list.length ? `${list.length} IN PUBCHEM` : 'PUBCHEM'));
       if (list.length) {
-        const chips = h('div', 'el-compounds');
+        const cards = h('div', 'el-cmps');
         list.forEach((x, i) => {
-          const chip = h('button', i === this.pick ? 'el-compound on' : 'el-compound') as HTMLButtonElement;
-          chip.type = 'button';
-          chip.setAttribute('aria-pressed', String(i === this.pick));
-          chip.append(h('b', '', subscript(x.f)), document.createTextNode(` ${x.name}`));
-          chip.onclick = () => {
+          const card = h('button', i === this.pick ? 'el-cmp on' : 'el-cmp') as HTMLButtonElement;
+          card.type = 'button';
+          card.setAttribute('aria-pressed', String(i === this.pick));
+          card.append(h('span', 'el-cmp-f', subscript(x.f)), h('span', 'el-cmp-n', x.name));
+          card.onclick = () => {
             this.pick = i;
             this.showBond();
             this.onBond();
           };
-          chips.append(chip);
+          cards.append(card);
         });
-        parts.push(chips);
+        parts.push(cards);
         if (c) {
+          const [ql, qr] = left.z <= right.z ? c.q : [c.q[1], c.q[0]];
           const drawn =
             c.o > 0
               ? `with ${left.sym}–${right.sym} as a ${['', 'single', 'double', 'triple'][Math.min(3, c.o)]} bond`
-              : `as ions, ${left.sym}${chargeMark(left.z <= right.z ? c.q[0] : c.q[1])} and ${right.sym}${chargeMark(left.z <= right.z ? c.q[1] : c.q[0])}`;
+              : `as ions, ${left.sym}${chargeMark(ql)} and ${right.sym}${chargeMark(qr)}`;
           const link = h('a', 'el-link', `PubChem CID ${c.cid} ↗`) as HTMLAnchorElement;
           link.href = `https://pubchem.ncbi.nlm.nih.gov/compound/${c.cid}`;
           link.target = '_blank';
@@ -379,7 +387,7 @@ export class ElementsScreen {
           note.append(link);
           parts.push(note);
           const odd = disagreement(kind, c);
-          if (odd) parts.push(h('p', 'el-drawn', odd));
+          if (odd) parts.push(h('p', 'el-drawn el-odd', odd));
         }
       } else {
         parts.push(h('p', 'el-drawn', 'None of the formulas their common oxidation states predict is a compound in PubChem.'));
@@ -390,14 +398,12 @@ export class ElementsScreen {
       const sh = atomOf(e).shells;
       return sh[sh.length - 1];
     };
-    const both = (f: (e: ElementData) => string | number | null) =>
-      left.z === right.z ? String(f(left) ?? 'no data') : `${left.sym} ${f(left) ?? 'no data'} · ${right.sym} ${f(right) ?? 'no data'}`;
     parts.push(
       section('THE TWO ATOMS', ''),
-      rows([
-        ['ELECTRONEGATIVITY (χ)', both((e) => e.en)],
-        ['OUTER ELECTRONS', both(outer)],
-        ['OXIDATION STATES', both((e) => e.ox)],
+      twoAtoms(left, right, [
+        ['ELECTRONEGATIVITY (χ)', (e) => e.en],
+        ['OUTER ELECTRONS', outer],
+        ['OXIDATION STATES', (e) => e.ox],
       ]),
       h('p', 'el-source', `Bond kind: the gap in electronegativity (Pauling, PubChem), ${IONIC_DX} and up ionic, ${POLAR_DX} and up polar: a rule of thumb. Compounds: formulas predicted from PubChem's oxidation states, kept only where PubChem has the compound.`),
     );
@@ -405,16 +411,21 @@ export class ElementsScreen {
   }
 
   /**
-   * Δχ on a bar of three equal zones, nonpolar, polar and ionic, the
-   * boundaries marked: the 0.4-wide nonpolar zone would be a sliver on a
-   * straight scale. The marker sits proportionally within its zone.
+   * Δχ on a bar of three equal zones, nonpolar, polar and ionic, each in its
+   * kind's colour, the boundaries marked: the 0.4-wide nonpolar zone would be
+   * a sliver on a straight scale. The marker sits proportionally within its
+   * zone, and its zone is lit.
    */
   private dxScale(dx: number | null, kind: ReturnType<typeof bondKind>): HTMLElement {
     const MAX = 3.2;
-    const zones = [[0, POLAR_DX, 'NONPOLAR'], [POLAR_DX, IONIC_DX, 'POLAR'], [IONIC_DX, MAX, 'IONIC']] as const;
+    const zones = [[0, POLAR_DX, 'nonpolar'], [POLAR_DX, IONIC_DX, 'polar'], [IONIC_DX, MAX, 'ionic']] as const;
     const wrap = h('div', 'el-dx');
     const bar = h('div', 'el-dx-bar');
-    for (const [, , label] of zones) bar.append(h('span', 'el-dx-seg', label));
+    for (const [, , k] of zones) {
+      const seg = h('span', k === kind ? 'el-dx-seg on' : 'el-dx-seg', KIND_LABEL[k].replace(' COVALENT', ''));
+      seg.style.setProperty('--k', KIND_TINT[k]);
+      bar.append(seg);
+    }
     const ticks = h('div', 'el-dx-ticks');
     for (const [v, at] of [[0, 0], [POLAR_DX, 1 / 3], [IONIC_DX, 2 / 3], [MAX, 1]] as const) {
       const t = h('span', '', String(v));
@@ -773,6 +784,33 @@ function section(title: string, right: string): HTMLElement {
   const s = h('div', 'el-section');
   s.append(h('span', '', title), h('span', '', right));
   return s;
+}
+
+/** the two atoms side by side: a row per property, a column per atom (one, for an element with itself) */
+function twoAtoms(a: ElementData, b: ElementData, list: [string, (e: ElementData) => string | number | null][]): HTMLElement {
+  const both = a.z === b.z ? [a] : [a, b];
+  const t = document.createElement('table');
+  t.className = 'el-two';
+  const head = t.createTHead().insertRow();
+  head.append(document.createElement('th'));
+  for (const e of both) {
+    const th = document.createElement('th');
+    th.textContent = e.sym;
+    th.style.color = tintOf(e);
+    head.append(th);
+  }
+  const body = t.createTBody();
+  for (const [label, f] of list) {
+    const row = body.insertRow();
+    row.insertCell().textContent = label;
+    for (const e of both) {
+      const v = f(e);
+      const td = row.insertCell();
+      td.textContent = v === null ? 'no data' : String(v);
+      if (v === null) td.className = 'none';
+    }
+  }
+  return t;
 }
 
 /** label / value rows; a missing value says so, dimmed */

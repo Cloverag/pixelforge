@@ -166,3 +166,27 @@ describe('BOND: when PubChem and the rule of thumb disagree', async () => {
     expect(disagreement('ionic', null)).toBeNull();
   });
 });
+
+describe('BOND: the labels over the atoms', async () => {
+  const { tagsOf } = await import('../src/elements/bond');
+  const text = (t: ReturnType<typeof tagsOf>) => [t.left.map((x) => x.text), t.right.map((x) => x.text), t.mid?.text ?? null];
+
+  it("ionic: the symbols, then the ions' charges, positive and negative", () => {
+    const nacl: Compound = { f: 'NaCl', name: 'Sodium Chloride', cid: 5234, o: 0, q: [1, -1] };
+    const t = tagsOf('ionic', el('Na'), el('Cl'), nacl, { kind: 'ionic', moves: 1 });
+    expect(text(t)).toEqual([['Na', 'Na⁺'], ['Cl', 'Cl⁻'], null]);
+    expect([t.left[1].role, t.right[1].role]).toEqual(['pos', 'neg']);
+  });
+
+  it('polar: δ+ and δ−, and the shared pairs over the bond; none where PubChem gives formal charges', () => {
+    const t = tagsOf('polar', el('H'), el('O'), null, { kind: 'covalent', order: 1 });
+    expect(text(t)).toEqual([['H', 'H δ+'], ['O', 'O δ−'], 'shared pair']);
+    const co: Compound = { f: 'CO', name: 'Carbon Monoxide', cid: 281, o: 3, q: [-1, 1] };
+    expect(text(tagsOf('polar', el('C'), el('O'), co, { kind: 'covalent', order: 3 }))).toEqual([['C', 'C'], ['O', 'O'], '3 shared pairs']);
+  });
+
+  it('metallic: an electron sea; no bond: no label between', () => {
+    expect(tagsOf('metallic', el('Fe'), el('Cu'), null, { kind: 'metallic' }).mid?.text).toBe('electron sea');
+    expect(tagsOf('none', el('Ne'), el('F'), null, { kind: 'apart' }).mid).toBeNull();
+  });
+});

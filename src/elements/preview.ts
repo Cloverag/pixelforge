@@ -31,7 +31,7 @@ export class ElementsPreview {
       this.root.append(this.label);
       wrap.append(this.root);
       this.atom = new Atom3D(this.root, { shiftX: 0.3, interactive: false });
-      this.root.prepend(this.root.lastElementChild!);
+      this.root.prepend(this.root.querySelector('canvas')!);
       document.body.classList.add('elements-preview');
     }
     this.i = start % TOUR.length;

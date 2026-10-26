@@ -1,4 +1,4 @@
-import type { BondPicture } from './atom3d';
+import type { BondPicture, PairTags, Tag } from './atom3d';
 
 /**
  * The ELEMENTS mode's BOND view: what two elements do together. Pure: the
@@ -53,6 +53,16 @@ export const KIND_LABEL: Record<BondKind, string> = {
   metallic: 'METALLIC',
   none: 'NO BOND',
   unknown: 'UNKNOWN',
+};
+
+/** each kind's colour: its badge in the panel, its zone on the Δχ bar */
+export const KIND_TINT: Record<BondKind, string> = {
+  ionic: '#ff8a5c',
+  polar: '#ffc65c',
+  nonpolar: '#8cf06a',
+  metallic: '#b99cff',
+  none: '#7c82b8',
+  unknown: '#7c82b8',
 };
 
 /** PubChem's oxidation states as numbers: "+4, +2, -4" -> [4, 2, -4]; 0 left out */
@@ -135,6 +145,36 @@ export function pictureOf(kind: BondKind, left: BondElement, right: BondElement,
   return { kind: 'apart' };
 }
 
+/** formal charges on both atoms of a bonded structure (C⁻≡O⁺): no δ+/δ− is claimed */
+const formalCharges = (c: Compound | null): c is Compound => !!c && c.o > 0 && c.q[0] !== 0 && c.q[1] !== 0;
+
+/**
+ * The labels over the bond view: the two symbols, then once the bond is
+ * made the ions' charges (ionic) or δ+ and δ− (polar), and under the bond
+ * the shared pairs or the electron sea.
+ */
+export function tagsOf(kind: BondKind, left: BondElement, right: BondElement, c: Compound | null, pic: BondPicture): PairTags {
+  const plain = (e: BondElement): Tag => ({ text: e.sym, role: 'plain' });
+  const same = (e: BondElement): [Tag, Tag] => [plain(e), plain(e)];
+  if (pic.kind === 'ionic') {
+    const q = ionCharges(left, right, c)!;
+    return {
+      left: [plain(left), { text: left.sym + chargeMark(q[0]), role: 'pos' }],
+      right: [plain(right), { text: right.sym + chargeMark(q[1]), role: 'neg' }],
+      mid: null,
+    };
+  }
+  if (pic.kind === 'covalent') {
+    const mid: Tag = { text: pic.order === 1 ? 'shared pair' : `${pic.order} shared pairs`, role: 'shared' };
+    if (kind === 'polar' && !formalCharges(c)) {
+      return { left: [plain(left), { text: `${left.sym} δ+`, role: 'pos' }], right: [plain(right), { text: `${right.sym} δ−`, role: 'neg' }], mid };
+    }
+    return { left: same(left), right: same(right), mid };
+  }
+  if (pic.kind === 'metallic') return { left: same(left), right: same(right), mid: { text: 'electron sea', role: 'shared' } };
+  return { left: same(left), right: same(right), mid: null };
+}
+
 const lower = (e: BondElement) => e.name.toLowerCase();
 const electrons = (n: number) => (n === 1 ? 'electron' : 'electrons');
 const BOND_WORD = ['', 'single', 'double', 'triple'];
@@ -186,7 +226,7 @@ export function explain(kind: BondKind, left: BondElement, right: BondElement, c
       if (kind === 'nonpolar') return `${left.name} ${chi(left)} and ${lower(right)} ${chi(right)} pull almost equally, so they share electrons about evenly: ${bond}.`;
       const pull = `${right.name} ${chi(right)} pulls the shared electrons closer than ${lower(left)} ${chi(left)} does: ${bond}`;
       // formal charges in PubChem's structure (C⁻≡O⁺): the δ+/δ− rule would point the wrong way
-      if (c && c.o > 0 && c.q[0] !== 0 && c.q[1] !== 0) {
+      if (formalCharges(c)) {
         const [ql, qr] = left.z <= right.z ? c.q : [c.q[1], c.q[0]];
         return `${pull}. But PubChem's structure gives the atoms formal charges, ${left.sym}${chargeMark(ql)} and ${right.sym}${chargeMark(qr)}, so the simple δ+/δ− picture does not hold here.`;
       }
