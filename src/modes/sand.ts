@@ -66,7 +66,17 @@ export class SandMode implements ModeController {
     const ch = this.challenge;
     this.ctx.hud.buildPalette(
       {
-        sections: materialSections(ch?.allowed ?? null),
+        // a challenge is its level: no photo drawn over it
+        sections: ch
+          ? materialSections(ch.allowed)
+          : [
+              {
+                label: 'PICTURE',
+                cls: 'scenebtns',
+                buttons: [{ label: 'DRAW A PHOTO', title: 'A photo drawn into the world as lines - wood to burn, stone to pour water over', onClick: () => this.ctx.picture() }],
+              },
+              ...materialSections(null),
+            ],
         initial: String(ch?.allowed[0] ?? Mat.SAND),
         onPick: (id) => {
           this.selMat = Number(id);

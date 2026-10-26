@@ -1255,6 +1255,16 @@ body.crt-on .title-screen::after {
 .pf-dialog-box p { margin: 0 0 14px; font-family: var(--font-read); font-size: 14px; line-height: 1.5; color: var(--ink-dim); }
 .pf-dialog-box .pf-dialog-hint { margin: 10px 0 0; font-size: 14px; color: var(--ink-faint); }
 .pf-dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+/* PICTURE: the photo as line art, DETAIL, and what to draw it in */
+.pf-dialog-box.pic-dialog { width: min(720px, 94vw); max-height: 94vh; overflow-y: auto; }
+.pic-view { display: block; width: 100%; aspect-ratio: 16 / 9; border-radius: 8px; image-rendering: pixelated; box-shadow: 0 0 0 2px var(--line); }
+.pic-row { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 12px; margin-top: 14px; font-family: var(--font-display); font-size: 14px; color: var(--cyan); }
+.pic-row input { width: 100%; accent-color: var(--gold); }
+.pic-mats { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.pic-mat { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 6px 12px 6px 8px; font-family: var(--font-read); font-size: 15px; color: var(--ink-dim); background: var(--panel-deep); border: 3px solid var(--line); border-radius: 9px; cursor: pointer; }
+.pic-mat::before { content: ''; width: 20px; height: 20px; border-radius: 5px; background: var(--c); }
+.pic-mat:hover { border-color: var(--gold); color: var(--ink); }
+.pic-mat[aria-pressed='true'] { border-color: var(--gold); color: var(--ink); box-shadow: 0 0 0 2px var(--gold); }
 .pf-name-row { display: flex; align-items: center; gap: 12px; }
 .room-avatar.big { width: 38px; height: 38px; font-size: 14px; flex: none; }
 .pf-name-input {

@@ -57,6 +57,27 @@ function keys(onOk: () => void, onCancel: () => void): () => void {
   return () => removeEventListener('keydown', h, true);
 }
 
+/**
+ * A dialog to fill with your own content (PICTURE): Escape or a click
+ * outside calls `onCancel`; set what Enter does with `onEnter`. Null while
+ * another dialog is open - one question at a time.
+ */
+export function panelDialog(title: string, onCancel: () => void): { box: HTMLElement; close: () => void; onEnter: (f: () => void) => void } | null {
+  if (open > 0) return null;
+  const { box, root, close } = shell(title);
+  let enter = (): void => {};
+  const unkey = keys(() => enter(), onCancel);
+  root.onclick = (e) => e.target === root && onCancel();
+  return {
+    box,
+    close: () => {
+      unkey();
+      close();
+    },
+    onEnter: (f) => (enter = f),
+  };
+}
+
 export function confirmDialog(o: { title: string; body: string; ok: string; cancel: string }): Promise<boolean> {
   // one question at a time: a second click while one is open is a no, not a second dialog
   if (open > 0) return Promise.resolve(false);

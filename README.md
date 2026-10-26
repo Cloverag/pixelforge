@@ -51,7 +51,7 @@ get their own layout.
 
 | Mode | What it is |
 |------|------------|
-| **SANDBOX** | Paint any material with the brush, flood-fill (`F`) or blow wind (`W`); right-drag erases. Your world autosaves and comes back on reload; SAVE / LOAD / SHARE a link to it. |
+| **SANDBOX** | Paint any material with the brush, flood-fill (`F`) or blow wind (`W`); right-drag erases. Your world autosaves and comes back on reload; SAVE / LOAD / SHARE a link to it. **DRAW A PHOTO** turns a picture into line art in the world - wood to set alight, stone to pour water over, ice to melt (see [Picture](#picture)). |
 | **PLAY TOGETHER (beta)** | A room for friends: open one, send the link, and everyone builds in the same world - the sandbox or the playground. See [Playing together](#playing-together). |
 | **PARTICLE PLAYGROUND** | Light shows instead of materials: emitters, forces, bumpers that play notes, portals - with a film-look renderer, a full 3D view and sound design. See [The playground](#the-playground). |
 | **ASCII GARDEN** | Flowers, an eye made of words and 3D lilies, drawn as coloured text. Solo only. See [The ASCII garden](#the-ascii-garden). |
@@ -75,6 +75,19 @@ get their own layout.
 
 Each challenge shows only its allowed materials; budgeted swatches show a
 remaining-count badge and grey out when exhausted.
+
+### Picture
+
+DRAW A PHOTO (top of the sandbox rail) opens a picture and shows it as
+line art before anything is drawn, with DETAIL and the material to make it
+of (wood, stone, wall, ice, glass, plant). The edge detection is our own,
+no library (`src/game/lineart.ts`): brightness, a light blur so grain is
+not an edge, the Sobel operator, thinning to one-cell lines (a cell stays
+only where it is the strongest across its edge), then two thresholds taken
+from the picture itself - the strong edges, and weaker ones only where they
+join a strong one, so lines stay whole without the noise. The lines go into
+the world as ordinary one-cell paint inputs, so in a room everyone gets the
+picture on the same frame.
 
 ## Playing together
 
@@ -720,6 +733,7 @@ src/
     pause.ts               what the pause menu does to the simulation (pure)
     juice.ts               screen shake + flash on explosions
     share.ts, rle.ts       share links and save slots
+    lineart.ts             DRAW A PHOTO: a picture to one-cell line art (Sobel, thinning, two thresholds; pure)
     progress.ts            star progress
     wallpapers.ts          background wallpapers
   ui/

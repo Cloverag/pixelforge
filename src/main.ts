@@ -19,6 +19,7 @@ import type { NetInput, Snapshot } from './sim/protocol';
 import { RoomPill } from './ui/roompill';
 import { CursorLayer, REACT_MS } from './ui/cursors';
 import { confirmDialog, isDialogOpen, nameDialog } from './ui/dialog';
+import { pictureDialog } from './ui/picture';
 import { EmoteLayer } from './ui/emotes';
 import { EMOTES, PING } from './net/presence';
 import { myIdentity, saveIdentity } from './net/presence';
@@ -131,6 +132,7 @@ const modeCtx: ModeCtx = {
     if (paused && !inFlight) sendStep();
   },
   musicAdapt: (v) => music.adapt(v),
+  picture: () => void placePicture(),
   tryInLab: (scene, hint) =>
     void switchMode('chem').then(() => {
       if (current.id !== 'chem') return;
@@ -457,6 +459,43 @@ function autosaveEligible(): boolean {
 
 function autosaveNow(): void {
   if (autosaveEligible() && !saveIntents.includes('auto')) requestSnapshot('auto');
+}
+
+/**
+ * PICTURE: pick a photo, see it as line art, and draw it into the world.
+ * The lines go in as ordinary paint inputs, one cell each, so a room
+ * draws them on the same frame for everyone, like any stroke.
+ */
+async function placePicture(): Promise<void> {
+  if (screen !== 'game' || current.id !== 'sand' || current.challengeId) return;
+  // the picker lives in the page (iOS Safari will not open one that is not)
+  let input = document.getElementById('pf-picture') as HTMLInputElement | null;
+  if (!input) {
+    input = document.createElement('input');
+    input.id = 'pf-picture';
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.hidden = true;
+    document.body.append(input);
+  }
+  const picker = input;
+  picker.value = ''; // the same photo twice still counts as a choice
+  const file = await new Promise<File | null>((resolve) => {
+    picker.onchange = () => resolve(picker.files?.[0] ?? null);
+    picker.oncancel = () => resolve(null);
+    picker.click();
+  });
+  if (!file) return;
+  const got = await pictureDialog(file);
+  if (!got) return;
+  if (got.pts.length === 0) {
+    toast('NO LINES IN THAT PICTURE', true);
+    return;
+  }
+  // a few thousand cells an input: one huge message would stall a room
+  for (let k = 0; k < got.pts.length; k += 6000) send({ k: 'paint', pts: got.pts.slice(k, k + 6000), mat: got.mat, size: 1, kind: 'brush' });
+  sfx.ui();
+  toast('PICTURE DRAWN');
 }
 
 /** Drops a decoded world into the sandbox and leaves the menu. */

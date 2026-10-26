@@ -23,6 +23,8 @@ export interface ModeCtx {
   tryInLab(scene: string | null, hint: string): void;
   /** FOCUS: the screen fills the window, the panels out of the way (immersive mode), or back */
   toggleFocus(): void;
+  /** PICTURE: pick a photo and draw it into the world as line art */
+  picture(): void;
 }
 
 /** Cursor fields a room shares: material colour and tool mark. */
