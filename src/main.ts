@@ -131,6 +131,12 @@ const modeCtx: ModeCtx = {
     if (paused && !inFlight) sendStep();
   },
   musicAdapt: (v) => music.adapt(v),
+  tryInLab: (scene, hint) =>
+    void switchMode('chem').then(() => {
+      if (current.id !== 'chem') return;
+      if (scene) send({ k: 'chemScene', id: scene });
+      toast(hint);
+    }),
 };
 const sandbox = new SandMode(modeCtx);
 const playground = new PlaygroundMode(modeCtx);

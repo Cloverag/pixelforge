@@ -19,6 +19,8 @@ export interface ModeCtx {
   nudge(): void;
   /** what this screen's music adapts to (the chem lab: reactions per second) */
   musicAdapt(v: number): void;
+  /** off to the chem lab, to try a reaction there: an experiment to load, and what to paint */
+  tryInLab(scene: string | null, hint: string): void;
 }
 
 /** Cursor fields a room shares: material colour and tool mark. */

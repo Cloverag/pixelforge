@@ -78,6 +78,7 @@ function buildContent(box: HTMLElement): void {
     ['ARROWS', 'elements: move round the periodic table'],
     ['O / K / R', 'elements: orbitals / shells / spin'],
     ['J', 'elements: bond with a second element'],
+    ['X', 'elements: reactions: search, steps, what comes next'],
     ['1-9', 'quick-pick palette swatch'],
     ['SPACE', 'pause / resume'],
     ['N', 'single step while paused'],

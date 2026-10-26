@@ -415,6 +415,14 @@ export class Atom3D {
     this.setLayers(this.layers);
   }
 
+  /** the bond view: whether its electrons have yet to move, are moving, or the bond is made (null: one atom) */
+  bondPhase(): 'before' | 'moving' | 'made' | null {
+    const p = this.pair;
+    if (!p) return null;
+    const age = this.paused || this.reduced.matches ? Infinity : this.time - p.born;
+    return age < BOND_T0 && p.movers.length ? 'before' : age < this.madeAt(p) ? 'moving' : 'made';
+  }
+
   /** the bond view: play the bond again from the start */
   replay(): void {
     if (!this.pair) return;

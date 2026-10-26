@@ -392,8 +392,36 @@ The kind comes from the electronegativity gap, and the panel says it is a
 rule of thumb, with Δχ marked on a nonpolar / polar / ionic bar. Where
 PubChem's own structure disagrees (it draws sodium hydride as ions though its
 Δχ is 1.27), the panel says that too. Below are the pair's compounds on
-record, each a chip that switches the picture to it, with PubChem's name and
-a link to its page.
+record, each a card that switches the picture to it, with PubChem's name and
+a link to its page. Labels ride the 3D view: each atom's symbol, turning into
+its ion (Na⁺ blue, Cl⁻ red) or δ+ / δ− once the bond is made, the shared
+pairs or the electron sea over the bond, and e⁻ on an electron in flight.
+
+**REACTIONS** (`X`, or the rail's REACTIONS button) opens a searchable list
+in the panel: 1,105 balanced equations. Search by name ("rust"), element
+("Na": every reaction with sodium), formula ("H2O") or kind ("combustion");
+every word must match, and one letter is a symbol (C is carbon, not
+chlorine).
+
+- **44 famous reactions**: burning (hydrogen, methane, charcoal, propane,
+  magnesium), the alkali metals in water, thermite, the Haber, contact and
+  Ostwald processes, acid meets base, electrolysis, photosynthesis and
+  respiration, precipitates and displacements. Their steps are written, in
+  words without figures.
+- **1,061 formations**: every compound on record made from its elements, the
+  elements as they come (H₂, Cl₂; Na, Fe as atoms), balanced by code
+  (4 Fe + 3 O₂ → 2 Fe₂O₃). Their steps are worked out from PubChem's numbers:
+  what splits (Cl₂ into atoms), what each atom gives or takes with its first
+  ionization energy and electron affinity (an oxide's second electron costs
+  energy, and the panel says so), or the bond order shared.
+
+Picking one plays its bond in 3D, and a formation's steps light up as the
+picture reaches them. **What reacts next** lists the reactions that start
+from its products (salt goes on to be split by electricity, or to meet silver
+nitrate), each a link. The ones CHEM LAB simulates have **TRY IT IN THE CHEM
+LAB**: the alkali metals in water load its ALKALI BATH, thermite its
+THERMITE, and the rest say what to paint. Every equation is checked to
+balance (`tests/reactions.test.ts`).
 
 - **Configurations, weights and the rest** are PubChem's (the same
   `src/data/elements.json` as the chem lab); every element's configuration,
@@ -466,6 +494,7 @@ entry bundle.
 | `E` | Periodic table (chem lab); elements (menu) |
 | Arrows / `O` / `K` / `R` | Move round the table / orbitals / shells / spin (elements) |
 | `J` | Bond with a second element: click it on the table; arrows then move the partner (elements) |
+| `X` | Reactions: search, how each happens, what comes next (elements) |
 | `O` | Open a room (menu) |
 | `Z` | Ping where your cursor is (in a room) |
 | `3` | 3D view |
@@ -606,7 +635,8 @@ src/
   elements/
     atom.ts                configurations -> shells, last subshell, orbitals (real harmonics), wavelength colour (pure)
     atom3d.ts              the atom in three.js: nucleus, shells, orbital lobes, bloom; two atoms and their bond
-    bond.ts                BOND: kind by Δχ, charges, what the picture plays, the explanation (pure)
+    bond.ts                BOND: kind by Δχ, charges, what the picture plays, its labels, the explanation (pure)
+    reactions.ts           REACTIONS: famous and formation equations, balancing, steps, search, what comes next (pure)
     screen.ts              the screen: header, panel, spectrum strip, clickable table
     trends.ts              colour-by views, state at T, records, orbital boxes, data caveats (pure)
     preview.ts             the atom behind the title screen while ELEMENTS is hovered

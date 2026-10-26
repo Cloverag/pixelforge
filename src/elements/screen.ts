@@ -36,6 +36,7 @@ import {
   type Compound,
 } from './bond';
 import { FACTS } from './facts';
+import { equationText, FAMOUS, formations, nextOf, searchReactions, type LabTry, type Reaction } from './reactions';
 import { NAMED } from './names';
 import {
   boxRows,
@@ -66,6 +67,9 @@ import {
  *
  * BOND (J): the selected element and a second one picked off the table,
  * side by side, and the bond between them played out (elements/bond.ts).
+ * REACTIONS (X): a searchable list of balanced equations in the panel; one
+ * picked plays its bond in 3D beside how it happens and what its products
+ * go on to react with (elements/reactions.ts).
  *
  * Sources: numbers and electron configurations from PubChem
  * (data/elements.json), visible lines from the NIST Atomic Spectra Database
@@ -86,6 +90,10 @@ const BY_SYM = new Map(ALL.map((e) => [e.sym, e]));
 const BONDS = BONDS_JSON as unknown as Record<string, Compound[]>;
 /** the two-element compounds of a pair on record, most common oxidation state first */
 export const compoundsOf = (a: ElementData, b: ElementData): Compound[] => BONDS[pairKey(a, b)] ?? [];
+/** every reaction: the famous first, then each compound on record made from its elements */
+const REACTIONS: Reaction[] = [...FAMOUS, ...formations(BONDS, (s) => BY_SYM.get(s)!)];
+/** rows the reaction list draws at once: a search narrows the rest */
+const LIST_MAX = 80;
 
 /** The ten categories, in the rail's order: PubChem's name, our word, colour. */
 // the rail's labels carry soft hyphens, so the long ones break inside its narrow tiles
@@ -183,11 +191,17 @@ export class ElementsScreen {
   private partner: number | null = null;
   /** BOND: which of the pair's compounds the picture follows */
   private pick = 0;
+  /** what the panel shows: the element or the bond, the reaction list, or one reaction */
+  private view: 'bond' | 'list' | 'reaction' = 'bond';
+  private reaction: Reaction | null = null;
+  private query = '';
+  private stepsRaf = 0;
   layers: Layers = { orbitals: true, shells: true };
 
   constructor(
     private onPick: (e: ElementData) => void,
     private onBond: () => void = () => {},
+    private onLab: (lab: LabTry) => void = () => {},
   ) {
     const left = h('div', 'el-left');
     this.stage.append(this.head, this.caption);
@@ -223,6 +237,7 @@ export class ElementsScreen {
   }
 
   dispose(): void {
+    cancelAnimationFrame(this.stepsRaf);
     this.atom.dispose();
     this.root.remove();
   }
@@ -249,15 +264,50 @@ export class ElementsScreen {
       this.setPartner(defaultPartner(this.current, (s) => BY_SYM.get(s)!, (a, b) => compoundsOf(a, b).length > 0).z);
     } else {
       this.partner = null;
+      this.reaction = null;
+      if (this.view === 'reaction') this.view = 'bond';
       this.grid.classList.remove('bonding');
       this.select(this.z);
     }
   }
 
-  /** BOND: the second element */
+  get listing(): boolean {
+    return this.view !== 'bond';
+  }
+
+  /** REACTIONS on: the list in the panel (the atoms stay as they are); off: back to the element or the bond */
+  setReactions(on: boolean): void {
+    if (on === this.listing) return;
+    this.reaction = null;
+    this.view = on ? 'list' : 'bond';
+    if (on) this.showList();
+    else if (this.partner !== null) this.showBond();
+    else this.select(this.z);
+  }
+
+  /** One reaction: its bond in 3D, how it happens and what comes next in the panel. */
+  openReaction(r: Reaction): void {
+    const a = BY_SYM.get(r.show[0])!;
+    const b = BY_SYM.get(r.show[1])!;
+    this.z = a.z;
+    this.partner = b.z;
+    this.grid.classList.add('bonding');
+    this.pick = Math.max(0, compoundsOf(a, b).findIndex((c) => c.f === r.show[2]));
+    this.reaction = r;
+    this.view = 'reaction';
+    this.showBond();
+    this.onPick(a);
+    this.onBond();
+  }
+
+  /** BOND: the second element (a reaction open gives way to the new pair's bond) */
   setPartner(z: number): void {
     this.partner = z;
     this.pick = 0;
+    if (this.view === 'reaction') {
+      this.view = 'bond';
+      this.reaction = null;
+    }
     this.showBond();
     this.onBond();
   }
@@ -303,7 +353,9 @@ export class ElementsScreen {
       `lobes: ${sub} (${orbitals.map((o) => o.name).join(' ')}) as |Y|² · ` +
       `rings: ${shells.length > 1 ? 'shells' : 'shell'} ${SHELL_LETTER[0]}${shells.length > 1 ? '–' + SHELL_LETTER[shells.length - 1] : ''}, not paths · ` +
       'nucleus not to scale';
-    this.showPanel(e, shells, subs);
+    // the reaction list stays up while the table is browsed
+    if (this.view === 'list') this.showList();
+    else this.showPanel(e, shells, subs);
     this.showReadout();
     this.onPick(e);
   }
@@ -339,8 +391,136 @@ export class ElementsScreen {
     } else {
       this.caption.textContent = `nothing passes between them · ${notPaths}`;
     }
-    this.showBondPanel(kind, left, right, list, c);
+    if (this.view === 'list') this.showList();
+    else if (this.view === 'reaction' && this.reaction) this.showReaction(this.reaction);
+    else this.showBondPanel(kind, left, right, list, c);
     this.showReadout();
+  }
+
+  // ---- REACTIONS ----
+
+  /** The list: a search box over the matching reactions; with no search, the famous ones. */
+  private showList(): void {
+    const box = document.createElement('input');
+    box.type = 'search';
+    box.className = 'el-rsearch';
+    box.placeholder = 'SEARCH: rust, Na, H2O, burns';
+    box.value = this.query;
+    box.spellcheck = false;
+    box.autocomplete = 'off';
+    box.setAttribute('aria-label', 'Search reactions by name, element, formula or kind');
+    box.addEventListener('keydown', (ev) => {
+      ev.stopPropagation();
+      if (ev.key === 'Escape' || ev.key === 'Enter') box.blur();
+    });
+    const head = section('REACTIONS', '');
+    const rows = h('div', 'el-rxs');
+    const fill = () => {
+      const q = this.query.trim();
+      const found = q ? searchReactions(q, REACTIONS) : FAMOUS;
+      head.lastElementChild!.textContent = q ? `${found.length} OF ${REACTIONS.length}` : `${FAMOUS.length} FAMOUS · ${REACTIONS.length - FAMOUS.length} FORMATIONS`;
+      rows.replaceChildren(...found.slice(0, LIST_MAX).map((r) => this.reactionRow(r)));
+      if (!found.length) rows.append(h('p', 'el-drawn', 'Nothing matches. Try an element symbol (Fe), a formula (CO2) or a word (burns).'));
+      if (found.length > LIST_MAX) rows.append(h('p', 'el-drawn', `${found.length - LIST_MAX} more: add a word to narrow it.`));
+      if (!q) rows.append(h('p', 'el-drawn', `Search an element (Na, Fe) to see the ${REACTIONS.length - FAMOUS.length} compounds on record made from their elements too.`));
+    };
+    box.oninput = () => {
+      this.query = box.value;
+      fill();
+    };
+    fill();
+    this.panel.replaceChildren(
+      head,
+      box,
+      rows,
+      h('p', 'el-source', 'Equations are balanced and checked by code. The famous reactions’ steps are written; a formation’s steps are worked out from PubChem’s ionization energies, electron affinities and bond orders.'),
+    );
+  }
+
+  private reactionRow(r: Reaction): HTMLElement {
+    const row = h('button', 'el-rx') as HTMLButtonElement;
+    row.type = 'button';
+    row.append(h('span', 'el-rx-eq', equationText(r)), h('span', 'el-rx-name', `${r.name} · ${r.kind.toLowerCase()}`));
+    row.onclick = () => this.openReaction(r);
+    return row;
+  }
+
+  /** One reaction: the equation, how it happens step by step (lit as the 3D view plays it), CHEM LAB, what comes next. */
+  private showReaction(r: Reaction): void {
+    const back = h('button', 'el-back', '◀ ALL REACTIONS') as HTMLButtonElement;
+    back.type = 'button';
+    back.onclick = () => {
+      this.view = 'list';
+      this.reaction = null;
+      this.showList();
+      this.onBond();
+    };
+    const steps = h('ol', 'el-steps');
+    for (const st of r.steps) {
+      const li = h('li', '', st.text);
+      if (st.phase) li.dataset.phase = st.phase;
+      steps.append(li);
+    }
+    const play = h('button', 'el-replay', '▶ PLAY IT') as HTMLButtonElement;
+    play.type = 'button';
+    play.onclick = () => this.replay();
+
+    const parts: HTMLElement[] = [
+      back,
+      section(r.kind, r.kind === 'FORMATION' ? 'FROM ITS ELEMENTS' : 'A FAMOUS ONE'),
+      h('div', 'el-rname', r.name),
+      h('div', 'el-eq', equationText(r)),
+      section('HOW IT HAPPENS', 'STEP BY STEP'),
+      steps,
+      play,
+    ];
+    if (r.lab) {
+      const lab = r.lab;
+      const go = h('button', 'el-lab', 'TRY IT IN THE CHEM LAB ▶') as HTMLButtonElement;
+      go.type = 'button';
+      go.onclick = () => this.onLab(lab);
+      parts.push(go, h('p', 'el-drawn', lab.scene ? `Loads the experiment: ${lab.hint.toLowerCase()}.` : `In the lab: ${lab.hint.toLowerCase()}.`));
+    }
+    const next = nextOf(r, REACTIONS);
+    parts.push(section('WHAT REACTS NEXT', next.length ? 'FROM ITS PRODUCTS' : ''));
+    if (next.length) {
+      const rows = h('div', 'el-rxs');
+      rows.append(...next.map((x) => this.reactionRow(x)));
+      parts.push(rows);
+    } else {
+      parts.push(h('p', 'el-drawn', 'Nothing in the list starts from its products.'));
+    }
+    const [a, b] = [BY_SYM.get(r.show[0])!, BY_SYM.get(r.show[1])!];
+    const c = compoundsOf(a, b)[this.pick];
+    const bond = h('button', 'el-back', `SEE THE ${a.sym}–${b.sym} BOND ▶`) as HTMLButtonElement;
+    bond.type = 'button';
+    bond.onclick = () => {
+      this.view = 'bond';
+      this.reaction = null;
+      this.showBond();
+      this.onBond();
+    };
+    parts.push(
+      section('IN 3D', ''),
+      h('p', 'el-drawn', `The view plays the ${a.sym}–${b.sym} bond${c && r.show[2] ? ` of ${subscript(c.f)}, ${c.name}` : ''}.`),
+      bond,
+    );
+    this.panel.replaceChildren(...parts);
+    this.litSteps(steps);
+  }
+
+  /** while a reaction is open, light the steps of the phase the 3D view is playing */
+  private litSteps(list: HTMLElement): void {
+    cancelAnimationFrame(this.stepsRaf);
+    const items = [...list.children] as HTMLElement[];
+    if (!items.some((li) => li.dataset.phase)) return;
+    const tick = () => {
+      if (this.view !== 'reaction' || !list.isConnected) return;
+      const phase = this.atom.bondPhase();
+      for (const li of items) li.classList.toggle('on', li.dataset.phase === phase);
+      this.stepsRaf = requestAnimationFrame(tick);
+    };
+    tick();
   }
 
   private showBondPanel(kind: ReturnType<typeof bondKind>, left: ElementData, right: ElementData, list: Compound[], c: Compound | null): void {
