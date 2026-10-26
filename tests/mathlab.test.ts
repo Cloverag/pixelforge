@@ -47,6 +47,41 @@ describe('MATH LAB drawings', () => {
   });
 });
 
+describe('MATH LAB: LISSAJOUS and FIBONACCI', () => {
+  const get = (id: string) => BASE.find((d) => d.id === id)!;
+
+  it('a Lissajous figure closes on itself; one swing each way a quarter apart is a circle', () => {
+    const d = get('lissajous');
+    for (const p of settings(d)) {
+      const st = d.strokes(p);
+      expect(st[st.length - 1].x2).toBeCloseTo(st[0].x1, 6);
+      expect(st[st.length - 1].y2).toBeCloseTo(st[0].y1, 6);
+    }
+    for (const s of d.strokes({ a: 1, b: 1, phase: 90 })) expect(Math.hypot(s.x1, s.y1)).toBeCloseTo(250, 6);
+    // in phase, it is a line
+    for (const s of d.strokes({ a: 1, b: 1, phase: 0 })) expect(s.x1).toBeCloseTo(s.y1, 6);
+  });
+
+  it('the Fibonacci squares tile a rectangle with no gap or overlap, and the spiral is one unbroken line', () => {
+    const d = get('fibonacci');
+    for (let n = 2; n <= 14; n++) {
+      const st = d.strokes({ n });
+      const sides = st.filter((s) => s.line === 3).map((s) => Math.hypot(s.x2 - s.x1, s.y2 - s.y1));
+      expect(sides).toHaveLength(4 * n);
+      const sq = sides.filter((_, i) => i % 4 === 0);
+      // each square as wide as the two before it
+      for (let k = 2; k < n; k++) expect(sq[k]).toBeCloseTo(sq[k - 1] + sq[k - 2], 6);
+      // their areas add up to the box round them: they fill it exactly
+      const xs = st.flatMap((s) => [s.x1, s.x2]), ys = st.flatMap((s) => [s.y1, s.y2]);
+      const box = (Math.max(...xs) - Math.min(...xs)) * (Math.max(...ys) - Math.min(...ys));
+      expect(sq.reduce((a, s) => a + s * s, 0) / box).toBeCloseTo(1, 6);
+      const arcs = st.filter((s) => s.line === 4);
+      for (let i = 1; i < arcs.length; i++) expect(Math.hypot(arcs[i].x1 - arcs[i - 1].x2, arcs[i].y1 - arcs[i - 1].y2)).toBeLessThan(1e-6);
+      if (n === 14) expect(sq[13] / sq[12]).toBeCloseTo((1 + Math.sqrt(5)) / 2, 4);
+    }
+  });
+});
+
 describe('MATH LAB formulas (KaTeX)', () => {
   const ok = (tex: string | null, what: string) => {
     expect(tex, what).toBeTypeOf('string');

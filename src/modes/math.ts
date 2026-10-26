@@ -27,6 +27,8 @@ const CHIPS: Record<string, string> = {
   sunflower: 'linear-gradient(135deg,#f2b81c 0 50%,#5a3416 50% 100%)',
   maurer: 'linear-gradient(135deg,#ff4a6a 0 50%,#52c8ff 50% 100%)',
   spiro: 'linear-gradient(135deg,#7ad8ff 0 50%,#ff7ad8 50% 100%)',
+  lissajous: 'linear-gradient(135deg,#7dff8a 0 50%,#1f7a5c 50% 100%)',
+  fibonacci: 'linear-gradient(135deg,#ffc83d 0 50%,#3a4f8a 50% 100%)',
   yours: 'linear-gradient(135deg,#ffd23f 0 50%,#ff4fa3 50% 100%)',
   python: 'linear-gradient(135deg,#3776ab 0 50%,#ffd43b 50% 100%)',
 };
