@@ -21,6 +21,8 @@ function lastElement(): number {
  * atom turns in front of you - nucleus, shells and the shapes of its outer
  * orbitals - beside its numbers, its spectrum and what it is used for.
  *
+ * BOND pairs it with a second element and plays the bond between them.
+ *
  * The screen (elements/screen.ts, with three.js and the element data) loads
  * on the way in. Solo, like the math lab: there is no world to share.
  */
@@ -41,6 +43,7 @@ export class ElementsMode implements ModeController {
     o: () => this.toggleLayer('orbitals'),
     k: () => this.toggleLayer('shells'),
     r: () => this.toggleSpin(),
+    j: () => this.toggleBond(),
   };
   private mod: Screen | null = null;
   private screen: InstanceType<Screen['ElementsScreen']> | null = null;
@@ -110,6 +113,7 @@ export class ElementsMode implements ModeController {
           { label: 'ORBITALS', title: 'The shapes of the outer orbitals (O)', onClick: () => this.toggleLayer('orbitals'), lamp: 'orbitals', on: true },
           { label: 'SHELLS', title: 'The electron shells, K to Q (K)', onClick: () => this.toggleLayer('shells'), lamp: 'shells', on: true },
           { label: 'SPIN', title: 'Turn the atom slowly; drag to turn it yourself (R)', onClick: () => this.toggleSpin(), lamp: 'spin', on: true },
+          { label: 'BOND', title: 'Bond it with a second element: click one on the table (J)', onClick: () => this.toggleBond(), lamp: 'bond', on: false },
           { label: '◀ PREV', title: 'The element before (←)', onClick: () => this.screen?.move('left') },
           { label: 'NEXT ▶', title: 'The element after (→)', onClick: () => this.screen?.move('right') },
           { label: 'COPY LINK', title: 'A link that opens this element', onClick: () => void this.share() },
@@ -136,7 +140,7 @@ export class ElementsMode implements ModeController {
       }
       this.ctx.hud.setParticles(e.z);
       this.ctx.sfx.ui();
-    });
+    }, () => this.ctx.sfx.ui());
     if (this.linked) {
       const e = mod.findElement(this.linked);
       if (e) this.z = e.z;
@@ -149,6 +153,15 @@ export class ElementsMode implements ModeController {
     this.ctx.hud.setLamp('orbitals', this.screen.layers.orbitals);
     this.ctx.hud.setLamp('shells', this.screen.layers.shells);
     this.ctx.hud.setLamp('spin', this.screen.spinning);
+    this.ctx.hud.setLamp('bond', false);
+  }
+
+  private toggleBond(): void {
+    const s = this.screen;
+    if (!s) return;
+    s.setBond(!s.bonding);
+    this.ctx.hud.setLamp('bond', s.bonding);
+    if (s.bonding) this.ctx.toast(`CLICK AN ELEMENT TO BOND IT WITH ${s.current.name.toUpperCase()}`);
   }
 
   private async share(): Promise<void> {

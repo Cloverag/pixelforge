@@ -370,6 +370,31 @@ helium's melting point is under pressure (it never freezes at 1 atm), and
 carbon and arsenic sublime. The panel says so beside the value, and no
 record is claimed from those (`CAVEATS` in `src/elements/trends.ts`).
 
+**BOND** (`J`, or the rail's BOND button) pairs the element with a second
+one: click any element on the table (a white dot marks those it has a
+compound with on record). The two atoms stand side by side, the less
+electronegative on the left, and the bond plays out once (PLAY AGAIN repeats
+it; the electrons in play glow warm):
+
+- **Ionic** (Δχ 1.7 or more): electrons arc from the left atom's outer shell
+  into the right one's. Sodium's lone 3s electron goes over, its M shell goes
+  dark and chlorine's fills to 8: Na⁺ and Cl⁻. The picture is one atom of
+  each; the panel does the whole formula ("In Al₂O₃, 2 Al give 6 electrons to
+  3 O").
+- **Covalent** (polar from 0.4, else nonpolar): one electron from each atom
+  per shared pair, circling between them, as many pairs as the bond order in
+  PubChem's structure (C≡O three, O=C=O two, C–H one).
+- **Metallic** (two metals): every outer electron leaves its shell and roams
+  over both atoms.
+- **None**: a noble gas, with only oxidation state 0 in PubChem's list.
+
+The kind comes from the electronegativity gap, and the panel says it is a
+rule of thumb, with Δχ marked on a nonpolar / polar / ionic bar. Where
+PubChem's own structure disagrees (it draws sodium hydride as ions though its
+Δχ is 1.27), the panel says that too. Below are the pair's compounds on
+record, each a chip that switches the picture to it, with PubChem's name and
+a link to its page.
+
 - **Configurations, weights and the rest** are PubChem's (the same
   `src/data/elements.json` as the chem lab); every element's configuration,
   core written out, adds up to its atomic number (tested). PubChem marks the
@@ -382,6 +407,18 @@ record is claimed from those (`CAVEATS` in `src/elements/trends.ts`).
   einsteinium) NIST has none, and the panel says that rather than drawing
   any. Intensities come from many sources and only compare within one
   element, which is all the strip does with them.
+- **Compounds** are predicted, then checked: for every pair of elements the
+  formulas follow from PubChem's common oxidation states (the more
+  electronegative element takes a negative one: Na +1 with Cl −1 is NaCl, C +4
+  with O −2 is CO2), and each is kept only if PubChem has a compound with
+  exactly that formula, its title, bond orders and charges taken from
+  PubChem's record. An element with itself counts only as the X₂ molecule
+  PubChem files under the element's name (H₂ is "Hydrogen"; C₂, "Dicarbon",
+  is not carbon's form). `scripts/fetch-bonds.mjs` writes
+  `src/data/bonds.json`: 1,069 compounds for 764 pairs. Records that
+  are not a neutral, named compound (ions such as NH₂⁻, radicals such as NH,
+  mixtures, untitled or isotope-labelled entries) are passed over for the
+  formula's next hit.
 - **The facts, uses and name origins** are written by hand
   (`src/elements/facts.ts`, `src/elements/names.ts`), not fetched: kept to
   well-established facts, with no precise figures. The records are not
@@ -428,6 +465,7 @@ entry bundle.
 | `R` / `F` | Draw again / finish (math lab) |
 | `E` | Periodic table (chem lab); elements (menu) |
 | Arrows / `O` / `K` / `R` | Move round the table / orbitals / shells / spin (elements) |
+| `J` | Bond with a second element: click it on the table; arrows then move the partner (elements) |
 | `O` | Open a room (menu) |
 | `Z` | Ping where your cursor is (in a room) |
 | `3` | 3D view |
@@ -541,11 +579,13 @@ index.html                 app shell, link-preview tags
 public/og.jpg              link-preview card (flower ponds + the title menu)
 scripts/fetch-elements.mjs regenerates src/data/elements.json from PubChem (by hand)
 scripts/fetch-spectra.mjs  regenerates src/data/spectra.json from the NIST ASD (by hand)
+scripts/fetch-bonds.mjs    regenerates src/data/bonds.json: two-element compounds found in PubChem (by hand)
 src/
   main.ts                  fixed-step loop, worker + room wiring, menu; asks the current mode
   styles.css               all styling (the one dark palette, the pixel frame, CRT, phone layout, dialogs)
   data/elements.json       the periodic table: 118 elements, trimmed PubChem data
   data/spectra.json        each element's visible lines, from the NIST Atomic Spectra Database
+  data/bonds.json          two-element compounds PubChem has: formula, title, bond order, charges
   modes/
     types.ts               ModeController: what a game screen provides to main.ts
     sand.ts                the sandbox, and each challenge
@@ -565,7 +605,8 @@ src/
     view.ts                the garden's own canvas over the world's; the title preview
   elements/
     atom.ts                configurations -> shells, last subshell, orbitals (real harmonics), wavelength colour (pure)
-    atom3d.ts              the atom in three.js: nucleus, shells, orbital lobes, bloom
+    atom3d.ts              the atom in three.js: nucleus, shells, orbital lobes, bloom; two atoms and their bond
+    bond.ts                BOND: kind by Δχ, charges, what the picture plays, the explanation (pure)
     screen.ts              the screen: header, panel, spectrum strip, clickable table
     trends.ts              colour-by views, state at T, records, orbital boxes, data caveats (pure)
     preview.ts             the atom behind the title screen while ELEMENTS is hovered

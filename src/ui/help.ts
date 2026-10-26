@@ -77,6 +77,7 @@ function buildContent(box: HTMLElement): void {
     ['R / F', 'math lab: draw again / skip to the finished drawing'],
     ['ARROWS', 'elements: move round the periodic table'],
     ['O / K / R', 'elements: orbitals / shells / spin'],
+    ['J', 'elements: bond with a second element'],
     ['1-9', 'quick-pick palette swatch'],
     ['SPACE', 'pause / resume'],
     ['N', 'single step while paused'],

@@ -1872,6 +1872,62 @@ body.elements-on #screen { opacity: 0; }
 .el-facts { margin: 0; padding-left: 1.2em; }
 .el-facts li { margin: 4px 0; line-height: 1.45; color: #cdd1ff; }
 .el-facts-k { color: var(--el-dim); letter-spacing: 0.1em; }
+/* BOND: the partner ringed in white; elements with a compound on record get a dot */
+.el-cell.sel2 { box-shadow: 0 0 0 2px #fff, 0 0 10px var(--tint); color: #fff; font-weight: 700; }
+.el-grid.bonding .el-cell { position: relative; }
+.el-grid.bonding .el-cell.bondable::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 4px #fff;
+}
+.el-dx-bar { position: relative; display: flex; height: 22px; margin-top: 4px; border: 1px solid var(--el-line); border-radius: 3px; }
+.el-dx-ticks { position: relative; height: 1.4em; margin-bottom: 6px; color: var(--el-faint); }
+.el-dx-ticks span { position: absolute; top: 1px; transform: translateX(-50%); }
+.el-dx-ticks span:first-child { transform: none; }
+.el-dx-ticks span:last-child { transform: translateX(-100%); }
+.el-dx-seg {
+  flex: 1 1 0;
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--el-dim);
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+.el-dx-seg + .el-dx-seg { border-left: 1px dashed var(--el-line); }
+.el-dx-mark {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 3px;
+  transform: translateX(-50%);
+  background: var(--el-tint);
+  box-shadow: 0 0 8px var(--el-tint);
+}
+.el-why { margin: 0 0 8px; line-height: 1.5; color: #cdd1ff; }
+.el-replay, .el-compound {
+  font: 14px 'IBM Plex Mono', monospace;
+  color: var(--el-ink);
+  background: #0c0e22;
+  border: 1px solid var(--el-line);
+  border-radius: 3px;
+  cursor: pointer;
+}
+.el-replay { padding: 4px 10px; color: var(--el-tint); letter-spacing: 0.08em; }
+.el-replay:hover, .el-compound:hover, .el-replay:focus-visible, .el-compound:focus-visible { border-color: var(--el-tint); outline: none; }
+.el-compounds { display: flex; flex-wrap: wrap; gap: 4px; }
+.el-compound { padding: 3px 8px; text-align: left; }
+.el-compound b { color: var(--el-tint); font-weight: 600; }
+.el-compound.on { border-color: var(--el-tint); background: color-mix(in srgb, var(--el-tint) 16%, #0c0e22); }
+.el-drawn { margin: 6px 0 0; color: var(--el-dim); line-height: 1.45; }
+.el-link { color: var(--el-tint); white-space: nowrap; }
 @media (max-width: 900px) and (orientation: portrait) {
   /* the screen is small here: the atom fills it, the table and the panel scroll under it */
   .el-root { display: block; overflow-y: auto; }

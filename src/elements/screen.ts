@@ -1,3 +1,4 @@
+import BONDS_JSON from '../data/bonds.json';
 import ELEMENTS from '../data/elements.json';
 import SPECTRA from '../data/spectra.json';
 import { placeOf, type Element } from '../ui/periodic';
@@ -15,6 +16,23 @@ import {
   wavelengthRGB,
 } from './atom';
 import { Atom3D, type AtomSpec, type Layers } from './atom3d';
+import {
+  bondKind,
+  chargeMark,
+  defaultPartner,
+  deltaChi,
+  disagreement,
+  explain,
+  ionCharges,
+  IONIC_DX,
+  KIND_LABEL,
+  ordered,
+  pairKey,
+  pictureOf,
+  POLAR_DX,
+  subscript,
+  type Compound,
+} from './bond';
 import { FACTS } from './facts';
 import { NAMED } from './names';
 import {
@@ -44,9 +62,13 @@ import {
  * known by a year), a FIND box, the key, and a readout of the element under
  * the pointer.
  *
+ * BOND (J): the selected element and a second one picked off the table,
+ * side by side, and the bond between them played out (elements/bond.ts).
+ *
  * Sources: numbers and electron configurations from PubChem
  * (data/elements.json), visible lines from the NIST Atomic Spectra Database
- * (data/spectra.json); the facts, uses and name origins are written
+ * (data/spectra.json), two-element compounds from PubChem
+ * (data/bonds.json); the facts, uses and name origins are written
  * (elements/facts.ts, elements/names.ts).
  */
 
@@ -59,6 +81,9 @@ const ALL = ELEMENTS as ElementData[];
 // JSON arrays type as number[][]; each line is [nm, intensity]
 const LINES = SPECTRA as unknown as Record<string, [number, number][] | null>;
 const BY_SYM = new Map(ALL.map((e) => [e.sym, e]));
+const BONDS = BONDS_JSON as unknown as Record<string, Compound[]>;
+/** the two-element compounds of a pair on record, most common oxidation state first */
+export const compoundsOf = (a: ElementData, b: ElementData): Compound[] => BONDS[pairKey(a, b)] ?? [];
 
 /** The ten categories, in the rail's order: PubChem's name, our word, colour. */
 // the rail's labels carry soft hyphens, so the long ones break inside its narrow tiles
@@ -152,9 +177,16 @@ export class ElementsScreen {
   private temp = ROOM_K;
   private knownBy = MENDELEEV;
   private hovered: number | null = null;
+  /** BOND: the second element, or null when the view shows one atom */
+  private partner: number | null = null;
+  /** BOND: which of the pair's compounds the picture follows */
+  private pick = 0;
   layers: Layers = { orbitals: true, shells: true };
 
-  constructor(private onPick: (e: ElementData) => void) {
+  constructor(
+    private onPick: (e: ElementData) => void,
+    private onBond: () => void = () => {},
+  ) {
     const left = h('div', 'el-left');
     this.stage.append(this.head, this.caption);
     left.append(this.stage, this.table);
@@ -199,16 +231,66 @@ export class ElementsScreen {
   }
 
   move(dir: 'left' | 'right' | 'up' | 'down'): void {
-    this.select(neighbour(this.z, dir));
+    if (this.partner !== null) this.setPartner(neighbour(this.partner, dir));
+    else this.select(neighbour(this.z, dir));
+  }
+
+  get bonding(): boolean {
+    return this.partner !== null;
+  }
+
+  /** BOND on: pair the element with its usual partner (elements/bond.ts); off: back to the one atom */
+  setBond(on: boolean): void {
+    if (on === this.bonding) return;
+    if (on) {
+      this.grid.classList.add('bonding');
+      this.setPartner(defaultPartner(this.current, (s) => BY_SYM.get(s)!, (a, b) => compoundsOf(a, b).length > 0).z);
+    } else {
+      this.partner = null;
+      this.grid.classList.remove('bonding');
+      this.select(this.z);
+    }
+  }
+
+  /** BOND: the second element */
+  setPartner(z: number): void {
+    this.partner = z;
+    this.pick = 0;
+    this.showBond();
+    this.onBond();
+  }
+
+  /** BOND: play the bond again */
+  replay(): void {
+    this.atom.replay();
+  }
+
+  /** a click, a FIND or an arrow: the second element while bonding, else the element */
+  private choose(z: number): void {
+    if (this.partner !== null) this.setPartner(z);
+    else this.select(z);
+  }
+
+  /** the cells: the selected element, and while bonding its partner and every element it has a compound with */
+  private markCells(): void {
+    const a = this.current;
+    for (const [k, cell] of this.cells) {
+      cell.classList.toggle('sel', k === this.z);
+      cell.classList.toggle('sel2', k === this.partner && k !== this.z);
+      cell.classList.toggle('bondable', this.partner !== null && compoundsOf(a, ALL[k - 1]).length > 0);
+      cell.setAttribute('aria-pressed', String(k === this.z || k === this.partner));
+    }
   }
 
   select(z: number): void {
     this.z = z;
     const e = this.current;
-    for (const [k, cell] of this.cells) {
-      cell.classList.toggle('sel', k === z);
-      cell.setAttribute('aria-pressed', String(k === z));
+    if (this.partner !== null) {
+      this.showBond();
+      this.onPick(e);
+      return;
     }
+    this.markCells();
     const { spec, subs, shells, last, orbitals } = atomOf(e);
     this.root.style.setProperty('--el-tint', tintOf(e));
     this.atom.show(spec);
@@ -222,6 +304,134 @@ export class ElementsScreen {
     this.showPanel(e, shells, subs);
     this.showReadout();
     this.onPick(e);
+  }
+
+  // ---- BOND ----
+
+  private showBond(): void {
+    const a = this.current;
+    const b = ALL[this.partner! - 1];
+    const [left, right] = ordered(a, b);
+    const list = compoundsOf(a, b);
+    const c = list[this.pick] ?? null;
+    const kind = bondKind(a, b);
+    const pic = pictureOf(kind, left, right, c);
+    this.markCells();
+    this.root.style.setProperty('--el-tint', tintOf(a));
+    this.atom.showPair(atomOf(left).spec, atomOf(right).spec, pic);
+    const dx = deltaChi(a, b);
+    this.head.replaceChildren(
+      h('div', 'el-z', '● BOND'),
+      h('div', 'el-sym', `${left.sym} + ${right.sym}`),
+      h('div', 'el-name', c ? `${c.name.toUpperCase()} · ${subscript(c.f)}` : 'NO COMPOUND ON RECORD'),
+      h('div', 'el-kind', KIND_LABEL[kind] + (dx !== null && kind !== 'metallic' && kind !== 'none' ? ` · Δχ ${dx.toFixed(2)}` : '')),
+    );
+    const notPaths = 'rings count electrons, not paths';
+    if (pic.kind === 'ionic') {
+      const q = ionCharges(left, right, c)!;
+      this.caption.textContent = `one atom of each · ${pic.moves} e⁻ cross from ${left.sym} to ${right.sym}: ${left.sym}${chargeMark(q[0])} and ${right.sym}${chargeMark(q[1])} · ${notPaths}`;
+    } else if (pic.kind === 'covalent') {
+      this.caption.textContent = `${pic.order} shared ${pic.order === 1 ? 'pair' : 'pairs'}: one electron from each atom per pair, circling the bond · ${notPaths}`;
+    } else if (pic.kind === 'metallic') {
+      this.caption.textContent = `the outer electrons leave their shells and roam over both atoms · ${notPaths}`;
+    } else {
+      this.caption.textContent = `nothing passes between them · ${notPaths}`;
+    }
+    this.showBondPanel(kind, left, right, list, c);
+    this.showReadout();
+  }
+
+  private showBondPanel(kind: ReturnType<typeof bondKind>, left: ElementData, right: ElementData, list: Compound[], c: Compound | null): void {
+    const why = h('p', 'el-why', explain(kind, left, right, c));
+    const replay = h('button', 'el-replay', '▶ PLAY AGAIN') as HTMLButtonElement;
+    replay.type = 'button';
+    replay.onclick = () => this.replay();
+
+    const parts: HTMLElement[] = [section('BOND', 'Δχ RULE OF THUMB'), this.dxScale(deltaChi(left, right), kind), why, replay];
+
+    if (kind !== 'metallic' && kind !== 'none') {
+      parts.push(section('ON RECORD', list.length ? `${list.length} IN PUBCHEM` : 'PUBCHEM'));
+      if (list.length) {
+        const chips = h('div', 'el-compounds');
+        list.forEach((x, i) => {
+          const chip = h('button', i === this.pick ? 'el-compound on' : 'el-compound') as HTMLButtonElement;
+          chip.type = 'button';
+          chip.setAttribute('aria-pressed', String(i === this.pick));
+          chip.append(h('b', '', subscript(x.f)), document.createTextNode(` ${x.name}`));
+          chip.onclick = () => {
+            this.pick = i;
+            this.showBond();
+            this.onBond();
+          };
+          chips.append(chip);
+        });
+        parts.push(chips);
+        if (c) {
+          const drawn =
+            c.o > 0
+              ? `with ${left.sym}–${right.sym} as a ${['', 'single', 'double', 'triple'][Math.min(3, c.o)]} bond`
+              : `as ions, ${left.sym}${chargeMark(left.z <= right.z ? c.q[0] : c.q[1])} and ${right.sym}${chargeMark(left.z <= right.z ? c.q[1] : c.q[0])}`;
+          const link = h('a', 'el-link', `PubChem CID ${c.cid} ↗`) as HTMLAnchorElement;
+          link.href = `https://pubchem.ncbi.nlm.nih.gov/compound/${c.cid}`;
+          link.target = '_blank';
+          link.rel = 'noopener';
+          const note = h('p', 'el-drawn', `PubChem draws ${subscript(c.f)} ${drawn}. `);
+          note.append(link);
+          parts.push(note);
+          const odd = disagreement(kind, c);
+          if (odd) parts.push(h('p', 'el-drawn', odd));
+        }
+      } else {
+        parts.push(h('p', 'el-drawn', 'None of the formulas their common oxidation states predict is a compound in PubChem.'));
+      }
+    }
+
+    const outer = (e: ElementData) => {
+      const sh = atomOf(e).shells;
+      return sh[sh.length - 1];
+    };
+    const both = (f: (e: ElementData) => string | number | null) =>
+      left.z === right.z ? String(f(left) ?? 'no data') : `${left.sym} ${f(left) ?? 'no data'} · ${right.sym} ${f(right) ?? 'no data'}`;
+    parts.push(
+      section('THE TWO ATOMS', ''),
+      rows([
+        ['ELECTRONEGATIVITY (χ)', both((e) => e.en)],
+        ['OUTER ELECTRONS', both(outer)],
+        ['OXIDATION STATES', both((e) => e.ox)],
+      ]),
+      h('p', 'el-source', `Bond kind: the gap in electronegativity (Pauling, PubChem), ${IONIC_DX} and up ionic, ${POLAR_DX} and up polar: a rule of thumb. Compounds: formulas predicted from PubChem's oxidation states, kept only where PubChem has the compound.`),
+    );
+    this.panel.replaceChildren(...parts);
+  }
+
+  /**
+   * Δχ on a bar of three equal zones, nonpolar, polar and ionic, the
+   * boundaries marked: the 0.4-wide nonpolar zone would be a sliver on a
+   * straight scale. The marker sits proportionally within its zone.
+   */
+  private dxScale(dx: number | null, kind: ReturnType<typeof bondKind>): HTMLElement {
+    const MAX = 3.2;
+    const zones = [[0, POLAR_DX, 'NONPOLAR'], [POLAR_DX, IONIC_DX, 'POLAR'], [IONIC_DX, MAX, 'IONIC']] as const;
+    const wrap = h('div', 'el-dx');
+    const bar = h('div', 'el-dx-bar');
+    for (const [, , label] of zones) bar.append(h('span', 'el-dx-seg', label));
+    const ticks = h('div', 'el-dx-ticks');
+    for (const [v, at] of [[0, 0], [POLAR_DX, 1 / 3], [IONIC_DX, 2 / 3], [MAX, 1]] as const) {
+      const t = h('span', '', String(v));
+      t.style.left = `${at * 100}%`;
+      ticks.append(t);
+    }
+    wrap.append(bar, ticks);
+    if (dx !== null && kind !== 'metallic' && kind !== 'none') {
+      const i = zones.findIndex(([, to]) => dx < to);
+      const z = i < 0 ? 2 : i;
+      const [from, to] = zones[z];
+      const mark = h('span', 'el-dx-mark');
+      mark.style.left = `${((z + Math.min(1, (dx - from) / (to - from))) / 3) * 100}%`;
+      bar.append(mark);
+      wrap.setAttribute('aria-label', `Electronegativity gap ${dx.toFixed(2)}`);
+    }
+    return wrap;
   }
 
   private showHead(e: ElementData): void {
@@ -374,7 +584,7 @@ export class ElementsScreen {
       cell.style.gridRow = String(row);
       cell.textContent = e.sym;
       cell.setAttribute('aria-label', `${e.z}, ${e.name}`);
-      cell.onclick = () => this.select(e.z);
+      cell.onclick = () => this.choose(e.z);
       cell.onmouseenter = () => {
         this.hovered = e.z;
         this.showReadout();
@@ -434,7 +644,7 @@ export class ElementsScreen {
     find.oninput = () => {
       const e = findElement(find.value);
       find.classList.toggle('miss', find.value.trim() !== '' && !e);
-      if (e && e.z !== this.z) this.select(e.z);
+      if (e && e.z !== (this.partner ?? this.z)) this.choose(e.z);
     };
     find.addEventListener('keydown', (ev) => {
       if (ev.key === 'Enter') find.blur();
@@ -536,6 +746,14 @@ export class ElementsScreen {
 
   /** Under the key: the element under the pointer (or the selected one) and its value in this view. */
   private showReadout(): void {
+    if (this.partner !== null) {
+      // while bonding: what the element under the pointer would make with the selected one
+      const a = this.current;
+      const e = ALL[(this.hovered ?? this.partner) - 1];
+      const c = compoundsOf(a, e)[0];
+      this.readout.textContent = `${a.sym} + ${e.sym} · ${KIND_LABEL[bondKind(a, e)].toLowerCase()}${c ? ` · ${subscript(c.f)} ${c.name}` : ''}`;
+      return;
+    }
     const e = ALL[(this.hovered ?? this.z) - 1];
     let v: string;
     if (this.by === 'category') v = e.block.toLowerCase();
