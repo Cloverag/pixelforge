@@ -137,6 +137,9 @@ const modeCtx: ModeCtx = {
       if (scene) send({ k: 'chemScene', id: scene });
       toast(hint);
     }),
+  toggleFocus: () => {
+    if (screen === 'game') toggleImmersive();
+  },
 };
 const sandbox = new SandMode(modeCtx);
 const playground = new PlaygroundMode(modeCtx);

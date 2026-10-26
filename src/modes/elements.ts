@@ -5,6 +5,19 @@ import type { CursorLook, ModeController, ModeCtx } from './types';
 
 type Screen = typeof import('../elements/screen');
 
+/** the rail folded to its colour chips (and the deck hidden): the screen gets the room */
+const FOLD_KEY = 'pf.el.fold';
+function railFolded(): boolean {
+  try {
+    const v = localStorage.getItem(FOLD_KEY);
+    if (v !== null) return v === '1';
+  } catch {
+    /* private mode: decide below */
+  }
+  // first visit: folded on a touch screen or anything narrower than a laptop
+  return matchMedia('(pointer: coarse)').matches || window.innerWidth < 1400;
+}
+
 /** the element last looked at, so a reload comes back to it */
 const LAST_KEY = 'pf.element';
 function lastElement(): number {
@@ -146,7 +159,15 @@ export class ElementsMode implements ModeController {
     }, () => {
       this.ctx.sfx.ui();
       this.syncLamps();
-    }, (lab) => this.ctx.tryInLab(lab.scene ?? null, lab.hint));
+    }, (lab) => this.ctx.tryInLab(lab.scene ?? null, lab.hint), {
+      orbitals: () => this.toggleLayer('orbitals'),
+      shells: () => this.toggleLayer('shells'),
+      spin: () => this.toggleSpin(),
+      bond: () => this.toggleBond(),
+      reactions: () => this.toggleReactions(),
+      light: (id) => this.ctx.hud.select(id),
+      focus: () => this.ctx.toggleFocus(),
+    });
     if (this.linked) {
       const e = mod.findElement(this.linked);
       if (e) this.z = e.z;
@@ -155,6 +176,7 @@ export class ElementsMode implements ModeController {
     }
     document.getElementById('screen-wrap')?.appendChild(this.screen.root);
     document.body.classList.add('elements-on');
+    this.addFold();
     this.screen.select(this.z);
     this.ctx.hud.setLamp('orbitals', this.screen.layers.orbitals);
     this.ctx.hud.setLamp('shells', this.screen.layers.shells);
@@ -167,6 +189,37 @@ export class ElementsMode implements ModeController {
     const s = this.screen;
     this.ctx.hud.setLamp('bond', s?.bonding ?? false);
     this.ctx.hud.setLamp('reactions', s?.listing ?? false);
+    s?.syncTools();
+  }
+
+  /** The rail's fold: « folds it to its colour chips and hides the deck; » brings them back. */
+  private addFold(): void {
+    const rail = document.getElementById('toolbar');
+    if (!rail) return;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'px rail-fold';
+    const show = (folded: boolean) => {
+      document.body.classList.toggle('el-folded', folded);
+      btn.textContent = folded ? '»' : '« FOLD';
+      btn.title = folded ? 'Unfold the rail and the deck' : 'Fold the rail and the deck away: more room for the elements';
+      btn.setAttribute('aria-label', btn.title);
+      btn.setAttribute('aria-expanded', String(!folded));
+      // the canvas and the atom size themselves on resize
+      window.dispatchEvent(new Event('resize'));
+    };
+    btn.onclick = () => {
+      const folded = !document.body.classList.contains('el-folded');
+      try {
+        localStorage.setItem(FOLD_KEY, folded ? '1' : '0');
+      } catch {
+        /* private mode */
+      }
+      this.ctx.sfx.ui();
+      show(folded);
+    };
+    rail.prepend(btn);
+    show(railFolded());
   }
 
   private toggleBond(): void {
@@ -199,6 +252,7 @@ export class ElementsMode implements ModeController {
     const l = { ...s.layers, [k]: !s.layers[k] };
     s.setLayers(l);
     this.ctx.hud.setLamp(k, l[k]);
+    s.syncTools();
     this.ctx.sfx.ui();
   }
 
@@ -207,6 +261,7 @@ export class ElementsMode implements ModeController {
     if (!s) return;
     s.setSpin(!s.spinning);
     this.ctx.hud.setLamp('spin', s.spinning);
+    s.syncTools();
     this.ctx.sfx.ui();
   }
 
@@ -221,7 +276,8 @@ export class ElementsMode implements ModeController {
     this.left = true;
     this.screen?.dispose();
     this.screen = null;
-    document.body.classList.remove('elements-on');
+    document.body.classList.remove('elements-on', 'el-folded');
+    window.dispatchEvent(new Event('resize'));
   }
 
   cursor(): CursorLook {

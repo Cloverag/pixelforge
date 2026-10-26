@@ -249,3 +249,18 @@ describe('ELEMENTS: no record from a value with a caveat', async () => {
     expect(records(bySym('H'), DATA).join(' ')).toMatch(/lowest melting point of any element/);
   });
 });
+
+describe('ELEMENTS: pane limits', async () => {
+  const { clampLeft, clampTable, clampTall } = await import('../src/elements/layout');
+  it('keep the atom, the table and the panel usable however far a splitter is dragged', () => {
+    expect(clampLeft(100, 1100)).toBe(320);
+    expect(clampLeft(1050, 1100)).toBe(820);
+    expect(clampLeft(600.4, 1100)).toBe(600);
+    expect(clampTable(20, 700)).toBe(150);
+    expect(clampTable(690, 700)).toBe(560);
+    expect(clampTall(50, 900)).toBe(160);
+    expect(clampTall(890, 900)).toBe(760);
+    // a screen too small for both limits keeps the lower one
+    expect(clampLeft(500, 400)).toBe(320);
+  });
+});

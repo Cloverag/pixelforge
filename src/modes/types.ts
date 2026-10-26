@@ -21,6 +21,8 @@ export interface ModeCtx {
   musicAdapt(v: number): void;
   /** off to the chem lab, to try a reaction there: an experiment to load, and what to paint */
   tryInLab(scene: string | null, hint: string): void;
+  /** FOCUS: the screen fills the window, the panels out of the way (immersive mode), or back */
+  toggleFocus(): void;
 }
 
 /** Cursor fields a room shares: material colour and tool mark. */

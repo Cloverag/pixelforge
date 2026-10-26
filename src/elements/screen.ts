@@ -36,6 +36,7 @@ import {
   type Compound,
 } from './bond';
 import { FACTS } from './facts';
+import { clampLeft, clampTable, clampTall, loadSizes, PORTRAIT, saveSizes, splitter, type Sizes } from './layout';
 import { equationText, FAMOUS, formations, nextOf, searchReactions, type LabTry, type Reaction } from './reactions';
 import { NAMED } from './names';
 import {
@@ -71,6 +72,11 @@ import {
  * picked plays its bond in 3D beside how it happens and what its products
  * go on to react with (elements/reactions.ts).
  *
+ * The panes resize (elements/layout.ts): a splitter between the atom and the
+ * panel, another between the atom and the table; upright, the atom keeps the
+ * top and the rest scrolls under it. The atom's own toolbar sits in the
+ * frame, so the screen works with the game's rail folded away.
+ *
  * Sources: numbers and electron configurations from PubChem
  * (data/elements.json), visible lines from the NIST Atomic Spectra Database
  * (data/spectra.json), two-element compounds from PubChem
@@ -94,6 +100,18 @@ export const compoundsOf = (a: ElementData, b: ElementData): Compound[] => BONDS
 const REACTIONS: Reaction[] = [...FAMOUS, ...formations(BONDS, (s) => BY_SYM.get(s)!)];
 /** rows the reaction list draws at once: a search narrows the rest */
 const LIST_MAX = 80;
+
+/** what the frame's toolbar asks of the mode, which keeps the rail's lamps and sounds in step */
+export interface ScreenTools {
+  orbitals(): void;
+  shells(): void;
+  spin(): void;
+  bond(): void;
+  reactions(): void;
+  /** LIGHT UP: a category's block name, or 'all' */
+  light(id: string): void;
+  focus(): void;
+}
 
 /** The ten categories, in the rail's order: PubChem's name, our word, colour. */
 // the rail's labels carry soft hyphens, so the long ones break inside its narrow tiles
@@ -196,18 +214,27 @@ export class ElementsScreen {
   private reaction: Reaction | null = null;
   private query = '';
   private stepsRaf = 0;
+  private left = h('div', 'el-left');
+  private tools = h('div', 'el-tools');
+  private toolBtns = new Map<string, HTMLButtonElement>();
+  private lightSel = document.createElement('select');
+  private sizes: Sizes = loadSizes();
+  private upright = matchMedia(PORTRAIT);
   layers: Layers = { orbitals: true, shells: true };
 
   constructor(
     private onPick: (e: ElementData) => void,
     private onBond: () => void = () => {},
     private onLab: (lab: LabTry) => void = () => {},
+    private act: ScreenTools | null = null,
   ) {
-    const left = h('div', 'el-left');
-    this.stage.append(this.head, this.caption);
-    left.append(this.stage, this.table);
-    this.root.append(left, this.panel);
+    const left = this.left;
+    this.stage.append(this.head, this.caption, this.tools);
+    left.append(this.stage, this.splitTable(), this.table);
+    this.root.append(left, this.splitPanel(), this.panel);
     this.panel.setAttribute('aria-live', 'polite');
+    this.buildTools();
+    this.applySizes();
     this.buildTable();
     this.atom = new Atom3D(this.stage);
     // the canvas goes under the header, the caption and the bond view's labels
@@ -238,12 +265,149 @@ export class ElementsScreen {
 
   dispose(): void {
     cancelAnimationFrame(this.stepsRaf);
+    window.removeEventListener('resize', this.onResize);
     this.atom.dispose();
     this.root.remove();
   }
 
+  // ---- the frame's toolbar ----
+
+  /** The atom's controls inside the frame: they work with the rail folded, and on a phone. */
+  private buildTools(): void {
+    this.tools.setAttribute('role', 'toolbar');
+    this.tools.setAttribute('aria-label', 'Atom');
+    const act = this.act;
+    if (!act) return;
+    const add = (id: string, label: string, title: string, run: () => void) => {
+      const b = h('button', 'el-tool', label) as HTMLButtonElement;
+      b.type = 'button';
+      b.title = title;
+      b.onclick = run;
+      this.tools.append(b);
+      this.toolBtns.set(id, b);
+    };
+    add('orbitals', 'ORBITALS', 'The shapes of the outer orbitals (O)', act.orbitals);
+    add('shells', 'SHELLS', 'The electron shells (K)', act.shells);
+    add('spin', 'SPIN', 'Turn the atom slowly; drag to turn it yourself (R)', act.spin);
+    add('bond', 'BOND', 'Bond it with a second element (J)', act.bond);
+    add('reactions', 'REACTIONS', 'Search reactions (X)', act.reactions);
+    const light = this.lightSel;
+    light.className = 'el-tool el-light';
+    light.setAttribute('aria-label', 'Light up one category');
+    const opt = (value: string, text: string) => {
+      const o = document.createElement('option');
+      o.value = value;
+      o.textContent = text;
+      light.append(o);
+    };
+    opt('all', 'LIGHT UP: ALL');
+    for (const c of CATEGORIES) opt(c.block, `LIGHT UP: ${c.label.replace(/\u00ad/g, '')}`);
+    light.onchange = () => act.light(light.value);
+    light.addEventListener('keydown', (ev) => ev.stopPropagation());
+    this.tools.append(light);
+    add('focus', '⤢ FOCUS', 'Fill the screen with the elements; again, or ESC, to come back (I)', act.focus);
+    window.addEventListener('resize', this.onResize);
+    this.syncTools();
+  }
+
+  /** the toolbar's buttons lit as the atom, the bond, the reactions and FOCUS stand */
+  syncTools(): void {
+    const on: Record<string, boolean> = {
+      orbitals: this.layers.orbitals,
+      shells: this.layers.shells,
+      spin: this.atom?.spinning ?? true,
+      bond: this.bonding,
+      reactions: this.listing,
+      focus: document.body.classList.contains('immersive'),
+    };
+    for (const [id, b] of this.toolBtns) {
+      b.classList.toggle('on', on[id]);
+      b.setAttribute('aria-pressed', String(on[id]));
+    }
+    const f = this.toolBtns.get('focus');
+    if (f) f.textContent = on.focus ? '⤡ EXIT FOCUS' : '⤢ FOCUS';
+  }
+
+  /** immersive mode and a turned tablet both arrive as a resize */
+  private onResize = (): void => {
+    this.syncTools();
+    this.applySizes();
+  };
+
+  // ---- the splitters ----
+
+  /** between the atom and table column and the panel */
+  private splitPanel(): HTMLElement {
+    return splitter({
+      label: 'Resize the panel',
+      orient: 'vertical',
+      drag: (x) => {
+        const r = this.root.getBoundingClientRect();
+        this.sizes.left = clampLeft(x - r.left, r.width);
+        this.applySizes();
+      },
+      step: (d) => {
+        const r = this.root.getBoundingClientRect();
+        this.sizes.left = clampLeft((this.sizes.left ?? this.left.getBoundingClientRect().width) + d, r.width);
+        this.applySizes();
+      },
+      reset: () => {
+        this.sizes.left = null;
+        this.applySizes();
+      },
+      done: () => saveSizes(this.sizes),
+    });
+  }
+
+  /** under the atom: the table's height in landscape, the atom's own upright */
+  private splitTable(): HTMLElement {
+    return splitter({
+      label: 'Resize the atom and the table',
+      orient: 'horizontal',
+      drag: (_x, y) => {
+        if (this.upright.matches) {
+          const r = this.root.getBoundingClientRect();
+          this.sizes.tall = clampTall(y - r.top, r.height);
+        } else {
+          const r = this.left.getBoundingClientRect();
+          this.sizes.table = clampTable(r.bottom - y, r.height);
+        }
+        this.applySizes();
+      },
+      step: (d) => {
+        if (this.upright.matches) {
+          const r = this.root.getBoundingClientRect();
+          this.sizes.tall = clampTall((this.sizes.tall ?? this.stage.getBoundingClientRect().height) + d, r.height);
+        } else {
+          const r = this.left.getBoundingClientRect();
+          // down shrinks the table: the bar moves down
+          this.sizes.table = clampTable((this.sizes.table ?? this.table.getBoundingClientRect().height) - d, r.height);
+        }
+        this.applySizes();
+      },
+      reset: () => {
+        if (this.upright.matches) this.sizes.tall = null;
+        else this.sizes.table = null;
+        this.applySizes();
+      },
+      done: () => saveSizes(this.sizes),
+    });
+  }
+
+  /** the sizes as CSS variables; each layout reads its own (styles.css) */
+  private applySizes(): void {
+    const set = (name: string, v: number | null) => {
+      if (v === null) this.root.style.removeProperty(name);
+      else this.root.style.setProperty(name, `${v}px`);
+    };
+    set('--el-left', this.sizes.left);
+    set('--el-table-h', this.sizes.table);
+    set('--el-tall', this.sizes.tall);
+  }
+
   /** Dim every category but one (null: show them all). */
   setFilter(block: string | null): void {
+    this.lightSel.value = block ?? 'all';
     for (const [z, cell] of this.cells) cell.classList.toggle('dim', block !== null && ALL[z - 1].block !== block);
   }
 

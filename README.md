@@ -370,6 +370,20 @@ helium's melting point is under pressure (it never freezes at 1 atm), and
 carbon and arsenic sublime. The panel says so beside the value, and no
 record is claimed from those (`CAVEATS` in `src/elements/trends.ts`).
 
+**On a tablet or a phone** the screen makes room. In ELEMENTS the frame
+fills the stage instead of keeping the worlds' 16:9, the rail folds to its
+colour chips (« FOLD / », remembered; folded at first on a touch screen or
+under 1400px wide) and the deck, whose lamps do nothing here, goes with it.
+The atom's controls sit in the frame: ORBITALS, SHELLS, SPIN, BOND,
+REACTIONS, LIGHT UP and **FOCUS**, which fills the whole screen (immersive
+mode). Drag a splitter to give the atom, the table or the panel more room
+(or focus it and use the arrow keys; double-click to reset); a taller table
+grows every cell, and each device remembers its own sizes. Held upright the
+atom keeps the top with a splitter under it, and the table and the panel
+scroll beneath; on a phone the table scrolls sideways rather than shrink its
+cells past tapping. A narrow panel puts each label over its value, so no
+value breaks mid-way.
+
 **BOND** (`J`, or the rail's BOND button) pairs the element with a second
 one: click any element on the table (a white dot marks those it has a
 compound with on record). The two atoms stand side by side, the less
@@ -637,6 +651,7 @@ src/
     atom3d.ts              the atom in three.js: nucleus, shells, orbital lobes, bloom; two atoms and their bond
     bond.ts                BOND: kind by Δχ, charges, what the picture plays, its labels, the explanation (pure)
     reactions.ts           REACTIONS: famous and formation equations, balancing, steps, search, what comes next (pure)
+    layout.ts              resizable panes: splitters, their limits, each device's sizes
     screen.ts              the screen: header, panel, spectrum strip, clickable table
     trends.ts              colour-by views, state at T, records, orbital boxes, data caveats (pure)
     preview.ts             the atom behind the title screen while ELEMENTS is hovered
