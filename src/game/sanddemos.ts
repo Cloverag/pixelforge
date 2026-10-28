@@ -17,6 +17,8 @@ export interface SandStroke {
 export interface SandDemo {
   name: string;
   strokes: SandStroke[];
+  /** what to try, said when the sandbox loads it */
+  hint?: string;
 }
 
 /**
@@ -120,4 +122,128 @@ const waterfall: SandDemo = {
   ],
 };
 
-export const SAND_DEMOS: SandDemo[] = [ponds, volcano, tnt, waterfall];
+/** Charges set in a sand tower, a house and a bridge, waiting for the big red button. */
+const yard: SandDemo = {
+  name: 'DEMOLITION YARD',
+  hint: 'DEMOLITION YARD: PRESS K TO BLOW IT ALL UP - THEN V FOR THE REPLAY',
+  strokes: [
+    line(Mat.STONE, 24, 0, 352, 640, 352),
+    line(Mat.SAND, 20, 0, 336, 640, 336),
+    // a tower of sand in a wooden frame, C4 packed into its foot (painted
+    // after, so it sits inside): the frame goes, and the tower pours down
+    ...Array.from({ length: 14 }, (_, i) => line(Mat.SAND, 10, 76, 316 - i * 8, 124, 316 - i * 8)),
+    line(Mat.WOOD, 4, 70, 326, 70, 200),
+    line(Mat.WOOD, 4, 130, 326, 130, 200),
+    line(Mat.WOOD, 4, 70, 200, 130, 200),
+    line(Mat.C4, 6, 74, 320, 126, 320),
+    // a stack of TNT crates beside it, for the chain
+    line(Mat.TNT, 8, 166, 322, 194, 322),
+    line(Mat.TNT, 8, 172, 314, 188, 314),
+    // a wooden house with C4 under its floor
+    line(Mat.WOOD, 4, 232, 324, 232, 274),
+    line(Mat.WOOD, 4, 328, 324, 328, 274),
+    line(Mat.WOOD, 4, 224, 272, 280, 244, 336, 272),
+    line(Mat.C4, 4, 240, 322, 320, 322),
+    // a wooden bridge on stone pillars over a pond, a charge on each pillar
+    // and one under the deck, and a cup of NITRO on it that falls when it goes
+    line(Mat.STONE, 8, 430, 326, 430, 270),
+    line(Mat.STONE, 8, 590, 326, 590, 270),
+    line(Mat.WATER, 12, 444, 318, 576, 318),
+    line(Mat.WOOD, 6, 424, 266, 596, 266),
+    line(Mat.C4, 4, 430, 302, 430, 292),
+    line(Mat.C4, 4, 590, 302, 590, 292),
+    line(Mat.C4, 4, 470, 268, 550, 268),
+    line(Mat.WOOD, 2, 494, 262, 494, 250),
+    line(Mat.WOOD, 2, 516, 262, 516, 250),
+    line(Mat.NITRO, 4, 498, 258, 512, 258),
+  ],
+};
+
+/**
+ * NITRO trickles out of a trough high up and falls on a pyramid of TNT and
+ * the huts beside it: every drop that lands is a blast, and the first sets
+ * the TNT going.
+ */
+const nitroDrip: SandDemo = {
+  name: 'NITRO DRIP',
+  hint: 'NITRO DRIP: EVERY DROP THAT LANDS GOES OFF',
+  strokes: [
+    line(Mat.STONE, 24, 0, 352, 640, 352),
+    line(Mat.SAND, 20, 0, 336, 640, 336),
+    // the trough: a floor sloping down to the right, closed at the left, and
+    // an end wall that stops three cells short of the floor - the nozzle
+    line(Mat.WALL, 3, 40, 100, 262, 130),
+    line(Mat.WALL, 3, 40, 70, 40, 100),
+    line(Mat.WALL, 3, 264, 92, 264, 124),
+    // in thin layers lying on the slope: painted in a lump, the top of it fell
+    // onto the rest, and a drop that long is a blast (the trough went up first)
+    ...[3.5, 7, 10.5].map((up) => line(Mat.NITRO, 4, 48, Math.round(100 + (8 * 30) / 222 - up), 256, Math.round(100 + (216 * 30) / 222 - up))),
+    // under the nozzle: a pyramid of TNT, and wooden huts either side
+    line(Mat.TNT, 8, 244, 322, 292, 322),
+    line(Mat.TNT, 8, 252, 314, 284, 314),
+    line(Mat.TNT, 6, 260, 307, 276, 307),
+    line(Mat.WOOD, 4, 180, 324, 180, 290),
+    line(Mat.WOOD, 4, 220, 324, 220, 290),
+    line(Mat.WOOD, 4, 174, 288, 200, 274, 226, 288),
+    line(Mat.WOOD, 4, 320, 324, 320, 290),
+    line(Mat.WOOD, 4, 360, 324, 360, 290),
+    line(Mat.WOOD, 4, 314, 288, 340, 274, 366, 288),
+  ],
+};
+
+/** A shower of antimatter over a little town, and a hopper that keeps pouring it on the biggest block. */
+const antimatterRain: SandDemo = {
+  name: 'ANTIMATTER RAIN',
+  hint: 'ANTIMATTER RAIN: ONLY WALL CAN HOLD IT',
+  strokes: [
+    line(Mat.WALL, 12, 0, 354, 640, 354),
+    line(Mat.SAND, 14, 0, 342, 640, 342),
+    // the town: stone, wood, a glass tower, a big stone block, trees
+    ...Array.from({ length: 10 }, (_, i) => line(Mat.STONE, 8, 100, 330 - i * 8, 160, 330 - i * 8)),
+    line(Mat.WOOD, 4, 200, 334, 200, 290),
+    line(Mat.WOOD, 4, 260, 334, 260, 290),
+    line(Mat.WOOD, 4, 194, 288, 230, 266, 266, 288),
+    ...Array.from({ length: 16 }, (_, i) => line(Mat.GLASS, 6, 300, 332 - i * 7, 330, 332 - i * 7)),
+    ...Array.from({ length: 8 }, (_, i) => line(Mat.STONE, 10, 400, 328 - i * 10, 540, 328 - i * 10)),
+    line(Mat.WOOD, 3, 580, 334, 580, 300),
+    line(Mat.PLANT, 10, 572, 296, 588, 292),
+    line(Mat.WOOD, 3, 50, 334, 50, 304),
+    line(Mat.PLANT, 10, 42, 300, 58, 296),
+    // the shower: scattered drops across the sky
+    ...Array.from({ length: 24 }, (_, i) => line(Mat.ANTIMATTER, 3, 60 + i * 22, 20 + ((i * 37) % 50), 61 + i * 22, 20 + ((i * 37) % 50))),
+    // the hopper over the big block: a WALL funnel with a three-cell throat
+    line(Mat.WALL, 3, 420, 60, 467, 110),
+    line(Mat.WALL, 3, 520, 60, 473, 110),
+    line(Mat.ANTIMATTER, 8, 440, 74, 500, 74),
+    line(Mat.ANTIMATTER, 8, 452, 88, 488, 88),
+  ],
+};
+
+/**
+ * Three piles of thermite, each lit by a torch, burn down through what lies
+ * under them: sand fused to a glass tube, stone to lava, a pocket of water
+ * flashed to steam - until the bedrock WALL stops them.
+ */
+const thermiteDrill: SandDemo = {
+  name: 'THERMITE DRILL',
+  hint: 'THERMITE DRILL: IT BURNS DOWN THROUGH STONE - ONLY WALL STOPS IT',
+  strokes: [
+    line(Mat.WALL, 8, 0, 354, 640, 354),
+    ...Array.from({ length: 6 }, (_, i) => line(Mat.STONE, 10, 0, 344 - i * 9, 640, 344 - i * 9)),
+    // a pocket of water in the middle of the rock, and wood under the right-hand drill
+    line(Mat.WATER, 10, 300, 318, 340, 318),
+    line(Mat.WOOD, 8, 460, 300, 500, 300),
+    ...Array.from({ length: 4 }, (_, i) => line(Mat.SAND, 10, 0, 290 - i * 9, 640, 290 - i * 9)),
+    // the drills: a pile each, a torch touching its side
+    ...[160, 320, 480].flatMap((x) => [
+      line(Mat.THERMITE, 8, x - 10, 252, x + 10, 252),
+      line(Mat.THERMITE, 6, x - 6, 246, x + 6, 246),
+      line(Mat.TORCH, 4, x - 14, 252, x - 14, 252),
+    ]),
+  ],
+};
+
+export const SAND_DEMOS: SandDemo[] = [ponds, volcano, tnt, waterfall, nitroDrip, thermiteDrill, antimatterRain];
+
+/** The sandbox's SCENES: the charged yard first, then everything that also plays behind the title screen. */
+export const SANDBOX_SCENES: SandDemo[] = [yard, nitroDrip, antimatterRain, thermiteDrill, ponds, volcano, tnt, waterfall];

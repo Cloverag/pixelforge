@@ -5,6 +5,7 @@ import { Mat } from './materials';
 import { RULES } from './reactions';
 import { rxDiff } from './rxdelta';
 import { setBackground } from './background';
+import { Replay } from './replay';
 
 const ctx = self as unknown as DedicatedWorkerGlobalScope;
 
@@ -20,6 +21,8 @@ let watchFluid = false;
 let windDirty = false;
 /** the rule counts last reported, to send only what fired since */
 const lastRx = new Uint32Array(RULES.length);
+/** the sandbox's instant replay of the last big red button (solo only) */
+const replay = new Replay();
 
 function respond(res: Res, transfer?: ArrayBuffer[]): void {
   ctx.postMessage(res, transfer ?? []);
@@ -57,14 +60,32 @@ function handle(e: MessageEvent<Req>): void {
       break;
 
     case 'input':
+      // any action ends a replay: it is played onto the live world, not the replay's
+      if (replay.playing) {
+        replay.stop(w);
+        forceFull = true;
+      }
+      // the moment before the button, for the replay (solo: a room's inputs come with its steps)
+      if (msg.inp.k === 'detonate' && w.mode === 'sand' && !w.challenge) replay.arm(w);
+      else if (msg.inp.k === 'clear' || msg.inp.k === 'mode') replay.forget(w);
       apply(w, msg.inp);
       break;
 
+    case 'replay':
+      if (replay.playing) replay.stop(w);
+      else replay.start(w);
+      forceFull = true;
+      break;
+
     case 'netSnap':
+      // a room opening mid-replay gets the live world, not the replay's
+      if (replay.playing) replay.stop(w);
+      replay.forget(w);
       respond({ t: 'netSnap', snapshot: w.snapshot() });
       break;
 
     case 'netRestore':
+      replay.forget(w);
       w.restore(msg.snap);
       forceFull = true;
       break;
@@ -126,7 +147,9 @@ function handle(e: MessageEvent<Req>): void {
           if (w.f % HASH_EVERY === 0) (hashes ??= []).push(w.f, w.hash(), ...w.hashParts());
         }
       } else {
-        w.step();
+        const playing = replay.playing;
+        if (replay.tick(w)) w.step();
+        if (playing && !replay.playing) forceFull = true;
       }
       if (w.mode === 'playground' && w.parts && master) {
         // trails are authoritative on master; copy the finished frame out
@@ -165,6 +188,7 @@ function handle(e: MessageEvent<Req>): void {
         used: st.used,
         budget: st.budget,
         shake: w.shake,
+        replay: replay.playing ? 2 : replay.ready ? 1 : undefined,
         events: w.takeEvents(),
         rx: rx.length ? rx : undefined,
         parts: w.mode === 'playground' ? w.parts?.count : undefined,
@@ -236,10 +260,12 @@ function handle(e: MessageEvent<Req>): void {
     }
 
     case 'loadChallenge':
+      replay.forget(w);
       if (w.loadChallenge(msg.id)) forceFull = true;
       break;
 
     case 'toSandbox':
+      replay.forget(w);
       w.toSandbox();
       forceFull = true;
       break;
@@ -260,6 +286,7 @@ function handle(e: MessageEvent<Req>): void {
     case 'load': {
       const d = msg.data;
       if (d.w === SIM_W && d.h === SIM_H) {
+        replay.forget(w);
         w.grid.cells.set(d.cells);
         w.grid.meta.set(d.meta);
         w.grid.clock.fill(0);

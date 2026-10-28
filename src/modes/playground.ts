@@ -19,6 +19,7 @@ const PG_TOOLS: [PgTool, string, string, string, string][] = [
   ['repel', 'REPULSE', 'linear-gradient(135deg,#ffa8c6 0 50%,#d43e77 50% 100%)', 'FORCES', 'Pushes nearby particles away'],
   ['vortex', 'VORTEX', 'linear-gradient(135deg,#e0f79f 0 50%,#8fc42b 50% 100%)', 'FORCES', 'Swirls particles around the cursor'],
   ['blackhole', 'BLACK HOLE', 'radial-gradient(circle,#000 0 35%,#ffb36b 40% 55%,#3a2410 60%)', 'FORCES', 'Pulls everything in and swallows it'],
+  ['supernova', 'SUPERNOVA', 'radial-gradient(circle,#fff 0 22%,#ffd36b 32%,#ff5fb4 55%,#3b1d5c 75%)', 'FORCES', 'Place a star: it swells, collapses and explodes into a nebula - and leaves a black hole'],
   ['wall', 'WALL', 'linear-gradient(135deg,#a0a0bc 0 50%,#5c5c72 50% 100%)', 'TOOLS', 'Draw a solid barrier'],
   ['bumper', 'BUMPER', 'linear-gradient(135deg,#c8f4ff 0 50%,#5fb0d0 50% 100%)', 'TOOLS', 'A bouncy wall that plays a note when hit - higher up, higher pitch'],
   ['portal', 'PORTAL', 'linear-gradient(135deg,#ffb066 0 50%,#4cb4ff 50% 100%)', 'TOOLS', 'Click twice to open a linked pair - what goes in one comes out the other'],

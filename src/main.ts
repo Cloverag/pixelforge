@@ -143,6 +143,9 @@ const modeCtx: ModeCtx = {
   toggleFocus: () => {
     if (screen === 'game') toggleImmersive();
   },
+  replayState: () => replayState,
+  inRoom: () => mp !== null,
+  liveCells: () => lastLive,
 };
 const sandbox = new SandMode(modeCtx);
 const playground = new PlaygroundMode(modeCtx);
@@ -328,6 +331,23 @@ let frameNo = 0;
 let resultOpen = false;
 let lastResultKey = '';
 
+/** the sandbox's instant replay, as the worker last reported it: 0 none, 1 ready, 2 playing */
+let replayState: 0 | 1 | 2 = 0;
+let replayBanner: HTMLElement | null = null;
+function showReplay(state: 0 | 1 | 2): void {
+  replayState = state;
+  const on = state === 2;
+  if (on && !replayBanner) {
+    replayBanner = document.createElement('div');
+    replayBanner.className = 'replay-banner';
+    replayBanner.textContent = '▶ INSTANT REPLAY · 1/3 SPEED · V TO SKIP';
+    document.getElementById('screen-wrap')?.append(replayBanner);
+  } else if (!on && replayBanner) {
+    replayBanner.remove();
+    replayBanner = null;
+  }
+}
+
 /** Sim events -> sound and screen feedback. Positions pan across stereo. */
 function playEvents(ev: SimEvents): void {
   const b = ev.booms;
@@ -354,6 +374,8 @@ const hoverTag = new HoverTag(
   (x, y) => post({ t: 'probe', x, y }),
   () => screen === 'game' && (current.id === 'sand' || current.id === 'chem'),
   { w: SIM_W, h: SIM_H },
+  // the 3D diorama: the voxel the pointer is over, not the 2D cell behind it
+  (x, y) => view3d?.pick(x, y) ?? null,
 );
 
 worker.onmessage = (e: MessageEvent<Res>) => {
@@ -375,6 +397,7 @@ worker.onmessage = (e: MessageEvent<Res>) => {
   if (r.t === 'frame' && r.buf) {
     stepBuf = r.buf;
     inFlight = false;
+    if ((r.replay ?? 0) !== replayState) showReplay(r.replay ?? 0);
     const snap = r.snap ? new Uint8Array(r.snap) : null;
     renderer.setFluidInputs(
       snap,

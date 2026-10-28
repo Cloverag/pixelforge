@@ -17,6 +17,19 @@ import { CHALLENGES, ChallengeDef, starsFor } from './challenges';
 /** frames from fire touching TNT to the blast: long enough to see it blink
  *  and back away, short enough that it still reads as cause and effect */
 export const TNT_FUSE = 70;
+
+/** NITRO falling this fast (LQ_V_MAX is 7; about a 12-cell drop) lands as a blast, not a splash */
+export const NITRO_DROP = 6;
+const NITRO_R = 6;
+/** a primed NITRO cell counts down in meta bits 5-7, the bits a liquid leaves free */
+const NITRO_SHIFT = 5;
+const NITRO_LOW = (1 << NITRO_SHIFT) - 1;
+/** plastic explosive outdoes TNT */
+const C4_R = 10;
+/** how long lit THERMITE burns, in ticks, and its chance a tick to melt what is under it */
+const THERMITE_BURN: [number, number] = [90, 150];
+const THERMITE_MELT = 0.25;
+const N4 = [[0, 1], [-1, 0], [1, 0], [0, -1]] as const;
 /** liquid meta bits 0-1: last flow direction */
 const LQ_DIR = 3;
 const LQ_RIGHT = 1;
@@ -191,6 +204,8 @@ export class World {
     this.parts.onBurst = (x, y) => this.events.booms.push(x | 0, y | 0, 4);
     // a black hole's flare is a TNT-sized moment
     this.parts.onFlare = (x, y) => this.events.booms.push(x | 0, y | 0, 9);
+    // a supernova outdoes it
+    this.parts.onNova = (x, y) => this.events.booms.push(x | 0, y | 0, 14);
   }
 
   clear(): void {
@@ -341,6 +356,9 @@ export class World {
         break;
       case 'pgTime':
         if (this.parts) this.parts.timeScale = inp.scale;
+        break;
+      case 'detonate':
+        if (this.mode === 'sand' && !this.challenge) this.detonate();
         break;
       case 'mode':
         this.setMode(inp.m);
@@ -649,7 +667,19 @@ export class World {
         this.salt(x, y);
         break;
       case Mat.TNT:
-        this.tnt(x, y, i);
+        this.tnt(x, y, i, 9);
+        break;
+      case Mat.C4:
+        this.tnt(x, y, i, C4_R);
+        break;
+      case Mat.NITRO:
+        this.nitro(x, y, i);
+        break;
+      case Mat.ANTIMATTER:
+        this.antimatter(x, y);
+        break;
+      case Mat.THERMITE:
+        this.thermite(x, y, i);
         break;
       case Mat.WIRE:
         this.wire(x, y, i);
@@ -1081,6 +1111,13 @@ export class World {
       const b = g.get(x, y + 1);
       const bLiquid = b !== 1 && MATS[b].cat === Cat.LIQUID;
       if (bLiquid && this.isOpen(g.get(x, y + 2))) return;
+      // NITRO does not splash: a hard landing sets it off - on ground, not on
+      // liquid. A pool draining away under it builds the same speed, a cell a
+      // tick, and blew a trough of it up as it emptied
+      if (m === Mat.NITRO && v >= NITRO_DROP && bLiquid === false) {
+        this.explode(x, y, NITRO_R, true);
+        return;
+      }
       // landed hard: the speed has to go somewhere
       if (v >= LQ_SPLASH && this.splash(x, y, m, d1, v)) return;
       // Stopped falling, so the speed is gone. Leaving it set froze whole
@@ -2291,12 +2328,14 @@ export class World {
    * A lit TNT cell counts down in its meta byte and blows at 1. Unlit TNT
    * (meta 0) never ticks, so a settled stack costs nothing.
    */
-  private tnt(x: number, y: number, i: number): void {
+  private tnt(x: number, y: number, i: number, r: number): void {
     const g = this.grid;
     const left = g.meta[i];
     if (left === 0) return;
     if (left <= 1) {
-      this.explode(x, y, 9, true);
+      // gone before the blast: a C4 cell left standing in its own blast would light itself again
+      g.setI(i, Mat.EMPTY);
+      this.explode(x, y, r, true);
       return;
     }
     g.meta[i] = left - 1;
@@ -2304,10 +2343,11 @@ export class World {
     g.touch(x, y); // the blink is drawn from meta, so repaint every tick
   }
 
-  /** Start (or shorten) a TNT cell's fuse. Never lengthens a running one. */
+  /** Start (or shorten) a TNT or C4 cell's fuse. Never lengthens a running one. */
   private lightTnt(x: number, y: number, frames: number): void {
     const g = this.grid;
-    if (g.get(x, y) !== Mat.TNT) return;
+    const t = g.get(x, y);
+    if (t !== Mat.TNT && t !== Mat.C4) return;
     const i = g.idx(x, y);
     const cur = g.meta[i];
     if (cur !== 0 && cur <= frames) return;
@@ -2315,6 +2355,154 @@ export class World {
     g.meta[i] = frames;
     g.chunks.wakeCell(x, y);
     g.touch(x, y);
+  }
+
+  /**
+   * The big red button: every charge in the world goes off within a few
+   * ticks of each other - C4 (which nothing else sets off), TNT and NITRO.
+   */
+  private detonate(): void {
+    const g = this.grid;
+    if (!g.counts[Mat.C4] && !g.counts[Mat.TNT] && !g.counts[Mat.NITRO]) return;
+    for (let i = 0; i < g.cells.length; i++) {
+      const t = g.cells[i];
+      if (t !== Mat.C4 && t !== Mat.TNT && t !== Mat.NITRO) continue;
+      const x = i % g.W;
+      const y = (i / g.W) | 0;
+      if (t === Mat.NITRO) this.primeNitro(x, y, this.rng.range(1, 5));
+      else this.lightTnt(x, y, this.rng.range(1, 5));
+    }
+  }
+
+  /** Fire (any colour), lava, an ember, a torch, a live wire or burning thermite beside (x, y). */
+  private nearHeat(x: number, y: number): boolean {
+    const g = this.grid;
+    for (const [dx, dy] of N4) {
+      const t = g.get(x + dx, y + dy);
+      if (t === Mat.FIRE || t === Mat.LAVA || t === Mat.EMBER || t === Mat.TORCH || FLAMES.has(t)) return true;
+      if ((t === Mat.WIRE || t === Mat.THERMITE) && g.meta[g.idx(x + dx, y + dy)] > 0) return true;
+    }
+    return false;
+  }
+
+  /**
+   * NITRO: a liquid that does not burn - it goes. Heat beside it or a hard
+   * landing (see liquid()) and it blows; a blast that catches it primes it
+   * for a few ticks instead, so a pool goes off as a ripple, not one pop.
+   */
+  private nitro(x: number, y: number, i: number): void {
+    const g = this.grid;
+    const fuse = g.meta[i] >> NITRO_SHIFT;
+    if (fuse > 0) {
+      // primed: it holds still and counts down (moving would rewrite its meta)
+      if (fuse <= 1) this.explode(x, y, NITRO_R, true);
+      else {
+        g.meta[i] = (g.meta[i] & NITRO_LOW) | ((fuse - 1) << NITRO_SHIFT);
+        g.chunks.wakeCell(x, y);
+        g.touch(x, y);
+      }
+      return;
+    }
+    if (this.nearHeat(x, y)) {
+      this.explode(x, y, NITRO_R, true);
+      return;
+    }
+    this.liquid(x, y, Mat.NITRO);
+  }
+
+  /** Prime a NITRO cell to blow in `ticks` (1-7). Never lengthens one already primed. */
+  private primeNitro(x: number, y: number, ticks: number): void {
+    const g = this.grid;
+    if (g.get(x, y) !== Mat.NITRO) return;
+    const i = g.idx(x, y);
+    const cur = g.meta[i] >> NITRO_SHIFT;
+    if (cur !== 0 && cur <= ticks) return;
+    g.meta[i] = (g.meta[i] & NITRO_LOW) | (Math.min(7, ticks) << NITRO_SHIFT);
+    g.chunks.wakeCell(x, y);
+    g.touch(x, y);
+  }
+
+  /**
+   * ANTIMATTER falls like a powder, and whatever it touches - anything but a
+   * WALL, a VOID, a gas or more antimatter - goes with it, cell for cell, in
+   * a flash of white fire. In a WALL box it waits. Gases are let through:
+   * annihilating its own smoke, it spent itself on the flash and never
+   * reached what it was dropped on.
+   */
+  private antimatter(x: number, y: number): void {
+    const g = this.grid;
+    for (const [dx, dy] of N4) {
+      const nx = x + dx;
+      const ny = y + dy;
+      const t = g.get(nx, ny);
+      if (t === Mat.EMPTY || t === 1 || t === Mat.VOID || t === Mat.ANTIMATTER || MATS[t].cat === Cat.GAS) continue;
+      if (t === Mat.TNT || t === Mat.C4) this.lightTnt(nx, ny, 1);
+      else if (t === Mat.NITRO) this.primeNitro(nx, ny, 1);
+      else g.setXY(nx, ny, Mat.FLAME_WHITE, this.rng.range(6, 16));
+      g.setXY(x, y, Mat.FLAME_WHITE, this.rng.range(6, 16));
+      this.wind.addBlast(x, y, 8, 0.35);
+      // a crackle of small bangs, not one per cell: a heap meeting a wall would deafen
+      if (this.events.booms.length < CHEM_BOOMS * 3 && this.rng.chance(0.15)) this.events.booms.push(x, y, 2);
+      return;
+    }
+    this.powder(x, y, Mat.ANTIMATTER);
+  }
+
+  /**
+   * THERMITE: a powder until heat lights it; then it burns white-hot for a
+   * couple of seconds (meta counts it down) and sinks through what is under
+   * it - stone, glass and metal melt to lava, sand fuses to glass, wood and
+   * oil catch, ice and water flash to steam. A WALL stops it, a charge it
+   * reaches goes off, and burnt out it leaves molten iron (lava).
+   */
+  private thermite(x: number, y: number, i: number): void {
+    const g = this.grid;
+    const burn = g.meta[i];
+    if (burn === 0) {
+      if (this.nearHeat(x, y) && this.rng.chance(0.3)) {
+        g.meta[i] = this.rng.range(THERMITE_BURN[0], THERMITE_BURN[1]);
+        this.events.ignites++;
+        g.chunks.wakeCell(x, y);
+        g.touch(x, y);
+        return;
+      }
+      this.powder(x, y, Mat.THERMITE);
+      return;
+    }
+    g.chunks.wakeCell(x, y);
+    g.touch(x, y); // the flicker is drawn from meta
+    if (burn <= 1) {
+      g.setXY(x, y, this.rng.chance(0.5) ? Mat.LAVA : Mat.EMPTY);
+      return;
+    }
+    g.meta[i] = burn - 1;
+    if (this.rng.chance(0.12) && g.get(x, y - 1) === Mat.EMPTY) g.setXY(x, y - 1, Mat.EMBER, this.rng.range(20, 50));
+    const below = g.get(x, y + 1);
+    if (below === 1 || below === Mat.VOID || below === Mat.CLONE || below === Mat.TORCH) return;
+    if (below === Mat.EMPTY || MATS[below].cat === Cat.GAS) {
+      g.swap(i, g.idx(x, y + 1));
+      return;
+    }
+    if (!this.rng.chance(THERMITE_MELT)) return;
+    if (below === Mat.TNT || below === Mat.C4) return this.lightTnt(x, y + 1, 1);
+    if (below === Mat.NITRO) return this.primeNitro(x, y + 1, 1);
+    if (below === Mat.THERMITE) {
+      // it lights what it sits on (heat does too, but this is certain)
+      const j = g.idx(x, y + 1);
+      if (g.meta[j] === 0) g.meta[j] = this.rng.range(THERMITE_BURN[0], THERMITE_BURN[1]);
+      return;
+    }
+    const product =
+      below === Mat.SAND ? Mat.GLASS
+      : below === Mat.WOOD || below === Mat.PLANT || below === Mat.FLORA || below === Mat.SEED || below === Mat.OIL || below === Mat.ANT || below === Mat.BIRD ? Mat.FIRE
+      : below === Mat.ICE || below === Mat.SNOW || below === Mat.WATER ? Mat.STEAM
+      : MATS[below].cat === Cat.LIQUID ? below // lava, acid: it sinks through, they stay
+      : Mat.LAVA;
+    // melt what is below, then trade places with it: the burn goes down, the
+    // melt is left above it - so through sand it leaves a glass tube
+    const j = g.idx(x, y + 1);
+    if (product !== below) g.setI(j, product, product === Mat.FIRE ? this.rng.range(12, 42) : product === Mat.STEAM ? this.rng.range(90, 220) : 0);
+    g.swap(i, j);
   }
 
   /**
@@ -2352,8 +2540,18 @@ export class World {
         }
         // TNT caught in the outer ring is lit on a hair trigger instead of
         // erased, so a stack goes off as a rolling chain, not one pop
+        // C4 anywhere in a blast goes too, so a slab all goes up. TNT's middle
+        // burns instead: its rolling chain is tuned on that, DEMOLITION with it
+        if (t === Mat.C4) {
+          this.lightTnt(x, y, this.rng.range(1, 4));
+          continue;
+        }
         if (t === Mat.TNT && d2 > r2 * 0.45) {
           this.lightTnt(x, y, this.rng.range(3, 10));
+          continue;
+        }
+        if (t === Mat.NITRO && d2 > r2 * 0.45) {
+          this.primeNitro(x, y, this.rng.range(2, 7));
           continue;
         }
         if (d2 <= r2 * 0.45) {

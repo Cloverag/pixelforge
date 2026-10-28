@@ -25,6 +25,12 @@ export interface ModeCtx {
   toggleFocus(): void;
   /** PICTURE: pick a photo and draw it into the world as line art */
   picture(): void;
+  /** the sandbox's instant replay: 0 none yet, 1 ready, 2 playing */
+  replayState(): 0 | 1 | 2;
+  /** playing together: what is shared cannot be replayed */
+  inRoom(): boolean;
+  /** cells in the world that are not empty, as of the last frame */
+  liveCells(): number;
 }
 
 /** Cursor fields a room shares: material colour and tool mark. */

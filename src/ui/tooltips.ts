@@ -17,6 +17,7 @@ const TOOL_NOTES: Record<string, string> = {
   ATTRACT: 'Particles are pulled toward your cursor.',
   REPULSE: 'Particles are pushed away from your cursor.',
   VORTEX: 'Particles swirl around your cursor.',
+  SUPERNOVA: 'Click to place a star: it swells, collapses and explodes into a nebula, and leaves a black hole.',
   WALL: 'Paint indestructible wall blocks.',
   BUCKET: 'Flood-fill the connected area with the selected material. (F)',
   WIND: 'Drag to blow smoke, fire and light powders. (W)',

@@ -111,8 +111,10 @@ export class PG3D {
     this.buildBackdrop();
     this.buildFloor();
 
-    // particles: unlit spheres, colour per instance, bright enough to bloom
-    const sphere = new THREE.IcosahedronGeometry(1.9, 1);
+    // particles: unlit spheres, colour per instance, bright enough to bloom. 20
+    // faces, not 80: bloom rounds them off even at the closest zoom, and every
+    // triangle is drawn twice (the floor reflects) for up to 24k particles
+    const sphere = new THREE.IcosahedronGeometry(1.9, 0);
     this.parts = new THREE.InstancedMesh(sphere, new THREE.MeshBasicMaterial(), CAP);
     this.parts.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.parts.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(CAP * 3), 3);
@@ -140,6 +142,7 @@ export class PG3D {
       new THREE.MeshBasicMaterial({ color: new THREE.Color(3.4, 1.5, 0.4) }), // portal, orange
       new THREE.MeshBasicMaterial({ color: new THREE.Color(0.4, 1.6, 3.6) }), // portal, blue
       new THREE.MeshBasicMaterial({ color: new THREE.Color(0.9, 0.45, 0.15) }), // portal, waiting
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(4.2, 3.4, 2.4) }), // a star going supernova: white-hot
     ];
 
     this.composer = new EffectComposer(r);
@@ -306,12 +309,19 @@ export class PG3D {
       const mesh = this.markers[k];
       mesh.visible = k < nf;
       if (!mesh.visible) continue;
-      const kind = forces[k * 3];
+      // a supernova's star is 7 plus its radius as a share of its largest
+      const raw = forces[k * 3];
+      const kind = Math.floor(raw);
       mesh.material = this.markerMats[kind];
+      mesh.geometry = kind === 7 ? this.coreGeo : this.markerGeo;
       mesh.position.set(toX(forces[k * 3 + 1]), toY(forces[k * 3 + 2]), 0);
       const t = this.frame * 0.05;
       mesh.children[0].visible = kind === 3;
-      if (kind >= 4) {
+      if (kind === 7) {
+        // the core sphere is 3.2 across; the star is up to 10 cells, flickering as it grows
+        mesh.rotation.set(0, 0, 0);
+        mesh.scale.setScalar((((raw - 7) * 10) / 3.2) * (1 + 0.08 * Math.sin(this.frame * 1.7)));
+      } else if (kind >= 4) {
         // portals face the camera's side of the stage and turn in opposite senses
         mesh.rotation.set(0, 0, t * (kind === 5 ? -3 : 3));
         mesh.scale.setScalar(kind === 6 ? 1.0 + 0.15 * Math.sin(t * 3) : 1.3);

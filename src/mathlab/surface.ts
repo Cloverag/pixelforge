@@ -2,11 +2,11 @@ import type { Param } from './drawings';
 
 /**
  * MATH LAB's 3D graphs: surfaces given as a function of two numbers (u, v)
- * -> (x, y, z), sampled on a grid and drawn as shaded quads, back to front,
- * on a plain 2D canvas - with axes and the mesh's grid lines, building row
- * by row, turning slowly; dragging turns them by hand.
+ * -> (x, y, z), sampled on a grid and drawn lit, with axes and the mesh's
+ * grid lines, building row by row, turning slowly; dragging turns them by hand.
  *
- * The surfaces are pure (params -> grid of points); SurfaceRun draws one.
+ * The surfaces are pure (params -> grid of points); SurfaceRun draws one,
+ * through surface3d.ts (WebGL).
  */
 
 export type V3 = [number, number, number];
@@ -172,18 +172,25 @@ export const SURFACES: Surface[] = [rose, ripple, saddle, waves];
 /** How long the rows take to appear, seconds. */
 const BUILD = 3;
 
+/** the WebGL drawing, fetched the first time a graph is shown (it brings three.js) */
+let draw3d: typeof import('./surface3d').drawSurface | null = null;
+let loading = false;
+
 /** One surface on screen: built row by row, turning; `turn` adds a drag. */
 export class SurfaceRun {
   private t0 = performance.now();
-  private nu: number;
-  private nv: number;
-  private pts: V3[];
+  readonly nu: number;
+  readonly nv: number;
+  readonly pts: V3[];
+  readonly origin: V3;
+  readonly zMin: number;
+  readonly zMax: number;
   private yaw = 0.6;
   private pitch = 0.5;
   private done = false;
 
   constructor(
-    private s: Surface,
+    readonly s: Surface,
     p: Record<string, number>,
   ) {
     const m = s.mesh(p);
@@ -205,9 +212,6 @@ export class SurfaceRun {
     this.zMin = (z0 - (z0 + z1) / 2) * zk;
     this.zMax = (z1 - (z0 + z1) / 2) * zk;
   }
-  private origin: V3;
-  private zMin: number;
-  private zMax: number;
 
   finish(): void {
     this.done = true;
@@ -226,79 +230,18 @@ export class SurfaceRun {
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.fillStyle = '#05050d';
     g.fillRect(0, 0, w, h);
-    const cy = Math.cos(this.yaw), sy = Math.sin(this.yaw), cp = Math.cos(this.pitch), sp = Math.sin(this.pitch);
-    const S = Math.min(aw, h) * 0.62;
-    const D = 3.2;
-    const cam = (p: V3): [number, number, number] => {
-      const x = p[0] * cy - p[1] * sy;
-      const yd = p[0] * sy + p[1] * cy;
-      const z = p[2] * cp - yd * sp;
-      const depth = yd * cp + p[2] * sp;
-      const k = D / (D + depth);
-      return [aw / 2 + x * S * k, h * 0.54 - z * S * k, depth];
-    };
-    const P = this.pts.map(cam);
-    const { nu, nv } = this;
-    const rows = Math.ceil((nv - 1) * built);
-    type Q = { d: number; i: number; j: number };
-    const quads: Q[] = [];
-    for (let j = 0; j < rows; j++)
-      for (let i = 0; i < nu - 1; i++) {
-        const a = j * nu + i;
-        quads.push({ d: (P[a][2] + P[a + 1][2] + P[a + nu][2] + P[a + nu + 1][2]) / 4, i, j });
+    if (draw3d) {
+      if (!draw3d(g, w, h, aw, this, built, this.yaw, this.pitch)) {
+        g.fillStyle = '#9aa6c8';
+        g.font = `${Math.round(h / 24)}px 'IBM Plex Mono', monospace`;
+        g.textAlign = 'center';
+        g.fillText('3D GRAPHS NEED WEBGL', aw / 2, h / 2);
+        g.textAlign = 'start';
       }
-    quads.sort((p, q) => q.d - p.d);
-    const L: V3 = [0.35, -0.45, 0.82];
-    const zr = this.zMax - this.zMin || 1;
-    g.lineWidth = Math.max(0.6, S / 700);
-    for (const { i, j } of quads) {
-      const a = j * nu + i;
-      const A = this.pts[a], B = this.pts[a + 1], C = this.pts[a + nu + 1], E = this.pts[a + nu];
-      // a normal from the diagonals; two-sided, so its sign does not matter
-      const d1 = [C[0] - A[0], C[1] - A[1], C[2] - A[2]];
-      const d2 = [E[0] - B[0], E[1] - B[1], E[2] - B[2]];
-      const n = [d1[1] * d2[2] - d1[2] * d2[1], d1[2] * d2[0] - d1[0] * d2[2], d1[0] * d2[1] - d1[1] * d2[0]];
-      const nl = Math.hypot(n[0], n[1], n[2]) || 1;
-      const lit = 0.35 + 0.65 * Math.abs((n[0] * L[0] + n[1] * L[1] + n[2] * L[2]) / nl);
-      // how high the quad is, 0 bottom to 1 top, for the colour map
-      const hgt = ((A[2] + C[2]) / 2 - this.zMin) / zr;
-      const c = this.s.colour(i / (nu - 2), j / (nv - 2), hgt);
-      const col = `rgb(${(c[0] * lit * 255) | 0},${(c[1] * lit * 255) | 0},${(c[2] * lit * 255) | 0})`;
-      g.beginPath();
-      g.moveTo(P[a][0], P[a][1]);
-      g.lineTo(P[a + 1][0], P[a + 1][1]);
-      g.lineTo(P[a + nu + 1][0], P[a + nu + 1][1]);
-      g.lineTo(P[a + nu][0], P[a + nu][1]);
-      g.closePath();
-      g.fillStyle = col;
-      g.fill();
-      // the mesh: lighter lines, as in a plotting program
-      g.strokeStyle = `rgba(255,235,220,${0.18 + 0.2 * lit})`;
-      g.stroke();
+    } else if (!loading) {
+      loading = true;
+      void import('./surface3d').then((m) => (draw3d = m.drawSurface));
     }
-    if (this.s.axes) this.drawAxes(g, cam, S);
     return built < 1 ? this.s.plotLine : -1;
-  }
-
-  private drawAxes(g: CanvasRenderingContext2D, cam: (p: V3) => [number, number, number], S: number): void {
-    const o = this.origin;
-    const axes: [V3, string, string][] = [
-      [[0.75, 0, 0], 'x', '#ff8a80'],
-      [[0, 0.75, 0], 'y', '#9fe8a0'],
-      [[0, 0, 0.6], 'z', '#9fd0ff'],
-    ];
-    g.font = `${Math.round(S / 18)}px 'IBM Plex Mono', monospace`;
-    g.lineWidth = Math.max(1, S / 300);
-    for (const [d, label, col] of axes) {
-      const a = cam(o);
-      const b = cam([o[0] + d[0], o[1] + d[1], o[2] + d[2]]);
-      g.strokeStyle = col;
-      g.fillStyle = col;
-      g.beginPath();
-      g.moveTo(a[0], a[1]);
-      g.lineTo(b[0], b[1]);
-      g.stroke();
-      g.fillText(label, b[0] + 4, b[1] - 4);
-    }
   }
 }

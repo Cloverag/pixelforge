@@ -285,6 +285,10 @@ export class Atom3D {
   private reduced = matchMedia('(prefers-reduced-motion: reduce)');
   /** the bond view's labels, over the canvas */
   private tagLayer: HTMLElement;
+  /** what the pointer is over - proton, neutron, an electron and its shell; null on the title screen's preview */
+  private hoverEl: HTMLElement | null = null;
+  private raycaster = new THREE.Raycaster();
+  private ndc = new THREE.Vector2();
 
   /**
    * `shiftX`: move the atom off centre by this share of the width (the title
@@ -295,7 +299,8 @@ export class Atom3D {
     private container: HTMLElement,
     private opts: { shiftX?: number; interactive?: boolean } = {},
   ) {
-    const r = new THREE.WebGLRenderer({ antialias: true });
+    // no antialias here: only the composer's last full-screen quad reaches the canvas
+    const r = new THREE.WebGLRenderer({ antialias: false });
     r.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     r.toneMapping = THREE.ACESFilmicToneMapping;
     r.toneMappingExposure = 1.05;
@@ -326,11 +331,25 @@ export class Atom3D {
     key.position.set(5, 8, 10);
     this.scene.add(key);
 
-    this.composer = new EffectComposer(r);
+    // the composer's own buffers are not multisampled, so the renderer's antialias
+    // never reached the scene and the hairline shell rings stair-stepped; MSAA
+    // goes on the composer's target instead (resize() sizes it)
+    this.composer = new EffectComposer(r, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 }));
     this.composer.addPass(new RenderPass(this.scene, this.camera));
     this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.5, 0.4, 0.55);
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
+
+    if (opts.interactive !== false) {
+      const el = document.createElement('span');
+      el.className = 'el-tag';
+      el.style.cssText = 'opacity:0;pointer-events:none;font-size:15px';
+      el.setAttribute('aria-hidden', 'true');
+      container.append(el);
+      this.hoverEl = el;
+      r.domElement.addEventListener('pointermove', this.onHover);
+      r.domElement.addEventListener('pointerleave', () => (el.style.opacity = '0'));
+    }
 
     this.resizeObs = new ResizeObserver(() => this.resize());
     this.resizeObs.observe(container);
@@ -449,6 +468,7 @@ export class Atom3D {
     // the electrons in play glow warm, so they stand out from the shells' white ones
     const free = new THREE.InstancedMesh(this.electronGeo, new THREE.MeshBasicMaterial({ color: new THREE.Color(2.2, 1.7, 0.7) }), Math.max(1, movers.length));
     free.count = 0;
+    free.userData.free = true;
     group.add(free);
     // across, and up as it rolls (about x)
     const tall = 2 * Math.max(...pos.map((p, k) => Math.hypot(p.y, p.z) + radii[k]));
@@ -573,10 +593,14 @@ export class Atom3D {
     cancelAnimationFrame(this.raf);
     this.raf = 0;
     this.resizeObs.disconnect();
+    this.hoverEl?.remove();
     this.clear();
     this.nucleonGeo.dispose();
     this.electronGeo.dispose();
     this.controls.dispose();
+    // composer.dispose() frees its own two buffers, not its passes': bloom's mip chain
+    // outlived every title-screen preview and ELEMENTS visit
+    this.bloom.dispose();
     this.composer.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
@@ -587,7 +611,6 @@ export class Atom3D {
     const h = Math.max(1, this.container.clientHeight);
     this.renderer.setSize(w, h, false);
     this.composer.setSize(w, h);
-    this.bloom.resolution.set(w, h);
     this.camera.aspect = w / h;
     // a narrow view backs off so the outer shell still fits across it
     this.camera.position.setLength(w / h < 1 ? 26 / Math.max(0.55, w / h) : 26);
@@ -620,6 +643,7 @@ export class Atom3D {
       nucleus.setMatrixAt(i, m.makeTranslation(p.x, p.y, p.z));
       nucleus.setColorAt(i, isProton[i] ? red : grey);
     }
+    nucleus.userData.isProton = isProton;
     group.add(nucleus);
 
     // shells: a ring each, tilted differently, electrons spaced round it
@@ -638,6 +662,7 @@ export class Atom3D {
       // room for the electrons an ionic bond brings in
       const mesh = new THREE.InstancedMesh(this.electronGeo, eMat, count + 4);
       mesh.count = count;
+      mesh.userData.shell = k;
       shells.add(mesh);
       // inner shells move faster
       electrons.push({ mesh, ring: r, count, speed: 0.9 / Math.pow(k + 1, 0.7), tilt });
@@ -660,6 +685,9 @@ export class Atom3D {
         transparent: true,
         depthWrite: false,
         side: THREE.DoubleSide,
+        // a transparent double-sided material draws twice, backs then fronts; added
+        // light sums the same in any order, so one pass gives the same picture
+        forceSinglePass: true,
         blending: THREE.AdditiveBlending,
       });
       orbitalMats.push(om);
@@ -682,6 +710,42 @@ export class Atom3D {
       }
     });
   }
+
+  /**
+   * Names the particle under the pointer beside it. Only nucleons and
+   * electrons are tested: the orbital lobes are see-through, so the pointer
+   * goes past them to what is inside.
+   */
+  private onHover = (e: PointerEvent): void => {
+    const el = this.hoverEl!;
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    this.ndc.set(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
+    this.raycaster.setFromCamera(this.ndc, this.camera);
+    const targets: THREE.InstancedMesh[] = [];
+    this.scene.traverse((o) => {
+      if (!(o instanceof THREE.InstancedMesh) || !o.visible) return;
+      const u = o.userData;
+      if (u.isProton || u.shell !== undefined || u.free) {
+        // electrons move: a bounding sphere from where they were would miss where they are
+        if (!u.isProton) o.computeBoundingSphere();
+        targets.push(o);
+      }
+    });
+    const hit = this.raycaster.intersectObjects(targets, false)[0];
+    if (!hit || hit.instanceId === undefined) {
+      el.style.opacity = '0';
+      return;
+    }
+    const u = hit.object.userData;
+    el.textContent = u.isProton
+      ? u.isProton[hit.instanceId] ? 'Proton p⁺' : 'Neutron n⁰'
+      : u.free ? 'Electron e⁻' : `Electron e⁻ · shell ${'KLMNOPQ'[u.shell]}`;
+    const x = e.clientX - rect.left;
+    // to the cursor's left near the right edge, as the sandbox's tag does
+    const left = x + 16 + el.offsetWidth > rect.width;
+    el.style.transform = `translate(${Math.round(left ? x - 12 - el.offsetWidth : x + 16)}px, ${Math.round(e.clientY - rect.top + 14)}px)`;
+    el.style.opacity = '1';
+  };
 
   /** electron j of `count` on a ring at time t, in its atom's frame */
   private ringPoint(e: Ring, j: number, count: number, t: number, out: THREE.Vector3): THREE.Vector3 {
