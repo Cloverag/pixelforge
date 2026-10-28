@@ -106,6 +106,7 @@ export type PgTool =
   | 'repel'
   | 'vortex'
   | 'blackhole'
+  | 'supernova'
   | 'wall'
   | 'bumper'
   | 'portal'

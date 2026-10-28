@@ -56,6 +56,7 @@ const PK_CROSS = 4; // a heavy star that splits into a cross of four
 const PK_PALM = 5; // a comet that sheds sparks like a palm frond
 const PK_JET = 6; // a black hole's flare: ignores every force
 const PK_SHELL = 7; // a firework star: moves as plain, but a black hole's meal
+const PK_NOVA = 8; // a supernova's flare or nebula: floats (space has no down), no meal
 
 /** a crossette star's life at the burst, and the life at which it splits */
 const CROSS_LIFE = 85;
@@ -164,6 +165,34 @@ interface PortalPair {
 const PORTAL_R = 6;
 const MAX_PAIRS = 3;
 
+/**
+ * A star placed to go supernova, on a fixed clock (frames, scaled by slow-mo):
+ * it swells and flickers, collapses to a point that drags nearby matter in,
+ * explodes - a white-hot shell, a slow two-colour nebula, a shockwave - and
+ * once the debris is clear, leaves a black hole that pulls the nebula back
+ * in. All from the playground's RNG, so a room sees the same star.
+ */
+interface Nova {
+  x: number;
+  y: number;
+  age: number;
+  /** the nebula's first colour; its second is a third of the wheel round */
+  hue: number;
+}
+export const NOVA_SWELL = 150;
+export const NOVA_COLLAPSE = 20;
+/**
+ * After the blast, before the black hole: long enough for the nebula to open
+ * out first. At 45 frames the hole swallowed most of it before it was seen.
+ */
+export const NOVA_REMNANT = 90;
+const NOVA_MAX = 3;
+/** the star's radius as it swells, and at the end of the collapse */
+const NOVA_R0 = 2;
+const NOVA_R1 = 10;
+/** nebula colours, as rainbow steps: magenta, orange, cyan */
+const NOVA_HUES = [54, 5, 31];
+
 interface Rocket {
   x: number;
   y: number;
@@ -211,6 +240,7 @@ export class PSys {
   forces: Force[] = [];
   gravityOn = true;
   private rockets: Rocket[] = [];
+  private novas: Nova[] = [];
   private portals: PortalPair[] = [];
   private emitters: Emitter[] = [];
   /** fireflies alive at the end of the last frame */
@@ -221,6 +251,8 @@ export class PSys {
   onBurst: ((x: number, y: number) => void) | null = null;
   /** called when a black hole flares (a bigger boom and flash) */
   onFlare: ((x: number, y: number) => void) | null = null;
+  /** called when a supernova goes off: the biggest boom the playground has */
+  onNova: ((x: number, y: number) => void) | null = null;
   /** what each black hole has swallowed lately; past FLARE_AT it flares.
    *  Kept out of structureHash: it follows the particles, whose float maths
    *  may differ between engines. Packed, so a joiner on the same engine
@@ -240,6 +272,7 @@ export class PSys {
     this.n = 0;
     this.forces.length = 0;
     this.rockets.length = 0;
+    this.novas.length = 0;
     this.feed.clear();
     this.eatenNow.clear();
     this.flares.length = 0;
@@ -264,6 +297,7 @@ export class PSys {
         portals: this.portals,
         emitters: this.emitters,
         rockets: this.rockets,
+        novas: this.novas,
         feed: this.forces.map((f) => this.feed.get(f) ?? [0, 0]),
       }),
     );
@@ -299,6 +333,7 @@ export class PSys {
     this.portals = h.portals;
     this.emitters = h.emitters;
     this.rockets = h.rockets;
+    this.novas = h.novas ?? [];
     this.feed = new Map();
     (h.feed ?? []).forEach((v: [number, number], k: number) => {
       if (this.forces[k]) this.feed.set(this.forces[k], v);
@@ -326,7 +361,7 @@ export class PSys {
    * make a Chrome-and-Safari room re-send its world every few seconds.
    */
   structureHash(): number {
-    const s = JSON.stringify([this.forces, this.portals, this.emitters.map((e) => ({ ...e, t: 0 })), this.gravityOn, this.timeScale]);
+    const s = JSON.stringify([this.forces, this.portals, this.emitters.map((e) => ({ ...e, t: 0 })), this.gravityOn, this.timeScale, this.novas]);
     let h = 0x811c9dc5;
     for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193);
     return h >>> 0;
@@ -620,6 +655,85 @@ export class PSys {
     }
   }
 
+  /** A star that will go supernova where it is placed. */
+  placeNova(x: number, y: number): void {
+    if (this.novas.length >= NOVA_MAX) this.novas.shift();
+    this.novas.push({ x, y, age: 0, hue: NOVA_HUES[this.rng.int(NOVA_HUES.length)] });
+  }
+
+  /** The star's radius at its age: swelling, then collapsing to a point. */
+  private novaRadius(n: Nova): number {
+    if (n.age < NOVA_SWELL) return NOVA_R0 + (NOVA_R1 - NOVA_R0) * (n.age / NOVA_SWELL) ** 1.5;
+    return Math.max(1, NOVA_R1 * (1 - (n.age - NOVA_SWELL) / NOVA_COLLAPSE));
+  }
+
+  /** One frame of each star's life; the blast, and the black hole after it. */
+  private stepNovas(ts: number): void {
+    for (let k = this.novas.length - 1; k >= 0; k--) {
+      const n = this.novas[k];
+      const before = n.age;
+      n.age += ts;
+      if (n.age < NOVA_SWELL) {
+        // solar flares off its surface, more as it swells
+        const t = n.age / NOVA_SWELL;
+        if (this.rng.chance((0.25 + 1.2 * t) * ts)) {
+          const a = this.rng.next() * Math.PI * 2;
+          const r = this.novaRadius(n);
+          const sp = 0.4 + this.rng.next() * 0.8;
+          this.push(n.x + Math.cos(a) * r, n.y + Math.sin(a) * r, Math.cos(a) * sp, Math.sin(a) * sp, 20 + this.rng.int(20), HUE_GOLD + this.rng.int(4), 0, 0, PK_NOVA);
+        }
+      } else if (n.age < NOVA_SWELL + NOVA_COLLAPSE) {
+        // the collapse: everything near falls toward the dying core
+        this.pull(n.x, n.y, 90, 0.45 * ts);
+      } else if (before < NOVA_SWELL + NOVA_COLLAPSE) {
+        this.explode(n);
+      } else if (n.age >= NOVA_SWELL + NOVA_COLLAPSE + NOVA_REMNANT) {
+        this.novas.splice(k, 1);
+        this.placeForce('blackhole', n.x, n.y);
+      }
+    }
+  }
+
+  /** Every particle within R of (x, y) is pushed toward it by k (outward for negative k), less with distance. */
+  private pull(x: number, y: number, R: number, k: number): void {
+    for (let i = 0; i < this.n; i++) {
+      const dx = x - this.px[i];
+      const dy = y - this.py[i];
+      const d2 = dx * dx + dy * dy;
+      if (d2 > R * R || d2 < 1) continue;
+      const d = Math.sqrt(d2);
+      const f = (k * (1 - d / R)) / d;
+      this.vx[i] += dx * f;
+      this.vy[i] += dy * f;
+    }
+  }
+
+  private explode(n: Nova): void {
+    // what was there already is thrown clear first, so the shell is not shoved too
+    this.pull(n.x, n.y, 140, -4.5);
+    // the shell: fast, white-hot (speed reads as white), a sphere seen flat
+    for (let k = 0; k < 170; k++) {
+      const a = this.rng.next() * Math.PI * 2;
+      const cz = this.rng.next() * 2 - 1;
+      const rxy = Math.sqrt(1 - cz * cz);
+      const sp = 3.6 + this.rng.next() * 1.4;
+      this.push(n.x, n.y, Math.cos(a) * rxy * sp, Math.sin(a) * rxy * sp, 45 + this.rng.int(25), HUE_GOLD + this.rng.int(3), 0, cz * sp, PK_NOVA);
+    }
+    // the nebula: slow and long-lived, in two colours, thicker in lumps
+    const lumps = 5 + this.rng.int(3);
+    const lumpA = Array.from({ length: lumps }, () => this.rng.next() * Math.PI * 2);
+    for (let k = 0; k < 420; k++) {
+      const a = this.rng.chance(0.6) ? lumpA[this.rng.int(lumps)] + (this.rng.next() - 0.5) * 0.7 : this.rng.next() * Math.PI * 2;
+      const cz = this.rng.next() * 2 - 1;
+      const rxy = Math.sqrt(1 - cz * cz);
+      const sp = 0.6 + this.rng.next() * 3;
+      const hue = (this.rng.chance(0.6) ? n.hue : n.hue + RAINBOW_N / 3) + this.rng.int(3);
+      this.push(n.x, n.y, Math.cos(a) * rxy * sp, Math.sin(a) * rxy * sp, 240 + this.rng.int(180), hue % RAINBOW_N, 0, cz * sp, PK_NOVA);
+    }
+    this.flares.push({ x: n.x, y: n.y, f0: this.frame });
+    this.onNova?.(n.x, n.y);
+  }
+
   placeForce(kind: 'attractor' | 'repulsor' | 'vortex' | 'blackhole', x: number, y: number): void {
     if (this.forces.length >= 8) this.forces.shift();
     const internal: Force['kind'] =
@@ -784,6 +898,9 @@ export class PSys {
       case 'portal':
         if (msg.phase === 'down') this.placePortal(msg.x, msg.y);
         break;
+      case 'supernova':
+        if (msg.phase === 'down') this.placeNova(msg.x, msg.y);
+        break;
       case 'erase':
         if (msg.phase !== 'up') {
           this.eraseNear(msg.x, msg.y);
@@ -842,6 +959,9 @@ export class PSys {
       out.push(p.b ? 4 : 6, p.a.x, p.a.y);
       if (p.b) out.push(5, p.b.x, p.b.y);
     }
+    // 7: a star going supernova, its radius over NOVA_R1 in the fraction (7.999 at full swell)
+    for (const n of this.novas)
+      if (n.age < NOVA_SWELL + NOVA_COLLAPSE) out.push(7 + Math.min(0.999, this.novaRadius(n) / NOVA_R1), n.x, n.y);
     return out;
   }
 
@@ -866,6 +986,7 @@ export class PSys {
     const drag = 1 - (1 - DRAG) * ts;
 
     this.runEmitters();
+    this.stepNovas(ts);
 
     // rockets: climb with a wobble, shed sparks, burst at their target height
     for (let k = this.rockets.length - 1; k >= 0; k--) {
@@ -895,7 +1016,7 @@ export class PSys {
         // wander, unhurried, and never fall
         vx = (vx + (this.rng.next() - 0.5) * 0.14 * ts) * (1 - 0.04 * ts);
         vy = (vy + (this.rng.next() - 0.5) * 0.14 * ts) * (1 - 0.04 * ts);
-      } else if (this.gravityOn && this.kind[i] !== PK_JET) {
+      } else if (this.gravityOn && this.kind[i] !== PK_JET && this.kind[i] !== PK_NOVA) {
         const kd = this.kind[i];
         vy += GRAVITY * (kd === PK_SPARK ? 0.5 : kd === PK_WILLOW ? 0.45 : kd === PK_PALM ? 0.8 : 1) * ts;
       }
@@ -1074,9 +1195,12 @@ export class PSys {
       const tr = t & 255;
       const tg = (t >>> 8) & 255;
       const tb = (t >>> 16) & 255;
-      const r = tr + ((((c & 255) - tr) * 230) >> 8);
-      const g = tg + (((((c >>> 8) & 255) - tg) * 230) >> 8);
-      const b = tb + (((((c >>> 16) & 255) - tb) * 230) >> 8);
+      // `| 0` rounds toward the sky from either side; `>> 8` rounded down, so a
+      // pixel a few shades darker than the sky (a black hole's shadow left
+      // behind) stepped back to the same value forever: dark ghosts that never went
+      const r = tr + ((((c & 255) - tr) * 230) / 256 | 0);
+      const g = tg + (((((c >>> 8) & 255) - tg) * 230) / 256 | 0);
+      const b = tb + (((((c >>> 16) & 255) - tb) * 230) / 256 | 0);
       pix[i] =
         Math.abs(r - tr) + Math.abs(g - tg) + Math.abs(b - tb) < 4
           ? t
@@ -1155,6 +1279,35 @@ export class PSys {
         if (mx >= 0 && my >= 0 && mx < SIM_W && my < SIM_H)
           pix[my * SIM_W + mx] = addSat(pix[my * SIM_W + mx], col);
       }
+    }
+
+    // stars going supernova: a hot core and a halo, flickering harder as they swell;
+    // collapsing, a shrinking white point
+    for (const n of this.novas) {
+      if (n.age >= NOVA_SWELL + NOVA_COLLAPSE) continue;
+      const r = this.novaRadius(n);
+      const t = Math.min(1, n.age / NOVA_SWELL);
+      const collapsing = n.age >= NOVA_SWELL;
+      // a hash of star and frame, not the sim RNG: drawing must not consume it
+      const flick = 1 - t * 0.45 * ((Math.imul(frame * 0x9e3779b1 + (n.x | 0), 0x85ebca6b) >>> 24) / 255);
+      const halo = r * 2.2;
+      for (let dy = -Math.ceil(halo); dy <= halo; dy++)
+        for (let dx = -Math.ceil(halo); dx <= halo; dx++) {
+          const d = Math.hypot(dx, dy);
+          if (d > halo) continue;
+          const ix = (n.x + dx) | 0;
+          const iy = (n.y + dy) | 0;
+          if (ix < 0 || iy < 0 || ix >= SIM_W || iy >= SIM_H) continue;
+          // inside: white core to yellow-orange rim; outside: a fading glow
+          const inside = d <= r;
+          const k = (inside ? 1 : ((halo - d) / (halo - r)) ** 2 * 0.45) * flick;
+          const edge = inside ? d / r : 1;
+          const R = 255 * k;
+          const G = (collapsing ? 255 : 245 - 95 * edge * t) * k;
+          const B = (collapsing ? 255 : 220 - 200 * edge) * k;
+          const col = ((255 << 24) | (Math.max(0, B | 0) << 16) | (Math.max(0, G | 0) << 8) | Math.max(0, R | 0)) >>> 0;
+          pix[iy * SIM_W + ix] = addSat(pix[iy * SIM_W + ix], col);
+        }
     }
 
     // black hole flares: a shockwave ring of blue-white light running out

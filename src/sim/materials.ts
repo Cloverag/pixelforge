@@ -92,6 +92,11 @@ export const Mat = {
   GLUCOSE: 83,
   SILVER_SOL: 84,
   MIRROR: 85,
+  // ---- BOOM: the sandbox's charges and the stuff that ends things ----
+  NITRO: 86,
+  C4: 87,
+  ANTIMATTER: 88,
+  THERMITE: 89,
 } as const;
 
 export type MatId = (typeof Mat)[keyof typeof Mat];
@@ -177,6 +182,14 @@ MATS[Mat.VOID] = def(Mat.VOID, 'VOID', Cat.SOLID, 100, ['#3a2450', '#2c1a40', '#
 MATS[Mat.SNOW] = def(Mat.SNOW, 'SNOW', Cat.POWDER, 0.7, ['#eef4fa', '#dce8f4', '#f8fbff', '#c8d8ea'], { acidChance: 0.01 });
 MATS[Mat.SALT] = def(Mat.SALT, 'SALT', Cat.POWDER, 1.3, ['#e8e4da', '#d8d4c8', '#f4f0e6', '#c8c4b8'], { acidChance: 0.01 });
 MATS[Mat.TNT] = def(Mat.TNT, 'TNT', Cat.SOLID, 100, ['#c8281e', '#b02018', '#e03828', '#981810'], { acidChance: 0.02 });
+// nitroglycerine: pale, oily and heavier than water. It does not burn - it goes
+MATS[Mat.NITRO] = def(Mat.NITRO, 'NITRO', Cat.LIQUID, 1.6, ['#e6dc72', '#d6cc5e', '#f0e88e', '#c6bc4e'], { disp: 3, acidChance: 0.02 });
+// plastic explosive: putty that stays where it is put; fire will not set it off, only the button
+MATS[Mat.C4] = def(Mat.C4, 'C4', Cat.SOLID, 100, ['#d8d2b4', '#c8c2a2', '#e6e0c6', '#b6b092'], { acidChance: 0.02 });
+// falls like a powder; what it touches, it annihilates
+MATS[Mat.ANTIMATTER] = def(Mat.ANTIMATTER, 'ANTIMATTER', Cat.POWDER, 1.2, ['#ff4fd8', '#c03aff', '#ff8af0', '#8a2cff'], { acidChance: 0 });
+// aluminium and rust, ground fine: lit, it burns white-hot down through stone
+MATS[Mat.THERMITE] = def(Mat.THERMITE, 'THERMITE', Cat.POWDER, 2.2, ['#8a6a5e', '#9c7a6c', '#74574c', '#b08a78'], { acidChance: 0.02 });
 // lighter than snow, so it is the most wind-mobile thing that still falls
 MATS[Mat.ASH] = def(Mat.ASH, 'ASH', Cat.POWDER, 0.5, ['#5c5764', '#4c4754', '#6c6774', '#3f3b48'], { acidChance: 0.03 });
 // stems, leaves and flowers that plants push up into the air. Its own
@@ -497,7 +510,11 @@ for (let m = 0; m < NMATS; m++) if (MATS[m]?.cat === Cat.POWDER) GRAINY[m] = 1;
 
 /** True when a cell's colour comes from its state, not its ramp. */
 export function offRamp(mat: number, meta: number): boolean {
-  return mat === Mat.FLORA || (meta > 0 && (mat === Mat.WIRE || mat === Mat.TNT));
+  return (
+    mat === Mat.FLORA ||
+    (meta > 0 && (mat === Mat.WIRE || mat === Mat.TNT || mat === Mat.C4 || mat === Mat.THERMITE)) ||
+    (mat === Mat.NITRO && meta >= 1 << 5)
+  );
 }
 
 /** Animated color pick for a cell, without surface lighting. */
@@ -509,6 +526,12 @@ export function colorAt(mat: number, x: number, y: number, frame: number, meta: 
   // has to be readable from across the screen, so it beats the stripe
   if (mat === Mat.TNT && meta > 0)
     return (frame >> (meta < 24 ? 1 : 2)) & 1 ? 0xfff0f8ff : MATS[mat].ramp[2];
+  // armed C4: a red light blinking on the putty
+  if (mat === Mat.C4 && meta > 0) return frame & 1 ? 0xff2a2aff : MATS[mat].ramp[2];
+  // primed NITRO (a blast caught it): white for the few ticks it has left
+  if (mat === Mat.NITRO && meta >= 1 << 5) return 0xfff8ffff;
+  // burning THERMITE: white-hot, flickering to yellow
+  if (mat === Mat.THERMITE && meta > 0) return (frame + x + y) & 1 ? 0xffffffff : 0xff70e8ff;
   if (mat === Mat.FLORA) {
     if (meta & Flora.BUD) return BUD_COL;
     const cols = FLORA_COLS[meta] ?? FLORA_COLS[Flora.STEM];

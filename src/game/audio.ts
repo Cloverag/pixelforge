@@ -28,6 +28,7 @@ export class Sfx {
   onReady: (() => void) | null = null;
   private lastPlace = 0;
   private lastBoom = 0;
+  private lastFold = 0;
   private lastSizzle = 0;
   private lastZap = 0;
   private lastIgnite = 0;
@@ -492,8 +493,12 @@ export class Sfx {
     const now = performance.now();
     const big = Math.min(1, r / 9);
     if (now - this.lastBoom < 70) {
-      // fold into the existing rumble rather than stacking another thump
-      this.noise(0.35, 400, 60, 0.08 * big, pan);
+      // fold into the existing rumble rather than stacking another thump - at
+      // most one every 15 ms: a slab of C4 is hundreds of blasts in a few frames
+      if (now - this.lastFold >= 15) {
+        this.lastFold = now;
+        this.noise(0.35, 400, 60, 0.08 * big, pan);
+      }
       return;
     }
     this.lastBoom = now;

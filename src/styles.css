@@ -2274,3 +2274,44 @@ body.elements-preview #screen { opacity: 0; }
 .el-preview-name { font-size: clamp(14px, 1.4vw, 22px); letter-spacing: 0.4em; color: #e6e8ff; }
 /* a deck lamp or sky that does nothing on this screen (ModeController.deckOff) */
 .lamp:disabled, .sky:disabled { opacity: 0.3; cursor: not-allowed; }
+
+/* the sandbox's big red button: its 3-2-1 (ui/countdown.ts) and the instant replay's banner */
+.countdown {
+  position: absolute;
+  inset: 0;
+  z-index: 9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  font-family: var(--font-display);
+  font-size: clamp(48px, 12vw, 160px);
+  color: #ff3b30;
+  text-shadow: 6px 6px 0 #1a0606, 0 0 30px rgba(255, 59, 48, 0.6);
+}
+.countdown.pop { animation: count-pop 0.6s steps(4) both; }
+.countdown.boom { color: #fff3b0; animation: count-pop 0.5s steps(3) both; }
+@keyframes count-pop {
+  from { transform: scale(1.8); opacity: 0; }
+  30% { transform: scale(1); opacity: 1; }
+  to { transform: scale(0.9); opacity: 0.25; }
+}
+.replay-banner {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  translate: -50% 0;
+  z-index: 9;
+  padding: 6px 14px;
+  pointer-events: none;
+  font-family: var(--font-read);
+  font-size: 14px;
+  letter-spacing: 1px;
+  color: #fff;
+  background: rgba(200, 30, 30, 0.85);
+  border-radius: 4px;
+  animation: ts-blink 1.2s steps(1) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .countdown.pop, .countdown.boom, .replay-banner { animation: none; }
+}

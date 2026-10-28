@@ -1,3 +1,4 @@
+import { enterRows, launch } from './menufx';
 import { CHALLENGES } from '../sim/challenges';
 import { isUnlocked, loadProgress, Progress } from '../game/progress';
 import { isDialogOpen } from './dialog';
@@ -105,6 +106,8 @@ let rows: Row[] = [];
 let itemEls: HTMLElement[] = [];
 let descEl: HTMLElement | null = null;
 let listening = false;
+/** a pick is playing out (menufx.launch): keys and clicks wait for it */
+let launching = false;
 
 const coarse = (): boolean => matchMedia('(pointer: coarse)').matches;
 
@@ -139,7 +142,7 @@ function buildRows(c: CommonCallbacks): Row[] {
       go: () => {
         c.sound('select');
         if (e.opens) setNav(open(nav, e.opens));
-        else e.run?.();
+        else if (e.run) leaveWith(e.run);
       },
     }));
   }
@@ -159,7 +162,7 @@ function buildRows(c: CommonCallbacks): Row[] {
             return;
           }
           c.sound('select');
-          t.onChallenge(ch.id);
+          leaveWith(() => t.onChallenge(ch.id));
         },
       };
     });
@@ -327,8 +330,19 @@ function paint(): void {
   }
 }
 
+/** A pick that leaves the menu, played out first (menufx.ts). */
+function leaveWith(go: () => void): void {
+  if (nav.screen === 'start') return go();
+  launching = true;
+  const stillUp = () => !!root?.isConnected && !root.closest('#overlay')?.classList.contains('hidden');
+  launch(itemEls, nav.cursor[nav.screen], () => {
+      launching = false;
+    go();
+  }, stillUp);
+}
+
 function moveCursor(d: number): void {
-  if (!cbs || nav.screen === 'start') return;
+  if (!cbs || nav.screen === 'start' || launching) return;
   const next = move(nav, rows.length, d);
   if (next === nav) return;
   cbs.sound('move');
@@ -343,6 +357,7 @@ function pressStart(): void {
 }
 
 function confirm(): void {
+  if (launching) return;
   if (nav.screen === 'start') pressStart();
   else rows[nav.cursor[nav.screen]]?.go();
 }
@@ -401,7 +416,7 @@ function render(): void {
       el.appendChild(lbl);
       // the mouse moves the cursor; a click or a tap confirms
       el.addEventListener('pointerenter', (e) => {
-        if (e.pointerType === 'mouse' && nav.screen !== 'start' && nav.cursor[nav.screen] !== i) {
+        if (e.pointerType === 'mouse' && !launching && nav.screen !== 'start' && nav.cursor[nav.screen] !== i) {
           c.sound('move');
           setNav(moveTo(nav, i));
         }
@@ -422,6 +437,7 @@ function render(): void {
   }
   foot.textContent = coarse() ? '' : HINTS[nav.screen];
   paint();
+  enterRows(itemEls);
 }
 
 /** Keys while the title screen is up: what it handles it stops, the rest (M, T, C) passes on. */
@@ -440,6 +456,7 @@ function onKey(e: KeyboardEvent): void {
     if (!e.repeat) pressStart();
     return;
   }
+  if (launching) return used(); // a pick is playing out: a third of a second, and nothing may undo it
   const repeatable = k === 'arrowup' || k === 'arrowdown' || k === 'w' || k === 's';
   if (e.repeat && !repeatable) return;
   const row = rows[nav.cursor[nav.screen]];

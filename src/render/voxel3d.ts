@@ -33,6 +33,45 @@ const RELIEF = 0.45;
 /** How far over 1.0 emissive colours are pushed, to clear the bloom threshold. */
 const GLOW_GAIN = 1.45;
 
+/** No voxel reaches further from z = 0 than its class's depth, even at full relief. */
+const SLAB = CAT_DEPTH[Cat.SOLID];
+
+/**
+ * The material of the first voxel a ray meets, or EMPTY: the ray is walked
+ * through the slab the voxels fill, each step tested against the box update()
+ * draws in that cell. `dir` is a unit vector.
+ */
+export function voxelAt(
+  o: THREE.Vector3,
+  dir: THREE.Vector3,
+  cells: Uint8Array,
+  w: number,
+  h: number,
+  step: number,
+  jitter: Float32Array,
+): number {
+  if (Math.abs(dir.z) < 1e-6) return Mat.EMPTY;
+  const ta = (SLAB - o.z) / dir.z;
+  const tb = (-SLAB - o.z) / dir.z;
+  const t0 = Math.max(0, Math.min(ta, tb));
+  // a grazing ray crosses the slab for miles; nothing is further than the world is wide
+  const t1 = Math.min(Math.max(ta, tb), t0 + 2 * w);
+  // ponytail: fixed quarter-voxel steps, not an exact grid walk; a ray grazing a corner can miss it
+  for (let t = t0; t <= t1; t += 0.25) {
+    const x = Math.round((o.x + dir.x * t + w / 2) / step) * step;
+    const y = Math.round((h / 2 - (o.y + dir.y * t)) / step) * step;
+    if (x < 0 || y < 0 || x >= w || y >= h) continue;
+    const i = y * w + x;
+    const m = cells[i];
+    const def = MATS[m];
+    if (m === Mat.EMPTY || !def) continue;
+    const depth = CAT_DEPTH[def.cat] ?? 4;
+    const z = o.z + dir.z * t;
+    if (Math.abs(z - jitter[i] * depth * RELIEF) <= (depth * (1 + jitter[i] * RELIEF)) / 2) return m;
+  }
+  return Mat.EMPTY;
+}
+
 /** sRGB -> linear, matching what THREE.ColorManagement does on the way in. */
 function toLinear(c: number): number {
   return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
@@ -84,6 +123,13 @@ export class Voxel3D {
   private capacity: number;
   /** stable per-cell relief offsets, so the terrain does not shimmer */
   private jitter: Float32Array;
+
+  /** the last snapshot drawn, which pick() reads */
+  private cells: Uint8Array | null = null;
+  private cellsW = 0;
+  private cellsH = 0;
+  private raycaster = new THREE.Raycaster();
+  private ndc = new THREE.Vector2();
 
   private frame = 0;
   /**
@@ -237,6 +283,8 @@ export class Voxel3D {
 
     this.buildControls();
     window.addEventListener('resize', this.onResize);
+    // dev only: lets a screenshot hold full quality on a software renderer
+    if (import.meta.env.DEV) (window as unknown as { __v3d: Voxel3D }).__v3d = this;
   }
 
   /**
@@ -379,6 +427,9 @@ export class Voxel3D {
    * cost, and every voxel here is a pure translate+scale.
    */
   update(cells: Uint8Array, w: number, h: number): void {
+    this.cells = cells;
+    this.cellsW = w;
+    this.cellsH = h;
     const { ramps, jitter, solidMat, solidCol, glowMat, glowCol } = this;
     const frame = this.frame;
     const halfH = h / 2;
@@ -439,6 +490,17 @@ export class Voxel3D {
     this.solid.instanceColor!.needsUpdate = true;
     this.glow.instanceMatrix.needsUpdate = true;
     this.glow.instanceColor!.needsUpdate = true;
+  }
+
+  /** The material under a point on screen; null while hidden, when the 2D world answers instead. */
+  pick(clientX: number, clientY: number): number | null {
+    if (!this.visible) return null;
+    if (!this.cells) return Mat.EMPTY;
+    const r = this.renderer.domElement.getBoundingClientRect();
+    this.ndc.set(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
+    this.raycaster.setFromCamera(this.ndc, this.camera);
+    const { origin, direction } = this.raycaster.ray;
+    return voxelAt(origin, direction, this.cells, this.cellsW, this.cellsH, this.stride, this.jitter);
   }
 
   /** the player picked another background colour */
@@ -506,6 +568,7 @@ export class Voxel3D {
   dispose(): void {
     window.removeEventListener('resize', this.onResize);
     this.controls.dispose();
+    this.bloom.dispose();
     this.scene.traverse((o) => {
       const mesh = o as THREE.Mesh;
       if (!mesh.isMesh) return;

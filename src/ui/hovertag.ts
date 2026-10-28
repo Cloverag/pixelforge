@@ -22,6 +22,8 @@ export class HoverTag {
   private py = 0;
   private cx = -1;
   private cy = -1;
+  private clientX = 0;
+  private clientY = 0;
   private inside = false;
 
   constructor(
@@ -31,6 +33,8 @@ export class HoverTag {
     private enabled: () => boolean,
     /** the world's size in cells */
     private size: { w: number; h: number },
+    /** a 3D view showing the world answers itself, at once; null: none is showing */
+    private pick: (clientX: number, clientY: number) => number | null = () => null,
   ) {}
 
   /** A frame came in: look again at what is under a resting cursor. */
@@ -47,6 +51,8 @@ export class HoverTag {
   private ask(): void {
     if (!this.inside) return;
     if (!this.enabled()) return this.render(null);
+    const m = this.pick(this.clientX, this.clientY);
+    if (m !== null) return this.render(m);
     this.probe(this.cx, this.cy);
   }
 
@@ -68,9 +74,14 @@ export class HoverTag {
     wrap.addEventListener('pointermove', (e) => {
       const w = wrap.getBoundingClientRect();
       const r = canvas.getBoundingClientRect();
+      this.clientX = e.clientX;
+      this.clientY = e.clientY;
       this.px = e.clientX - w.left;
       this.py = e.clientY - w.top;
-      this.inside = e.clientX >= r.left && e.clientX < r.right && e.clientY >= r.top && e.clientY < r.bottom;
+      // over a canvas, not a button drawn on one (the 3D view's camera pill)
+      this.inside =
+        (e.target as Element).tagName === 'CANVAS' &&
+        e.clientX >= r.left && e.clientX < r.right && e.clientY >= r.top && e.clientY < r.bottom;
       const cx = Math.floor(((e.clientX - r.left) / r.width) * this.size.w);
       const cy = Math.floor(((e.clientY - r.top) / r.height) * this.size.h);
       if (!this.inside) this.render(null);

@@ -24,6 +24,7 @@ export type PgToolKind =
   | 'vortex'
   | 'blackhole'
   | 'portal'
+  | 'supernova'
   | 'erase';
 
 export type PgToolMsg = {
@@ -77,7 +78,9 @@ export type Req =
   | { t: 'loadChallenge'; id: string }
   | { t: 'toSandbox' }
   | { t: 'save' }
-  | { t: 'load'; data: SaveData };
+  | { t: 'load'; data: SaveData }
+  /** the sandbox's instant replay: start it, or end it early */
+  | { t: 'replay' };
 
 /**
  * Everything the sandbox simulation steps from, for multiplayer: a peer
@@ -117,6 +120,8 @@ export type NetInput =
   | { k: 'pgClear' }
   | { k: 'pgGravity'; on: boolean }
   | { k: 'pgTime'; scale: number }
+  /** the sandbox's big red button: every charge goes off */
+  | { k: 'detonate' }
   /** the host switches everyone between sandbox and playground */
   | { k: 'mode'; m: Mode }
   /** the chem lab: replace the bench with a ready-made experiment */
@@ -176,6 +181,8 @@ export interface Res {
   used?: number[];
   budget?: (number | null)[];
   shake?: number;
+  /** the sandbox's instant replay: 1 one is ready, 2 one is playing */
+  replay?: 1 | 2;
   events?: SimEvents;
   /** live particle count, playground only */
   parts?: number;
