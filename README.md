@@ -17,7 +17,7 @@ three.js and Trystero load only when the 3D views or multiplayer are used.
 
 **▶ Play it: https://cloverag.github.io/pixelforge/**
 
-**🎬 [Watch the one-minute showcase](docs/pixelforge-trailer.mp4)** - chemistry, space, 3D lilies and MATH LAB, recorded from the game and cut with [Remotion](https://www.remotion.dev).
+**🎬 [One-minute video](docs/pixelforge-trailer.mp4)** of the chemistry, space, 3D lilies and MATH LAB, recorded from the game and edited with [Remotion](https://www.remotion.dev).
 
 | Bonds: sodium hands chlorine an electron | Bonds: carbon shares pairs with two oxygens |
 |:---:|:---:|
@@ -25,11 +25,11 @@ three.js and Trystero load only when the 3D views or multiplayer are used.
 | **Supernova** (playground) | **Galaxy** (playground) |
 | ![A star swells and explodes into a cyan and magenta nebula; a black hole forms where it was](docs/space-supernova.gif) | ![The GALAXY scene: a four-armed spiral of light turning and changing colour](docs/space-galaxy.gif) |
 
-## New: the BOOM update
+## Explosives
 
-The sandbox no longer opens blank: it starts on a ready-made **DEMOLITION YARD**, and the
-new **SCENES** rail loads any of eight worlds with one click. Four new materials, a big red
-button and an instant replay:
+The sandbox starts on a demolition yard. Press `K` and everything in it goes off after a
+3-2-1; press `V` to watch it again at a third of the speed (solo play only). The SCENES
+buttons on the left load seven other worlds, three of them built around the newer materials:
 
 | The big red button (`K`) | **NITRO DRIP** |
 |:---:|:---:|
@@ -37,13 +37,14 @@ button and an instant replay:
 | **ANTIMATTER RAIN** | **THERMITE DRILL** |
 | ![Purple antimatter rains on a little town and pours from a WALL hopper, annihilating stone and wood in white flashes](docs/boom-antimatter.gif) | ![Three piles of thermite, lit by torches, burn white-hot down through sand and stone](docs/boom-thermite.gif) |
 
-- **C4** - putty that stays put; fire will not set it off, only the button (or another blast). A slab all goes up.
-- **NITRO** - a liquid explosive: pour it gently and it sits there; drop it about 12 cells onto anything solid, or let heat touch it, and it goes.
-- **ANTIMATTER** - falls like a powder and annihilates whatever it touches, cell for cell. Only WALL holds it.
-- **THERMITE** - lit by fire, it burns white-hot down through stone (to lava) and sand (to a glass tube) until a WALL stops it.
-- **`K`** - the big red button: 3-2-1, then every C4, TNT and NITRO in the world goes off at once.
-- **`V`** - instant replay of the last detonation at a third of the speed (solo play), then back to your world exactly as it was.
-- **SUPERNOVA** (playground, under FORCES) - a star swells, collapses, explodes into a nebula and leaves a black hole.
+C4 only goes off when you press `K` or another blast reaches it, so you can build with it
+right next to fire. NITRO is a liquid; poured gently it sits in its container, but a fall of
+about 12 cells onto something solid sets it off, and so does heat. ANTIMATTER deletes whatever
+it lands on, cell for cell, and only WALL holds it. Lit THERMITE burns down through stone and
+leaves a glass tube where it went through sand.
+
+In the playground, the SUPERNOVA tool under FORCES places a star that swells, explodes and
+leaves a black hole behind.
 
 ![The title screen: hovering ASCII GARDEN plays the garden's three scenes behind the list](docs/menu-garden.gif)
 
@@ -181,7 +182,7 @@ rounding. It is wrapped to 32 bits now, with every sequence unchanged.
 | Group | Tools |
 |-------|-------|
 | **Emitters** | FOUNTAIN, FIREWORK (a rocket that bursts where you click, as a peony, ring, gold willow, crossette or palm), SPARKLER, HOSE (sprays the way you drag), FIREFLIES |
-| **Forces** | ATTRACT, REPULSE, VORTEX, BLACK HOLE (spirals matter in and swallows it; swallow a firework whole and it flares - a shockwave and twin jets), SUPERNOVA (a star that swells for 2.5 s, collapses, explodes into a two-colour nebula with a shockwave, and leaves a black hole that pulls the nebula back in) |
+| **Forces** | ATTRACT, REPULSE, VORTEX, BLACK HOLE (spirals matter in and swallows it; swallow a firework whole and it flares - a shockwave and twin jets), SUPERNOVA (a star that swells for 2.5 s, collapses and explodes into a nebula; the black hole it leaves pulls the nebula back in) |
 | **Tools** | WALL, BUMPER (a bouncy wall that plays a note set by its height), PORTAL (click twice for a linked pair), ERASE |
 | **Scenes** | GALAXY, FOUNTAINS, PINBALL, MUSIC STAIRS, MEADOW, PORTAL LOOP - self-running demos - and SURPRISE ME |
 | **Actions** | GRAVITY (`G`), SLOW-MO (`Q`), CLEAR (`X`) |
@@ -705,9 +706,9 @@ solids stay put.
 | GUNPOWDER | Explodes on ignition. |
 | FUSE | Slow-burning line for timing charges: fire lights it, the flame creeps along about 9 cells a second and sets off gunpowder or TNT at the end. |
 | TNT | Fire or lava lights a short fuse (it blinks); a spark or a burning fuse detonates it at once. Stacks chain. The blast throws its shell and the loose ground around it as debris that arcs and lands back as cells: a crater with a rim, and burning pieces fly as embers. |
-| NITRO | A liquid explosive, heavier than water. A drop of about 12 cells or more lands as a blast instead of a splash; heat beside it sets it off. A blast primes the NITRO it reaches for a few ticks, so a pool goes off as a ripple. |
-| C4 | Plastic explosive that stays put. Fire, lava and sparks do nothing to it - only the big red button (`K`), or another blast. A slab all goes up, not just its edges. |
-| ANTIMATTER | Falls like a powder and annihilates whatever it touches, cell for cell, in a white flash. Gases pass, a WALL box holds it. |
+| NITRO | A liquid explosive, heavier than water. Dropped about 12 cells onto anything that isn't liquid, it explodes instead of splashing, and heat next to it sets it off too. A nearby blast primes it for a few frames, so a pool goes off in a ripple. |
+| C4 | Plastic explosive that stays where you put it. Fire, lava and sparks do nothing to it; it goes off when you press `K` or another blast reaches it, and a whole slab goes up at once. |
+| ANTIMATTER | Falls like a powder and annihilates whatever it touches, cell for cell, in a white flash. Gas passes through it; a WALL box holds it. |
 | THERMITE | A powder until heat lights it; then it burns white-hot for two seconds and sinks through what is under it - stone and metal melt to lava, sand fuses to glass, wood catches, water flashes to steam. A WALL stops it. |
 | WIRE | Carries spark pulses; glows while energised. |
 | TORCH | Sends spark pulses into touching wire. |
