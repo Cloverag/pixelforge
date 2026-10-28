@@ -17,21 +17,25 @@ three.js and Trystero load only when the 3D views or multiplayer are used.
 
 **▶ Play it: https://cloverag.github.io/pixelforge/**
 
-## New: the BOOM update
+**🎬 [Watch the one-minute showcase](docs/pixelforge-trailer.mp4)** - chemistry, space, 3D lilies and MATH LAB, recorded from the game and cut with [Remotion](https://www.remotion.dev).
 
-**🎬 [Watch the 45-second trailer](docs/pixelforge-trailer.mp4)** - made with [Remotion](https://www.remotion.dev) from clips of the game running.
+| Bonds: sodium hands chlorine an electron | Bonds: carbon shares pairs with two oxygens |
+|:---:|:---:|
+| ![ELEMENTS bond view: Na + Cl, sodium's outer electron flies over to chlorine and the two become Na+ and Cl- ions](docs/chem-bond-nacl.gif) | ![ELEMENTS bond view: CO2 drawn whole, a carbon between two oxygens with the shared electron pairs glowing between them](docs/chem-bond-co2.gif) |
+| **Supernova** (playground) | **Galaxy** (playground) |
+| ![A star swells and explodes into a cyan and magenta nebula; a black hole forms where it was](docs/space-supernova.gif) | ![The GALAXY scene: a four-armed spiral of light turning and changing colour](docs/space-galaxy.gif) |
+
+## New: the BOOM update
 
 The sandbox no longer opens blank: it starts on a ready-made **DEMOLITION YARD**, and the
 new **SCENES** rail loads any of eight worlds with one click. Four new materials, a big red
 button and an instant replay:
 
-| The big red button (`K`) | Supernova (playground) |
+| The big red button (`K`) | **NITRO DRIP** |
 |:---:|:---:|
-| ![DEMOLITION YARD: C4 under a sand tower, a house and a bridge all go off at once; the tower pours out of its blown foot like an hourglass](docs/boom-yard.gif) | ![A star swells and explodes into a cyan and magenta nebula, then a black hole forms and pulls it back in](docs/boom-supernova.gif) |
-| **NITRO DRIP** | **ANTIMATTER RAIN** |
-| ![NITRO drips from a tank onto a pyramid of TNT; the blast climbs the falling stream back up and the tank explodes in the sky](docs/boom-nitro.gif) | ![Purple antimatter rains on a little town and pours from a WALL hopper, annihilating stone and wood in white flashes](docs/boom-antimatter.gif) |
-| **THERMITE DRILL** | |
-| ![Three piles of thermite, lit by torches, burn white-hot down through sand and stone](docs/boom-thermite.gif) | |
+| ![DEMOLITION YARD: C4 under a sand tower, a house and a bridge all go off at once; the tower pours out of its blown foot like an hourglass](docs/boom-yard.gif) | ![NITRO drips from a tank onto a pyramid of TNT; the blast climbs the falling stream back up and the tank explodes in the sky](docs/boom-nitro.gif) |
+| **ANTIMATTER RAIN** | **THERMITE DRILL** |
+| ![Purple antimatter rains on a little town and pours from a WALL hopper, annihilating stone and wood in white flashes](docs/boom-antimatter.gif) | ![Three piles of thermite, lit by torches, burn white-hot down through sand and stone](docs/boom-thermite.gif) |
 
 - **C4** - putty that stays put; fire will not set it off, only the button (or another blast). A slab all goes up.
 - **NITRO** - a liquid explosive: pour it gently and it sits there; drop it about 12 cells onto anything solid, or let heat touch it, and it goes.
