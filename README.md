@@ -1,6 +1,6 @@
 # PIXELFORGE
 
-A pixel-art falling-sand forge for the browser. Paint 29 materials that burn,
+A pixel-art falling-sand forge for the browser. Paint 33 materials that burn,
 flow, grow and explode; build with friends in the same world over a link; make
 light shows with fireworks, portals, black holes and musical bumpers; pick
 elements off a periodic table and watch them react in the chem lab; turn any
@@ -16,6 +16,30 @@ music are procedural; the only assets are 31 CC0 sound effects from Kenney.
 three.js and Trystero load only when the 3D views or multiplayer are used.
 
 **▶ Play it: https://cloverag.github.io/pixelforge/**
+
+## New: the BOOM update
+
+**🎬 [Watch the 45-second trailer](docs/pixelforge-trailer.mp4)** - made with [Remotion](https://www.remotion.dev) from clips of the game running.
+
+The sandbox no longer opens blank: it starts on a ready-made **DEMOLITION YARD**, and the
+new **SCENES** rail loads any of eight worlds with one click. Four new materials, a big red
+button and an instant replay:
+
+| The big red button (`K`) | Supernova (playground) |
+|:---:|:---:|
+| ![DEMOLITION YARD: C4 under a sand tower, a house and a bridge all go off at once; the tower pours out of its blown foot like an hourglass](docs/boom-yard.gif) | ![A star swells and explodes into a cyan and magenta nebula, then a black hole forms and pulls it back in](docs/boom-supernova.gif) |
+| **NITRO DRIP** | **ANTIMATTER RAIN** |
+| ![NITRO drips from a tank onto a pyramid of TNT; the blast climbs the falling stream back up and the tank explodes in the sky](docs/boom-nitro.gif) | ![Purple antimatter rains on a little town and pours from a WALL hopper, annihilating stone and wood in white flashes](docs/boom-antimatter.gif) |
+| **THERMITE DRILL** | |
+| ![Three piles of thermite, lit by torches, burn white-hot down through sand and stone](docs/boom-thermite.gif) | |
+
+- **C4** - putty that stays put; fire will not set it off, only the button (or another blast). A slab all goes up.
+- **NITRO** - a liquid explosive: pour it gently and it sits there; drop it about 12 cells onto anything solid, or let heat touch it, and it goes.
+- **ANTIMATTER** - falls like a powder and annihilates whatever it touches, cell for cell. Only WALL holds it.
+- **THERMITE** - lit by fire, it burns white-hot down through stone (to lava) and sand (to a glass tube) until a WALL stops it.
+- **`K`** - the big red button: 3-2-1, then every C4, TNT and NITRO in the world goes off at once.
+- **`V`** - instant replay of the last detonation at a third of the speed (solo play), then back to your world exactly as it was.
+- **SUPERNOVA** (playground, under FORCES) - a star swells, collapses, explodes into a nebula and leaves a black hole.
 
 ![The title screen: hovering ASCII GARDEN plays the garden's three scenes behind the list](docs/menu-garden.gif)
 
@@ -153,7 +177,7 @@ rounding. It is wrapped to 32 bits now, with every sequence unchanged.
 | Group | Tools |
 |-------|-------|
 | **Emitters** | FOUNTAIN, FIREWORK (a rocket that bursts where you click, as a peony, ring, gold willow, crossette or palm), SPARKLER, HOSE (sprays the way you drag), FIREFLIES |
-| **Forces** | ATTRACT, REPULSE, VORTEX, BLACK HOLE (spirals matter in and swallows it; swallow a firework whole and it flares - a shockwave and twin jets) |
+| **Forces** | ATTRACT, REPULSE, VORTEX, BLACK HOLE (spirals matter in and swallows it; swallow a firework whole and it flares - a shockwave and twin jets), SUPERNOVA (a star that swells for 2.5 s, collapses, explodes into a two-colour nebula with a shockwave, and leaves a black hole that pulls the nebula back in) |
 | **Tools** | WALL, BUMPER (a bouncy wall that plays a note set by its height), PORTAL (click twice for a linked pair), ERASE |
 | **Scenes** | GALAXY, FOUNTAINS, PINBALL, MUSIC STAIRS, MEADOW, PORTAL LOOP - self-running demos - and SURPRISE ME |
 | **Actions** | GRAVITY (`G`), SLOW-MO (`Q`), CLEAR (`X`) |
@@ -575,6 +599,8 @@ entry bundle.
 | `3` | 3D view |
 | `I` | Immersive: the canvas fills the window; push the pointer to an edge for the panels |
 | `B` | Grid view: chunky blocks, cycles 4 / 8 / 16 px then off |
+| `K` | Sandbox: the big red button - a 3-2-1, then every C4, TNT and NITRO goes off |
+| `V` | Sandbox: instant replay of the last detonation at a third of the speed (`V` again skips; solo only) |
 | `S` / `C` | Soft glow / CRT filter |
 | `T` | ASCII view: the world's materials as coloured text |
 | `X` / deck CLEAR | Clear what you made: the world (sandbox and chem lab ask first), the playground, the flower bed, the math canvas. Off in challenges |
@@ -675,6 +701,10 @@ solids stay put.
 | GUNPOWDER | Explodes on ignition. |
 | FUSE | Slow-burning line for timing charges: fire lights it, the flame creeps along about 9 cells a second and sets off gunpowder or TNT at the end. |
 | TNT | Fire or lava lights a short fuse (it blinks); a spark or a burning fuse detonates it at once. Stacks chain. The blast throws its shell and the loose ground around it as debris that arcs and lands back as cells: a crater with a rim, and burning pieces fly as embers. |
+| NITRO | A liquid explosive, heavier than water. A drop of about 12 cells or more lands as a blast instead of a splash; heat beside it sets it off. A blast primes the NITRO it reaches for a few ticks, so a pool goes off as a ripple. |
+| C4 | Plastic explosive that stays put. Fire, lava and sparks do nothing to it - only the big red button (`K`), or another blast. A slab all goes up, not just its edges. |
+| ANTIMATTER | Falls like a powder and annihilates whatever it touches, cell for cell, in a white flash. Gases pass, a WALL box holds it. |
+| THERMITE | A powder until heat lights it; then it burns white-hot for two seconds and sinks through what is under it - stone and metal melt to lava, sand fuses to glass, wood catches, water flashes to steam. A WALL stops it. |
 | WIRE | Carries spark pulses; glows while energised. |
 | TORCH | Sends spark pulses into touching wire. |
 | TURBINE | Spins in wind or under falling water, and sparks the wire it touches. |
